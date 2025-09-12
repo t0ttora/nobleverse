@@ -20,6 +20,8 @@ import {
   IconDotsVertical,
   IconPizza,
   IconPlus,
+  IconCirclePlus,
+  IconCirclePlusFilled,
   IconSettings,
   IconSun,
   IconTrash,
@@ -30,7 +32,18 @@ import {
   IconUserX,
   IconX,
   IconLayoutKanban,
-  IconBrandGithub
+  IconBrandGithub,
+  IconShip,
+  IconMail,
+  IconAddressBook,
+  IconFileDescription,
+  IconGridDots,
+  IconRobot,
+  IconMessageCircle,
+  IconTruck,
+  IconPlane,
+  IconTrain,
+  IconBox
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -49,6 +62,7 @@ export const Icons = {
   employee: IconUserX,
   post: IconFileText,
   page: IconFile,
+  file: IconFile,
   userPen: IconUserEdit,
   user2: IconUserCircle,
   media: IconPhoto,
@@ -56,6 +70,8 @@ export const Icons = {
   billing: IconCreditCard,
   ellipsis: IconDotsVertical,
   add: IconPlus,
+  addCircle: IconCirclePlus,
+  addCircleFilled: IconCirclePlusFilled,
   warning: IconAlertTriangle,
   user: IconUser,
   arrowRight: IconArrowRight,
@@ -66,5 +82,18 @@ export const Icons = {
   laptop: IconDeviceLaptop,
   github: IconBrandGithub,
   twitter: IconBrandTwitter,
-  check: IconCheck
+  check: IconCheck,
+  ship: IconShip,
+  mail: IconMail,
+  addressBook: IconAddressBook,
+  fileDescription: IconFileDescription,
+  grid: IconGridDots,
+  robot: IconRobot,
+  chat: IconMessageCircle,
+  road: IconTruck,
+  sea: IconShip,
+  air: IconPlane,
+  rail: IconTrain,
+  multimodal: IconGridDots,
+  courier: IconBox
 };

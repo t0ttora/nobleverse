@@ -3,10 +3,10 @@
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 
-type BreadcrumbItem = {
+interface BreadcrumbItem {
   title: string;
   link: string;
-};
+}
 
 // This allows to add custom title as well
 const routeMapping: Record<string, BreadcrumbItem[]> = {
@@ -18,6 +18,10 @@ const routeMapping: Record<string, BreadcrumbItem[]> = {
   '/dashboard/product': [
     { title: 'Dashboard', link: '/dashboard' },
     { title: 'Product', link: '/dashboard/product' }
+  ],
+  '/dashboard/freight-form': [
+    { title: 'Dashboard', link: '/dashboard' },
+    { title: 'Create a request', link: '/dashboard/freight-form' }
   ]
   // Add more custom mappings as needed
 };
@@ -28,7 +32,7 @@ export function useBreadcrumbs() {
   const breadcrumbs = useMemo(() => {
     // Check if we have a custom mapping for this exact path
     if (routeMapping[pathname]) {
-      return routeMapping[pathname];
+      return routeMapping[pathname] ?? [];
     }
 
     // If no exact match, fall back to generating breadcrumbs from the path

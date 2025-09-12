@@ -4,6 +4,6 @@ export const metadata = {
   title: 'Dashboard : Kanban view'
 };
 
-export default function page() {
+export default function Page() {
   return <KanbanViewPage />;
 }

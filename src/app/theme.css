@@ -70,6 +70,20 @@ body {
   }
 }
 
+/* Noble theme: warm vivid accent inspired by hero gradient */
+.theme-noble,
+.theme-noble-scaled {
+  /* Use a vibrant orange/red similar to rgb(255, 60, 0) from hero_bg */
+  --primary: #ff3c00;
+  --primary-foreground: var(--color-amber-50);
+
+  @variant dark {
+    /* Slightly softer in dark to maintain contrast */
+    --primary: #ff5a26;
+    --primary-foreground: var(--color-amber-50);
+  }
+}
+
 .theme-mono,
 .theme-mono-scaled {
   --font-sans: var(--font-mono);

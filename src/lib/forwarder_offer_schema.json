@@ -1,0 +1,59 @@
+{
+  "forwarder_offer": {
+    "title": "Forwarder Offer Form",
+    "icon": "📑",
+    "sections": [
+      {
+        "title": "Offer Details",
+        "fields": [
+          { "id": "total_price", "label": "Total Offer Price", "type": "number", "currency": ["USD", "EUR", "TRY"], "required": true },
+          { "id": "price_includes", "label": "Price Includes", "type": "multiselect", "options": ["All-In", "Freight Only", "Local Charges", "Fuel Surcharge", "Documentation Fees", "Other"], "required": true },
+          { "id": "additional_charges", "label": "Additional Charges (if any)", "type": "text", "required": false }
+        ]
+      },
+      {
+        "title": "Transit & Operational",
+        "fields": [
+          { "id": "transit_time", "label": "Estimated Transit Time (days)", "type": "number", "required": true },
+          { "id": "transit_time_guarantee", "label": "Is Transit Time Guaranteed?", "type": "boolean", "required": false },
+          { "id": "carrier_info", "label": "Carrier / Line / Network", "type": "text", "required": false },
+          { "id": "free_time", "label": "Free Time at Destination (days)", "type": "number", "required": false },
+          { "id": "service_scope", "label": "Scope of Service", "type": "multiselect", "options": ["Port-to-Port", "Door-to-Door", "Door-to-Port", "Port-to-Door"], "required": true }
+        ]
+      },
+      {
+        "title": "Service Conditions",
+        "fields": [
+          { "id": "value_added_services", "label": "Value-Added Services", "type": "multiselect", "options": ["Customs Clearance", "Insurance", "Warehousing", "Distribution", "Tracking/Visibility"], "required": false },
+          { "id": "tracking_available", "label": "Tracking Available?", "type": "boolean", "required": false },
+          { "id": "sla_details", "label": "SLA / Service Guarantees", "type": "text", "required": false },
+          { "id": "cancellation_policy", "label": "Cancellation Policy", "type": "text", "required": false }
+        ]
+      },
+      {
+        "title": "Financial & Commercial",
+        "fields": [
+          { "id": "payment_terms", "label": "Payment Terms", "type": "text", "required": true },
+          { "id": "currency", "label": "Currency", "type": "select", "options": ["USD", "EUR", "TRY", "GBP"], "required": true },
+          { "id": "offer_validity", "label": "Offer Validity (days)", "type": "number", "required": true },
+          { "id": "taxes_duties", "label": "Taxes / Duties Included?", "type": "boolean", "required": false }
+        ]
+      },
+      {
+        "title": "Forwarder Credentials",
+        "fields": [
+          { "id": "company_name", "label": "Company Name", "type": "text", "required": true },
+          { "id": "contact_person", "label": "Contact Person", "type": "text", "required": true },
+          { "id": "licenses_certifications", "label": "Licenses & Certifications", "type": "multiselect", "options": ["IATA", "FIATA", "Local License", "Insurance Certificate", "Other"], "required": false },
+          { "id": "references", "label": "References / Similar Experience", "type": "text", "required": false }
+        ]
+      }
+    ],
+    "notes_section": {
+      "title": "Additional Notes",
+      "fields": [
+        { "id": "general_notes", "label": "General Notes", "type": "text", "required": false }
+      ]
+    }
+  }
+}

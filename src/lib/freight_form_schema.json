@@ -1,0 +1,261 @@
+{
+  "forms": {
+    "road": {
+      "title": "Road Freight Form",
+      "icon": "🚚",
+      "sections": [
+        {
+          "title": "Cargo Information",
+          "fields": [
+            {"id": "cargo_type", "label": "What type of cargo are you shipping?", "type": "text", "required": true, "mas": false},
+            {"id": "weight", "label": "Total weight (kg)", "type": "number", "required": true, "mas": false},
+            {"id": "volume", "label": "Total volume (m³)", "type": "number", "required": false, "mas": false},
+            {"id": "hazardous", "label": "Is it hazardous cargo?", "type": "boolean", "required": true, "mas": false},
+            {"id": "temperature_controlled", "label": "Is temperature control required?", "type": "boolean", "required": false, "mas": false}
+          ]
+        },
+        {
+          "title": "Transport Details",
+          "fields": [
+            {"id": "shipment_type", "label": "Is it a full or partial load?", "type": "select", "options": ["Full Load", "Partial Load"], "required": true, "mas": false},
+            {"id": "origin_city", "label": "Origin City", "type": "text", "required": true, "mas": false},
+            {"id": "destination_city", "label": "Destination City", "type": "text", "required": true, "mas": false},
+            {"id": "departure_date", "label": "Departure Date", "type": "date", "required": true, "mas": true},
+            {"id": "arrival_date", "label": "Estimated Arrival Date", "type": "date", "required": false, "mas": true},
+            {"id": "free_time_days", "label": "Free time duration (in days)", "type": "number", "required": false, "mas": false}
+          ]
+        },
+        {
+          "title": "Financial & Terms",
+          "fields": [
+            {"id": "budget", "label": "Estimated budget (USD)", "type": "number", "required": false, "mas": false},
+            {"id": "incoterms", "label": "Select Incoterms", "type": "select", "options": ["EXW", "FCA", "CPT", "CIP", "DAP", "DDP", "FOB", "CFR", "CIF"], "required": false, "mas": false},
+            {"id": "insurance", "label": "Is insurance required?", "type": "boolean", "required": false, "mas": false},
+            {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+          ]
+        }
+      ],
+      "notes_section": {
+        "title": "Additional Notes",
+        "fields": [
+          {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+        ]
+      }
+    },
+    "sea": {
+      "title": "Sea Freight Form",
+      "icon": "🚢",
+      "sections": [
+        {
+          "title": "Cargo Information",
+          "fields": [
+            {"id": "container_type", "label": "Container Type", "type": "select", "options": ["20ft Standard", "40ft Standard", "40ft High Cube", "LCL"], "required": true, "mas": false},
+            {"id": "cargo_type", "label": "Cargo Type", "type": "text", "required": true, "mas": false},
+            {"id": "hazardous", "label": "Is cargo hazardous?", "type": "boolean", "required": true, "mas": false},
+            {"id": "weight", "label": "Total weight (kg)", "type": "number", "required": true, "mas": false},
+            {"id": "volume", "label": "Volume (m³)", "type": "number", "required": false, "mas": false},
+            {"id": "temperature_controlled", "label": "Temperature control needed?", "type": "boolean", "required": false, "mas": false}
+          ]
+        },
+        {
+          "title": "Route & Port Details",
+          "fields": [
+            {"id": "origin_port", "label": "Port of Origin", "type": "text", "required": true, "mas": false},
+            {"id": "destination_port", "label": "Port of Destination", "type": "text", "required": true, "mas": false},
+            {"id": "etd", "label": "ETD (Estimated Time of Departure)", "type": "date", "required": true, "mas": true},
+            {"id": "eta", "label": "ETA (Estimated Time of Arrival)", "type": "date", "required": false, "mas": true},
+            {"id": "free_days", "label": "Free time at destination (days)", "type": "number", "required": false, "mas": false}
+          ]
+        },
+        {
+          "title": "Financial Terms",
+          "fields": [
+            {"id": "budget", "label": "Expected Budget (USD)", "type": "number", "required": false, "mas": false},
+            {"id": "incoterms", "label": "Select Incoterms", "type": "select", "options": ["FOB", "CFR", "CIF"], "required": false, "mas": false},
+            {"id": "insurance", "label": "Is insurance required?", "type": "boolean", "required": false, "mas": false},
+            {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+          ]
+        }
+      ],
+      "notes_section": {
+        "title": "Additional Notes",
+        "fields": [
+          {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+        ]
+      }
+    },
+    "air": {
+      "title": "Air Freight Form",
+      "icon": "✈️",
+      "sections": [
+        {
+          "title": "Shipment Details",
+          "fields": [
+            {"id": "cargo_type", "label": "Cargo Type", "type": "text", "required": true, "mas": false},
+            {"id": "weight", "label": "Weight (kg)", "type": "number", "required": true, "mas": false},
+            {"id": "volume", "label": "Volume (m³)", "type": "number", "required": false, "mas": false},
+            {"id": "hazardous", "label": "Hazardous Cargo?", "type": "boolean", "required": true, "mas": false},
+            {"id": "temperature_controlled", "label": "Need Temperature Control?", "type": "boolean", "required": false, "mas": false},
+            {"id": "airport_origin", "label": "Airport of Departure", "type": "text", "required": true, "mas": false},
+            {"id": "airport_destination", "label": "Airport of Arrival", "type": "text", "required": true, "mas": false},
+            {"id": "etd", "label": "Estimated Departure", "type": "date", "required": true, "mas": true},
+            {"id": "eta", "label": "Estimated Arrival", "type": "date", "required": false, "mas": true}
+          ]
+        },
+        {
+          "title": "Financial",
+          "fields": [
+            {"id": "budget", "label": "Budget (USD)", "type": "number", "required": false, "mas": false},
+            {"id": "incoterms", "label": "Incoterms", "type": "select", "options": ["EXW", "FOB", "DAP", "DDP"], "required": false, "mas": false},
+            {"id": "insurance", "label": "Insurance Required?", "type": "boolean", "required": false, "mas": false},
+            {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+          ]
+        }
+      ],
+      "notes_section": {
+        "title": "Additional Notes",
+        "fields": [
+          {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+          {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+        ]
+      }
+    },
+    "rail": {
+  "title": "Rail Freight Form",
+  "icon": "🚆",
+  "sections": [
+    {
+      "title": "Cargo Information",
+      "fields": [
+        {"id": "cargo_type", "label": "What type of cargo are you shipping?", "type": "text", "required": true, "mas": false},
+        {"id": "weight", "label": "Total weight (kg)", "type": "number", "required": true, "mas": false},
+        {"id": "volume", "label": "Total volume (m³)", "type": "number", "required": false, "mas": false},
+        {"id": "hazardous", "label": "Is it hazardous cargo?", "type": "boolean", "required": true, "mas": false},
+        {"id": "temperature_controlled", "label": "Is temperature control required?", "type": "boolean", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Rail Route Details",
+      "fields": [
+        {"id": "origin_station", "label": "Origin Station", "type": "text", "required": true, "mas": false},
+        {"id": "destination_station", "label": "Destination Station", "type": "text", "required": true, "mas": false},
+        {"id": "departure_date", "label": "Departure Date", "type": "date", "required": true, "mas": true},
+        {"id": "arrival_date", "label": "Estimated Arrival Date", "type": "date", "required": false, "mas": true},
+        {"id": "free_time_days", "label": "Free time duration (in days)", "type": "number", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Financial Terms",
+      "fields": [
+        {"id": "budget", "label": "Estimated budget (USD)", "type": "number", "required": false, "mas": false},
+        {"id": "incoterms", "label": "Select Incoterms", "type": "select", "options": ["EXW", "FCA", "DAP", "DDP"], "required": false, "mas": false},
+        {"id": "insurance", "label": "Is insurance required?", "type": "boolean", "required": false, "mas": false},
+        {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+      ]
+    }
+  ],
+  "notes_section": {
+    "title": "Additional Notes",
+    "fields": [
+      {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+    ]
+  }
+},
+
+    "multimodal": {
+  "title": "Multimodal Freight Form",
+  "icon": "🔄",
+  "sections": [
+    {
+      "title": "Cargo Information",
+      "fields": [
+        {"id": "cargo_type", "label": "What type of cargo are you shipping?", "type": "text", "required": true, "mas": false},
+        {"id": "weight", "label": "Total weight (kg)", "type": "number", "required": true, "mas": false},
+        {"id": "volume", "label": "Total volume (m³)", "type": "number", "required": false, "mas": false},
+        {"id": "hazardous", "label": "Is it hazardous cargo?", "type": "boolean", "required": true, "mas": false},
+        {"id": "temperature_controlled", "label": "Is temperature control required?", "type": "boolean", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Multimodal Route",
+      "fields": [
+        {"id": "origin_location", "label": "Starting Location", "type": "text", "required": true, "mas": false},
+        {"id": "destination_location", "label": "Final Destination", "type": "text", "required": true, "mas": false},
+        {"id": "modes_used", "label": "Transport Modes (e.g. Road + Sea)", "type": "text", "required": true, "mas": false},
+        {"id": "departure_date", "label": "Departure Date", "type": "date", "required": true, "mas": true},
+        {"id": "arrival_date", "label": "Estimated Arrival Date", "type": "date", "required": false, "mas": true},
+        {"id": "transshipment_points", "label": "Transshipment Points (if any)", "type": "text", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Financial Terms",
+      "fields": [
+        {"id": "budget", "label": "Estimated budget (USD)", "type": "number", "required": false, "mas": false},
+        {"id": "incoterms", "label": "Select Incoterms", "type": "select", "options": ["EXW", "FCA", "FOB", "CFR", "CIF", "DAP", "DDP"], "required": false, "mas": false},
+        {"id": "insurance", "label": "Is insurance required?", "type": "boolean", "required": false, "mas": false},
+        {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+      ]
+    }
+  ],
+  "notes_section": {
+    "title": "Additional Notes",
+    "fields": [
+      {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+    ]
+  }
+},
+
+"courier": {
+  "title": "Courier / Express Shipping Form",
+  "icon": "📦",
+  "sections": [
+    {
+      "title": "Package Details",
+      "fields": [
+        {"id": "package_type", "label": "Type of Package", "type": "text", "required": true, "mas": false},
+        {"id": "weight", "label": "Weight (kg)", "type": "number", "required": true, "mas": false},
+        {"id": "dimensions", "label": "Dimensions (LxWxH in cm)", "type": "text", "required": false, "mas": false},
+        {"id": "hazardous", "label": "Contains Hazardous Material?", "type": "boolean", "required": true, "mas": false},
+        {"id": "temperature_controlled", "label": "Need Temperature Control?", "type": "boolean", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Pickup & Delivery",
+      "fields": [
+        {"id": "pickup_address", "label": "Pickup Address", "type": "text", "required": true, "mas": false},
+        {"id": "delivery_address", "label": "Delivery Address", "type": "text", "required": true, "mas": false},
+        {"id": "pickup_date", "label": "Pickup Date", "type": "date", "required": true, "mas": true},
+        {"id": "delivery_date", "label": "Expected Delivery Date", "type": "date", "required": false, "mas": true},
+        {"id": "delivery_speed", "label": "Delivery Speed", "type": "select", "options": ["Same Day", "Next Day", "Standard"], "required": true, "mas": false},
+        {"id": "tracking_required", "label": "Tracking Required?", "type": "boolean", "required": false, "mas": false}
+      ]
+    },
+    {
+      "title": "Financial Terms",
+      "fields": [
+        {"id": "budget", "label": "Budget (USD)", "type": "number", "required": false, "mas": false},
+        {"id": "insurance", "label": "Require Insurance?", "type": "boolean", "required": false, "mas": false},
+        {"id": "payment_terms", "label": "Payment Terms", "type": "text", "required": false, "mas": false}
+      ]
+    }
+  ],
+  "notes_section": {
+    "title": "Additional Notes",
+    "fields": [
+      {"id": "cargo_notes", "label": "Cargo Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "transport_notes", "label": "Transport Related Notes", "type": "text", "required": false, "mas": false},
+      {"id": "financial_notes", "label": "Financial Related Notes", "type": "text", "required": false, "mas": false}
+    ]
+  }
+}
+  }
+}

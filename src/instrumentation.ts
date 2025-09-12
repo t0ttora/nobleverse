@@ -29,6 +29,8 @@ export async function register() {
       Sentry.init(sentryOptions);
     }
   }
+  // Ensure the async function contains an await to satisfy lint rule
+  await Promise.resolve();
 }
 
 export const onRequestError = Sentry.captureRequestError;

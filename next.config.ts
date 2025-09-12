@@ -12,21 +12,32 @@ const baseConfig: NextConfig = {
       }
     ]
   },
-  transpilePackages: ['geist']
+  transpilePackages: ['geist'],
+  // Don't fail production builds on ESLint errors. Keep linting in CI or via `pnpm lint`.
+  eslint: {
+    ignoreDuringBuilds: true
+  }
 };
 
 let configWithPlugins = baseConfig;
 
-// Conditionally enable Sentry configuration
-if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
+// Conditionally enable Sentry configuration only in CI with required envs
+const enableSentry =
+  !!process.env.CI &&
+  !!process.env.SENTRY_AUTH_TOKEN &&
+  !!process.env.SENTRY_ORG &&
+  !!process.env.SENTRY_PROJECT &&
+  !process.env.NEXT_PUBLIC_SENTRY_DISABLED;
+
+if (enableSentry) {
   configWithPlugins = withSentryConfig(configWithPlugins, {
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
     // FIXME: Add your Sentry organization and project names
-    org: process.env.NEXT_PUBLIC_SENTRY_ORG,
-    project: process.env.NEXT_PUBLIC_SENTRY_PROJECT,
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
     // Only print logs for uploading source maps in CI
-    silent: !process.env.CI,
+    silent: false,
 
     // For all available options, see:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/

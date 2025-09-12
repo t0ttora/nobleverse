@@ -1,23 +1,18 @@
 import {
-  Geist,
-  Geist_Mono,
   Instrument_Sans,
   Inter,
   Mulish,
   Noto_Sans_Mono
 } from 'next/font/google';
+// Use local Geist fonts to avoid Turbopack's google font virtual module issues
+import { GeistSans, GeistMono } from 'geist/font';
 
 import { cn } from '@/lib/utils';
 
-const fontSans = Geist({
-  subsets: ['latin'],
-  variable: '--font-sans'
-});
+// Local Geist exports are preconfigured font objects
+const fontSans = GeistSans;
 
-const fontMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono'
-});
+const fontMono = GeistMono;
 
 const fontInstrument = Instrument_Sans({
   subsets: ['latin'],

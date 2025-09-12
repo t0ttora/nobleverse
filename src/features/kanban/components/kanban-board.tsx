@@ -53,7 +53,7 @@ export function KanbanBoard() {
   const tasks = useTaskStore((state) => state.tasks);
   const setTasks = useTaskStore((state) => state.setTasks);
   const [activeColumn, setActiveColumn] = useState<Column | null>(null);
-  const [isMounted, setIsMounted] = useState<Boolean>(false);
+  const [isMounted, setIsMounted] = useState<boolean>(false);
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -72,7 +72,7 @@ export function KanbanBoard() {
   useEffect(() => {
     useTaskStore.persist.rehydrate();
   }, []);
-  if (!isMounted) return;
+  if (!isMounted) return null;
 
   function getDraggingTaskData(taskId: UniqueIdentifier, columnId: ColumnId) {
     const tasksInColumn = tasks.filter((task) => task.status === columnId);
@@ -279,7 +279,7 @@ export function KanbanBoard() {
     const overData = over.data.current;
 
     const isActiveATask = activeData?.type === 'Task';
-    const isOverATask = activeData?.type === 'Task';
+    const isOverATask = overData?.type === 'Task';
 
     if (!isActiveATask) return;
 

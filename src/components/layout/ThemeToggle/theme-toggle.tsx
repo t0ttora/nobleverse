@@ -11,10 +11,16 @@ export function ModeToggle() {
 
   const handleThemeToggle = React.useCallback(
     (e?: React.MouseEvent) => {
+      if (typeof document === 'undefined') return;
       const newMode = resolvedTheme === 'dark' ? 'light' : 'dark';
       const root = document.documentElement;
 
-      if (!document.startViewTransition) {
+      // Narrow the Document type to a possible extension with startViewTransition
+      type VTDocument = Document & {
+        startViewTransition?: (cb: () => void) => void;
+      };
+      const d = document as VTDocument;
+      if (typeof d.startViewTransition !== 'function') {
         setTheme(newMode);
         return;
       }
@@ -25,7 +31,7 @@ export function ModeToggle() {
         root.style.setProperty('--y', `${e.clientY}px`);
       }
 
-      document.startViewTransition(() => {
+      d.startViewTransition(() => {
         setTheme(newMode);
       });
     },

@@ -91,7 +91,7 @@ export function DataTableDateFilter<TData>({
       if (multiple && !('getTime' in date)) {
         const from = date.from?.getTime();
         const to = date.to?.getTime();
-        column.setFilterValue(from || to ? [from, to] : undefined);
+        column.setFilterValue((from ?? to) ? [from, to] : undefined);
       } else if (!multiple && 'getTime' in date) {
         column.setFilterValue(date.getTime());
       }
@@ -110,7 +110,7 @@ export function DataTableDateFilter<TData>({
   const hasValue = React.useMemo(() => {
     if (multiple) {
       if (!getIsDateRange(selectedDates)) return false;
-      return selectedDates.from || selectedDates.to;
+      return (selectedDates.from ?? selectedDates.to) !== undefined;
     }
     if (!Array.isArray(selectedDates)) return false;
     return selectedDates.length > 0;
@@ -128,7 +128,8 @@ export function DataTableDateFilter<TData>({
     if (multiple) {
       if (!getIsDateRange(selectedDates)) return null;
 
-      const hasSelectedDates = selectedDates.from || selectedDates.to;
+      const hasSelectedDates =
+        (selectedDates.from ?? selectedDates.to) !== undefined;
       const dateText = hasSelectedDates
         ? formatDateRange(selectedDates)
         : 'Select date range';

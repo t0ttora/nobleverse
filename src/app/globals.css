@@ -156,3 +156,34 @@
   /* Apply the reveal animation */
   animation: reveal 0.4s ease-in-out forwards;
 }
+
+/* Subtle breathing opacity animation for hero background bars */
+@keyframes breatheOpacity {
+  0% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.65;
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: no-preference) {
+  .gradient-bar {
+    animation-name: breatheOpacity;
+    animation-duration: 3.2s;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    /* allow inline animationDelay to stagger */
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-bar {
+    animation: none !important;
+  }
+}
