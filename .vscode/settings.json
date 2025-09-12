@@ -1,0 +1,15 @@
+{
+  "files.eol": "\n",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": ["typescript","typescriptreact","javascript","javascriptreact"],
+  "git.autofetch": true,
+  "git.fetchOnPull": true,
+  "git.confirmSync": false,
+  "git.pruneOnFetch": true,
+  "files.insertFinalNewline": true,
+  // Prettier extension id may differ per environment; devs can override locally.
+  "editor.defaultFormatter": "vscode.typescript-language-features"
+}
