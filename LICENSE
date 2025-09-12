@@ -1,21 +1,38 @@
-MIT License
+Copyright (c) 2025 NobleVerse. All rights reserved.
 
-Copyright (c) 2025 NobleVerse Contributors
+This software (the "Platform") and all associated source code, build artifacts,
+schema definitions, interface designs, documentation and related intellectual
+property are proprietary to NobleVerse and its licensors. No license is granted
+to use, copy, modify, merge, publish, distribute, sublicense, sell, host, or
+create derivative works from any portion of the Platform unless you have a
+separate, written and duly executed commercial agreement with NobleVerse that
+explicitly grants such rights.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+You may not:
+1. Reverse engineer, decompile, disassemble or otherwise attempt to derive the
+	source, models, data structures, or trade secrets embodied in the Platform.
+2. Circumvent, remove, or disable any access control, security, usage
+	telemetry, or protective measures.
+3. Use the Platform to build or train competing products or foundation models.
+4. Redistribute any portion of the Platform, including schemas or migrations,
+	outside your authorized organization.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+NO WARRANTY: The Platform is provided on an "AS IS" and "AS AVAILABLE" basis.
+To the maximum extent permitted by law, NobleVerse disclaims all warranties,
+express, implied, or statutory, including but not limited to merchantability,
+fitness for a particular purpose, non‑infringement, accuracy, or uninterrupted
+availability.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+LIMITATION OF LIABILITY: In no event shall NobleVerse, its officers,
+employees, contractors, suppliers, or licensors be liable for any indirect,
+incidental, special, consequential, exemplary, or punitive damages, or lost
+profits, revenue, data, or goodwill, arising from or related to the use of—or
+inability to use—the Platform, even if advised of the possibility of such
+damages. Aggregate liability shall not exceed the amounts actually paid under
+an applicable commercial agreement during the twelve (12) months preceding the
+claim.
+
+Any unauthorized use terminates all permissions automatically and may trigger
+civil and/or criminal enforcement.
+
+For partnership or licensing inquiries, contact: legal@nobleverse.com
