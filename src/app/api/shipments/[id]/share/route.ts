@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import crypto from 'crypto';
 
+type RouteContext = { params: { id: string } };
 // POST -> create share link, DELETE -> revoke all
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -22,22 +24,18 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   const raw = crypto.randomBytes(24).toString('base64url');
   const hash = await hashToken(raw);
   const expires = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-  await supabase
-    .from('shipment_share_tokens')
-    .insert({
-      shipment_id: s.id,
-      token_hash: hash,
-      expires_at: expires,
-      created_by: uid
-    });
+  await supabase.from('shipment_share_tokens').insert({
+    shipment_id: s.id,
+    token_hash: hash,
+    expires_at: expires,
+    created_by: uid
+  });
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ''}/s/${raw}`;
   return NextResponse.json({ url, expires });
 }
 
-export async function DELETE(
-  _: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;

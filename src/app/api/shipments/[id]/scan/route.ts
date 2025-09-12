@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import { hmacLabelToken } from '@/lib/shipment-label';
 
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+type RouteContext = { params: { id: string } };
+export async function POST(req: Request, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const body = await req.json().catch(() => ({}));
   const token = body.token as string | undefined;
   if (!token) return NextResponse.json({ error: 'NO_TOKEN' }, { status: 400 });

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: { id: string } };
+export async function POST(_req: Request, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -24,13 +26,11 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
       status: shipment.status === 'created' ? 'in_transit' : shipment.status
     })
     .eq('id', shipment.id);
-  await supabase
-    .from('escrow_ledger')
-    .insert({
-      shipment_id: shipment.id,
-      entry_type: 'RELEASE',
-      amount_cents: shipment.net_amount_cents,
-      meta: { manual: true }
-    });
+  await supabase.from('escrow_ledger').insert({
+    shipment_id: shipment.id,
+    entry_type: 'RELEASE',
+    amount_cents: shipment.net_amount_cents,
+    meta: { manual: true }
+  });
   return NextResponse.json({ ok: true });
 }

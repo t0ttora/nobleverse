@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 
 // Accept a negotiation: create shipment, mark negotiation accepted, reject others, convert request
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+// NOTE: Loosen the param typing to sidestep Next.js 15 route generic constraint issue during build.
+// The runtime shape we rely on is params.id (string).
+type RouteContext = { params: { id: string } };
+export async function POST(_req: Request, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -98,16 +102,14 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   ]);
 
   try {
-    await supabase
-      .from('notifications')
-      .insert({
-        user_id: negotiation.forwarder_id,
-        actor_id: uid,
-        type: 'negotiation_accepted',
-        title: 'Negotiation accepted',
-        body: shipment.code || shipment.id,
-        data: { shipment_id: shipment.id, request_id: negotiation.request_id }
-      });
+    await supabase.from('notifications').insert({
+      user_id: negotiation.forwarder_id,
+      actor_id: uid,
+      type: 'negotiation_accepted',
+      title: 'Negotiation accepted',
+      body: shipment.code || shipment.id,
+      data: { shipment_id: shipment.id, request_id: negotiation.request_id }
+    });
   } catch {}
 
   return NextResponse.json({

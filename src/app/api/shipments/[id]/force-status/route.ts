@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
+type RouteContext = { params: { id: string } };
+
 // PATCH body: { status: 'delivered' | 'in_transit' | 'cancelled' }
 // Only participants or admins (role check) may force status.
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, context: RouteContext | any) {
+  const { params } = context as RouteContext;
   const supabase = createRouteHandlerClient({ cookies });
   const { status } = (await req.json().catch(() => ({}))) as {
     status?: string;

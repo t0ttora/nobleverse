@@ -7,11 +7,13 @@ type ParamsMaybeAsync =
   | { shipmentId: string }
   | Promise<{ shipmentId: string }>;
 
-export default async function ShipmentPage(props: {
-  params: ParamsMaybeAsync;
-}) {
-  // Await params defensively (handles Next.js dynamic ParamsProxy in 15+)
-  const resolvedParams = await props.params;
+export default async function ShipmentPage(props: any) {
+  // Allow any prop shape; resolve params if promise-like
+  const rawParams: any = props?.params;
+  const resolvedParams =
+    rawParams && typeof rawParams.then === 'function'
+      ? await rawParams
+      : rawParams;
   const codeOrId = resolvedParams.shipmentId;
 
   const supabase = await createClient();

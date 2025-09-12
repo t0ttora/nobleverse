@@ -1,11 +1,8 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/server';
 
-export default async function PublicShipmentPage({
-  params
-}: {
-  params: { token: string };
-}) {
+export default async function PublicShipmentPage(props: any) {
+  const { params } = props || {};
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('fetch_public_shipment', {
     p_token: params.token

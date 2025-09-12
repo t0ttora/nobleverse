@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import { generateLabelToken, hmacLabelToken } from '@/lib/shipment-label';
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, context: any) {
+  const { params } = context || {};
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
