@@ -72,24 +72,7 @@ export async function ensureProfileServer() {
         })
         .eq('id', user.id);
     }
-    // If username differs from email local-part, try to align if available
-    if (existing.username !== baseUsername) {
-      const { data: conflict } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', baseUsername)
-        .maybeSingle();
-      if (!conflict) {
-        await supabase
-          .from('profiles')
-          .update({
-            username: baseUsername,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-        return { id: user.id, username: baseUsername };
-      }
-    }
+    // Preserve any user-chosen username; do not override with email local-part
     return existing as Pick<DbProfile, 'id' | 'username'>;
   }
 

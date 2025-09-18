@@ -1,12 +1,5 @@
 'use client';
-import React, {
-  useMemo,
-  useRef,
-  useState,
-  useEffect,
-  useLayoutEffect
-} from 'react';
-import { createPortal } from 'react-dom';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 
 interface CountryCities {
   country: string;
@@ -151,14 +144,10 @@ export function LocationPicker({
   const [cityQuery, setCityQuery] = useState(value.city ?? '');
   const [openCountry, setOpenCountry] = useState(false);
   const [openCity, setOpenCity] = useState(false);
-  const countryListRef = useRef<HTMLDivElement | null>(null);
-  const cityListRef = useRef<HTMLDivElement | null>(null);
-  const countryAnchorRef = useRef<HTMLDivElement | null>(null);
-  const cityAnchorRef = useRef<HTMLDivElement | null>(null);
-  const countryPortalRef = useRef<HTMLDivElement | null>(null);
-  const cityPortalRef = useRef<HTMLDivElement | null>(null);
-  const [countryRect, setCountryRect] = useState<DOMRect | null>(null);
-  const [cityRect, setCityRect] = useState<DOMRect | null>(null);
+  const countryWrapRef = useRef<HTMLDivElement | null>(null);
+  const cityWrapRef = useRef<HTMLDivElement | null>(null);
+  const [countryIdx, setCountryIdx] = useState(-1);
+  const [cityIdx, setCityIdx] = useState(-1);
 
   const countryMatches = useMemo(() => {
     const q = countryQuery.toLowerCase();
@@ -187,26 +176,22 @@ export function LocationPicker({
     setCityQuery('');
     setOpenCountry(false);
     setOpenCity(true);
+    setCountryIdx(-1);
   };
 
   const commitCity = (city: string) => {
     setCityQuery(city);
     onChange({ country: value.country ?? countryQuery, city });
     setOpenCity(false);
+    setCityIdx(-1);
   };
 
   // Close popovers on outside click
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
-      const inCountry =
-        (countryListRef.current?.contains(target) ?? false) ||
-        (countryPortalRef.current?.contains(target) ?? false) ||
-        (countryAnchorRef.current?.contains(target) ?? false);
-      const inCity =
-        (cityListRef.current?.contains(target) ?? false) ||
-        (cityPortalRef.current?.contains(target) ?? false) ||
-        (cityAnchorRef.current?.contains(target) ?? false);
+      const inCountry = countryWrapRef.current?.contains(target) ?? false;
+      const inCity = cityWrapRef.current?.contains(target) ?? false;
       if (!inCountry) {
         setOpenCountry(false);
       }
@@ -218,33 +203,11 @@ export function LocationPicker({
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  // Recompute anchor rects when open or on resize/scroll
-  useLayoutEffect(() => {
-    const compute = () => {
-      if (openCountry && countryAnchorRef.current) {
-        setCountryRect(countryAnchorRef.current.getBoundingClientRect());
-      }
-      if (openCity && cityAnchorRef.current) {
-        setCityRect(cityAnchorRef.current.getBoundingClientRect());
-      }
-    };
-    compute();
-    window.addEventListener('resize', compute);
-    window.addEventListener('scroll', compute, true);
-    return () => {
-      window.removeEventListener('resize', compute);
-      window.removeEventListener('scroll', compute, true);
-    };
-  }, [openCountry, openCity]);
-
   return (
     <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
       {/* Country dropdown */}
-      <div className='relative' ref={countryListRef}>
-        <div
-          ref={countryAnchorRef}
-          className='flex items-center rounded-lg border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'
-        >
+      <div className='relative' ref={countryWrapRef}>
+        <div className='flex items-center rounded-lg border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
           <input
             value={countryQuery}
             onChange={(e) => {
@@ -253,6 +216,24 @@ export function LocationPicker({
               onChange({ country: e.target.value, city: '' });
             }}
             onFocus={() => setOpenCountry(true)}
+            onKeyDown={(e) => {
+              if (!openCountry) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setCountryIdx((i) =>
+                  Math.min(i + 1, countryMatches.length - 1)
+                );
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setCountryIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Enter' && countryIdx >= 0) {
+                e.preventDefault();
+                const c = countryMatches[countryIdx];
+                if (c) commitCountry(c.country);
+              } else if (e.key === 'Escape') {
+                setOpenCountry(false);
+              }
+            }}
             placeholder='Country'
             className='w-full bg-transparent px-3 py-2 outline-none'
           />
@@ -265,51 +246,25 @@ export function LocationPicker({
             ▾
           </button>
         </div>
-        {openCountry &&
-          countryMatches.length > 0 &&
-          countryRect &&
-          typeof window !== 'undefined' &&
-          createPortal(
-            <div
-              ref={countryPortalRef}
-              style={(function () {
-                const pad = 12;
-                const desired = Math.max(countryRect.width, 320);
-                const maxLeft = window.innerWidth - pad - desired;
-                const left = Math.min(
-                  Math.max(countryRect.left, pad),
-                  Math.max(pad, maxLeft)
-                );
-                return {
-                  position: 'fixed' as const,
-                  top: countryRect.bottom + 4,
-                  left,
-                  width: desired,
-                  zIndex: 10000
-                };
-              })()}
-              className='bg-popover text-popover-foreground max-h-64 overflow-auto rounded-md border shadow'
-            >
-              {countryMatches.map((c) => (
-                <button
-                  type='button'
-                  key={c.code}
-                  className='hover:bg-accent hover:text-accent-foreground w-full px-3 py-2 text-left'
-                  onClick={() => commitCountry(c.country)}
-                >
-                  {c.country}
-                </button>
-              ))}
-            </div>,
-            document.body
-          )}
+        {openCountry && countryMatches.length > 0 && (
+          <div className='bg-popover text-popover-foreground absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border shadow'>
+            {countryMatches.map((c, idx) => (
+              <button
+                type='button'
+                key={c.code}
+                className={`hover:bg-accent hover:text-accent-foreground w-full px-3 py-2 text-left ${idx === countryIdx ? 'bg-accent/60' : ''}`}
+                onMouseEnter={() => setCountryIdx(idx)}
+                onClick={() => commitCountry(c.country)}
+              >
+                {c.country}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {/* City dropdown */}
-      <div className='relative' ref={cityListRef}>
-        <div
-          ref={cityAnchorRef}
-          className='flex items-center rounded-lg border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'
-        >
+      <div className='relative' ref={cityWrapRef}>
+        <div className='flex items-center rounded-lg border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
           <input
             value={cityQuery}
             onChange={(e) => {
@@ -321,6 +276,22 @@ export function LocationPicker({
               });
             }}
             onFocus={() => setOpenCity(true)}
+            onKeyDown={(e) => {
+              if (!openCity) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setCityIdx((i) => Math.min(i + 1, cityMatches.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setCityIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Enter' && cityIdx >= 0) {
+                e.preventDefault();
+                const c = cityMatches[cityIdx];
+                if (c) commitCity(c);
+              } else if (e.key === 'Escape') {
+                setOpenCity(false);
+              }
+            }}
             placeholder='City'
             disabled={!value.country && !countryQuery}
             className='w-full bg-transparent px-3 py-2 outline-none disabled:opacity-50'
@@ -335,44 +306,21 @@ export function LocationPicker({
             ▾
           </button>
         </div>
-        {openCity &&
-          cityMatches.length > 0 &&
-          cityRect &&
-          typeof window !== 'undefined' &&
-          createPortal(
-            <div
-              ref={cityPortalRef}
-              style={(function () {
-                const pad = 12;
-                const desired = Math.max(cityRect.width, 320);
-                const maxLeft = window.innerWidth - pad - desired;
-                const left = Math.min(
-                  Math.max(cityRect.left, pad),
-                  Math.max(pad, maxLeft)
-                );
-                return {
-                  position: 'fixed' as const,
-                  top: cityRect.bottom + 4,
-                  left,
-                  width: desired,
-                  zIndex: 10000
-                };
-              })()}
-              className='bg-popover text-popover-foreground max-h-64 overflow-auto rounded-md border shadow'
-            >
-              {cityMatches.map((city) => (
-                <button
-                  type='button'
-                  key={city}
-                  className='hover:bg-accent hover:text-accent-foreground w-full px-3 py-2 text-left'
-                  onClick={() => commitCity(city)}
-                >
-                  {city}
-                </button>
-              ))}
-            </div>,
-            document.body
-          )}
+        {openCity && cityMatches.length > 0 && (
+          <div className='bg-popover text-popover-foreground absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border shadow'>
+            {cityMatches.map((city, idx) => (
+              <button
+                type='button'
+                key={city}
+                className={`hover:bg-accent hover:text-accent-foreground w-full px-3 py-2 text-left ${idx === cityIdx ? 'bg-accent/60' : ''}`}
+                onMouseEnter={() => setCityIdx(idx)}
+                onClick={() => commitCity(city)}
+              >
+                {city}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

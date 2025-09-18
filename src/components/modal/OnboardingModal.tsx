@@ -10,6 +10,8 @@ import {
 } from '@/components/onboarding/LocationPicker';
 import Confetti from '@/components/onboarding/Confetti';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Icons } from '@/components/icons';
+import PixelBlast from '@/components/PixelBlast';
 import type { Profile } from '@/types/profile';
 
 type TeamSize = 'solo' | 'small' | 'medium' | 'large' | 'enterprise';
@@ -93,6 +95,10 @@ export default function OnboardingModal({
   });
   const [firstName, setFirstName] = useState('');
   const savingRef = useRef(false);
+  const [usernameState, setUsernameState] = useState<
+    'idle' | 'checking' | 'available' | 'taken'
+  >('idle');
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const emailLocal = useMemo(() => {
     const e = (profile as Profile | Partial<Profile> | undefined)?.email;
@@ -204,6 +210,13 @@ export default function OnboardingModal({
     setForm((f) => ({ ...f, [name]: value }));
   };
 
+  const slugify = (raw: string) =>
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$|\.$/g, '');
+
   const checkUsername = async (u: string) => {
     try {
       const res = await fetch(
@@ -220,6 +233,25 @@ export default function OnboardingModal({
     }
   };
 
+  // Live username probe with debounce
+  useEffect(() => {
+    if (step !== 2) return;
+    const candidate = slugify(form.username || '') || emailLocal;
+    if (!candidate) {
+      setUsernameState('idle');
+      return;
+    }
+    setUsernameState('checking');
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    usernameTimer.current = setTimeout(async () => {
+      const ok = await checkUsername(candidate);
+      setUsernameState(ok ? 'available' : 'taken');
+    }, 350);
+    return () => {
+      if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    };
+  }, [form.username, emailLocal, step]);
+
   const handleNext = async () => {
     setError(null);
     // per-step validation
@@ -227,7 +259,9 @@ export default function OnboardingModal({
       if (!form.role) return setError('Please select a role.');
     }
     if (step === 2) {
-      const nobleId = (form.username?.trim() ?? emailLocal).toLowerCase();
+      const nobleId = slugify(
+        (form.username?.trim() ?? emailLocal).toLowerCase()
+      );
       if (!nobleId) return setError('Please choose your NobleID.');
       const ok = await checkUsername(nobleId);
       if (!ok) return setError('This NobleID is already taken.');
@@ -313,24 +347,27 @@ export default function OnboardingModal({
 
   const stepTitle =
     step === 1
-      ? `Hey ${authFirstName}, which hat are you wearing in the supply chain?`
+      ? `Hey ${authFirstName}, what brings you here?`
       : step === 2
-        ? 'Pick your NobleID'
+        ? 'Choose your NobleID'
         : step === 3
-          ? 'Where are you based?'
+          ? 'Your location'
           : step === 4
             ? 'Team size & company'
             : 'All set';
   const stepDescription =
     step === 1
-      ? 'Select the option that best describes you.'
+      ? 'Pick the role that best describes your day-to-day.'
       : step === 2
-        ? 'Your NobleID is how others will find and recognize you.'
+        ? 'This is your unique handle in NobleVerse. Letters, numbers, dots and dashes.'
         : step === 3
-          ? 'Tell us your operating location.'
+          ? 'We’ll use this to personalize content and availability.'
           : step === 4
             ? 'Choose your team size. If not solo, add your company name.'
             : "You're ready to go.";
+
+  // PixelBlast density fixed to 2.0
+  const pixelBlastDensity = 2;
 
   return (
     <Modal
@@ -349,12 +386,12 @@ export default function OnboardingModal({
         <div
           className={`grid grid-cols-1 ${step === 5 ? 'sm:grid-cols-1' : 'sm:grid-cols-2'} h-[680px] max-h-[85vh] grid-rows-[1fr_auto]`}
         >
-          <div className='flex min-h-0 px-8 py-8'>
+          <div className='flex min-h-0 px-6 py-6 sm:px-8 sm:py-8'>
             <div className='mx-auto flex min-h-0 w-full max-w-[540px] flex-col'>
               {/* textual header inside content */}
               {step !== 5 && (
                 <div className='mb-4'>
-                  <h2 className='text-xl font-semibold tracking-tight'>
+                  <h2 className='text-2xl font-semibold tracking-tight'>
                     {stepTitle}
                   </h2>
                   <p className='text-muted-foreground mt-1 text-sm'>
@@ -362,24 +399,34 @@ export default function OnboardingModal({
                   </p>
                 </div>
               )}
-              <div className='min-h-0 overflow-y-auto pr-1'>
+              <div className='relative min-h-0 flex-1 overflow-visible pr-2 pb-2'>
                 <AnimatePresence mode='wait' initial={false}>
                   {step === 1 && (
                     <motion.div
                       key='step1'
-                      initial={{ x: 24, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -24, opacity: 0 }}
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className='flex flex-col'
                     >
                       <div
                         role='radiogroup'
                         aria-label='Select your role'
-                        className='mt-2 grid grid-cols-1 gap-3'
+                        className='mt-2 flex flex-col gap-3 sm:gap-4'
                       >
                         {ROLES.map((role) => {
                           const selected = form.role === role.value;
+                          const RoleIcon =
+                            role.value === 'shipper'
+                              ? Icons.courier
+                              : role.value === 'forwarder'
+                                ? Icons.road
+                                : role.value === 'carrier'
+                                  ? Icons.courier
+                                  : role.value === 'broker'
+                                    ? Icons.addressBook
+                                    : Icons.user;
                           return (
                             <button
                               type='button'
@@ -389,44 +436,24 @@ export default function OnboardingModal({
                               }
                               role='radio'
                               aria-checked={selected}
-                              className={`flex items-center justify-between gap-3 rounded-xl border p-4 transition-all duration-150 ${
+                              className={`group relative flex items-start gap-4 rounded-2xl border p-5 text-left transition-all duration-150 ${
                                 selected
-                                  ? 'border-orange-600 bg-orange-50 ring-2 ring-orange-500/40 dark:bg-orange-900/40'
+                                  ? 'border-2 border-orange-600 bg-orange-50 dark:bg-orange-900/30'
                                   : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
-                              } hover:border-orange-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/60`}
-                              // remove aria-pressed to satisfy a11y for role radio
+                              }`}
                             >
-                              <div className='flex items-center gap-3'>
-                                <div className='flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800'>
-                                  <span className='text-sm'>
-                                    {role.label[0]}
-                                  </span>
-                                </div>
-                                <div className='flex flex-col items-start'>
-                                  <span className='font-medium'>
-                                    {`I'm a `}
-                                    <span className='font-semibold'>
-                                      {role.label}
-                                    </span>
-                                  </span>
-                                  {selected && (
-                                    <span className='text-muted-foreground text-xs'>
-                                      {ROLE_DESCRIPTIONS[role.value]}
-                                    </span>
-                                  )}
-                                </div>
+                              <div className='flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400'>
+                                <RoleIcon size={20} />
                               </div>
-                              <span
-                                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                                  selected
-                                    ? 'border-orange-600 bg-orange-600/20'
-                                    : 'border-zinc-300 dark:border-zinc-600'
-                                }`}
-                              >
-                                <span
-                                  className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-orange-600' : 'bg-transparent'}`}
-                                />
-                              </span>
+                              <div className='flex flex-col'>
+                                <span className='font-semibold'>
+                                  {role.label}
+                                </span>
+                                <span className='text-muted-foreground text-xs'>
+                                  {ROLE_DESCRIPTIONS[role.value]}
+                                </span>
+                              </div>
+                              {/* Removed check badge and right-side indicator per request */}
                             </button>
                           );
                         })}
@@ -437,15 +464,18 @@ export default function OnboardingModal({
                   {step === 2 && (
                     <motion.div
                       key='step2'
-                      initial={{ x: 24, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -24, opacity: 0 }}
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className='flex h-full flex-col'
                     >
                       <div className='mt-2'>
+                        <label className='mb-2 block text-sm font-medium'>
+                          NobleID
+                        </label>
                         <div className='relative'>
-                          <div className='flex items-stretch rounded-lg border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
+                          <div className='flex items-stretch rounded-xl border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
                             <span className='px-3 py-3 text-zinc-500 select-none'>
                               @
                             </span>
@@ -455,14 +485,39 @@ export default function OnboardingModal({
                               onChange={(e) =>
                                 setForm((f) => ({
                                   ...f,
-                                  username: (e.target.value || '').toLowerCase()
+                                  username: slugify(e.target.value || '')
                                 }))
                               }
                               placeholder={emailLocal}
-                              className='w-full bg-transparent px-0 py-3 pr-3 focus:outline-none'
+                              autoComplete='off'
+                              className='w-full bg-transparent px-0 py-3 pr-10 focus:outline-none'
                             />
+                            <div className='pointer-events-none absolute top-1/2 right-3 -translate-y-1/2'>
+                              {usernameState === 'checking' && (
+                                <Icons.spinner
+                                  className='animate-spin text-zinc-400'
+                                  size={18}
+                                />
+                              )}
+                              {usernameState === 'available' && (
+                                <Icons.check
+                                  className='text-green-600'
+                                  size={18}
+                                />
+                              )}
+                              {usernameState === 'taken' && (
+                                <Icons.warning
+                                  className='text-red-600'
+                                  size={18}
+                                />
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <p className='mt-2 text-xs text-zinc-600 dark:text-zinc-400'>
+                          Tip: Keep it short and memorable. Allowed: letters,
+                          numbers, dot, dash, underscore.
+                        </p>
                       </div>
                     </motion.div>
                   )}
@@ -470,9 +525,9 @@ export default function OnboardingModal({
                   {step === 3 && (
                     <motion.div
                       key='step3'
-                      initial={{ x: 24, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -24, opacity: 0 }}
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className='flex h-full flex-col'
                     >
@@ -497,16 +552,16 @@ export default function OnboardingModal({
                   {step === 4 && (
                     <motion.div
                       key='step4'
-                      initial={{ x: 24, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -24, opacity: 0 }}
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className='flex h-full flex-col'
                     >
                       <div
                         role='radiogroup'
                         aria-label='Select your team size'
-                        className='grid grid-cols-1 gap-3'
+                        className='grid grid-cols-1 gap-3 sm:grid-cols-2'
                       >
                         {TEAM_SIZES.map((opt) => {
                           const selected = form.details?.team_size === opt.key;
@@ -525,38 +580,31 @@ export default function OnboardingModal({
                               }
                               role='radio'
                               aria-checked={selected}
-                              className={`flex items-center justify-between rounded-lg border p-4 transition-all ${
+                              className={`flex items-center justify-between rounded-2xl border p-4 transition-all ${
                                 selected
-                                  ? 'border-orange-600 bg-orange-50 ring-2 ring-orange-500/40 dark:bg-orange-900/40'
+                                  ? 'border-2 border-orange-600 bg-orange-50 dark:bg-orange-900/30'
                                   : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
                               }`}
                             >
-                              <span>{opt.label}</span>
-                              <span
-                                className={`h-5 w-5 rounded-full border ${
-                                  selected
-                                    ? 'border-orange-600 bg-orange-600'
-                                    : 'border-zinc-400'
-                                }`}
-                              />
+                              <span className='font-medium'>{opt.label}</span>
                             </button>
                           );
                         })}
                       </div>
                       {form.details?.team_size &&
                         form.details.team_size !== 'solo' && (
-                          <div className='mt-2'>
+                          <div className='mt-auto pt-3'>
+                            <div className='mb-2 inline-flex rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'>
+                              Don’t worry, we made room for team invitations
+                              too.
+                            </div>
                             <input
                               name='company_name'
                               value={form.company_name ?? ''}
                               onChange={handleChange}
                               placeholder='Company name'
-                              className='w-full rounded-lg border bg-white px-3 py-3 focus:ring-2 focus:ring-orange-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+                              className='w-full rounded-xl border bg-white px-3 py-3 focus:ring-2 focus:ring-orange-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
                             />
-                            <div className='mt-2 inline-flex rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'>
-                              Don’t worry, we made room for team invitations
-                              too.
-                            </div>
                           </div>
                         )}
                     </motion.div>
@@ -565,9 +613,9 @@ export default function OnboardingModal({
                   {step === 5 && (
                     <motion.div
                       key='step5'
-                      initial={{ x: 24, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -24, opacity: 0 }}
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className='flex h-full flex-col items-center justify-center'
                     >
@@ -604,8 +652,24 @@ export default function OnboardingModal({
             </div>
           </div>
           {step !== 5 && (
-            <div className='row-span-2 hidden h-full p-3 sm:block'>
-              <div className='h-full w-full rounded-md bg-orange-500/85' />
+            <div className='row-span-2 hidden h-full rounded-l pt-5 pr-5 pb-5 pl-0 sm:block'>
+              <div className='relative h-full w-full overflow-hidden rounded-none'>
+                <PixelBlast
+                  variant='square'
+                  pixelSize={7}
+                  color='#ff5a26'
+                  patternScale={90}
+                  patternDensity={pixelBlastDensity}
+                  pixelSizeJitter={5}
+                  enableRipples={true}
+                  rippleSpeed={0.4}
+                  rippleThickness={0.12}
+                  rippleIntensityScale={1.5}
+                  speed={0.6}
+                  edgeFade={0}
+                  transparent
+                />
+              </div>
             </div>
           )}
           {/* Footer: Centered Finish on step 5; otherwise Back • Stepper • Continue */}
