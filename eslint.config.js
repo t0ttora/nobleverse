@@ -22,6 +22,7 @@ module.exports = [
     files: [
       '**/*.js',
       '**/*.cjs',
+      '**/*.mjs',
       'eslint.config.js',
       'postcss.config.js',
       'next.config.ts'
@@ -52,7 +53,8 @@ module.exports = [
     plugins: {
       '@typescript-eslint': tseslint,
       // Register Next.js plugin under the same key used by its rule names
-      '@next/next': nextPlugin
+      '@next/next': nextPlugin,
+      'react-hooks': require('eslint-plugin-react-hooks')
     },
     rules: {
       // Use TS's checks instead of core no-undef in TS files
@@ -63,7 +65,14 @@ module.exports = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
       ],
-      'no-console': 'warn'
+      'no-console': 'warn',
+      // Allow empty catch blocks (we intentionally swallow errors in UI flows)
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+      // Some regex literals intentionally escape forward slashes, reduce noise
+      'no-useless-escape': 'warn',
+      // Ensure hooks deps rule is available
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
     }
   }
 ];

@@ -127,7 +127,15 @@ export default function SupabaseSignInForm() {
           </Button>
         </form>
       </Form>
-      <div className='mt-4 text-center text-sm'>
+      <div className='mt-3 text-center text-sm'>
+        <Link
+          href='/auth/forgot-password'
+          className='text-muted-foreground hover:text-foreground underline underline-offset-4'
+        >
+          Forgot password?
+        </Link>
+      </div>
+      <div className='mt-3 text-center text-sm'>
         Don&apos;t have an account?{' '}
         <Link
           href='/auth/sign-up'

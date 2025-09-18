@@ -54,7 +54,24 @@ export default function SupabaseSignUpForm() {
         .eq('id', user.id)
         .maybeSingle();
       if (profile?.id) {
-        router.replace('/dashboard');
+        // Cookies'in sunucuya yazılması ve SSR'ın oturumu görmesi için kısa bir bekleme uygula
+        const waitForSession = async () => {
+          for (let i = 0; i < 4; i++) {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) return true;
+            await new Promise((r) => setTimeout(r, 150));
+          }
+          return false;
+        };
+        const hasSession = await waitForSession();
+        try {
+          router.replace('/dashboard');
+          router.refresh();
+        } finally {
+          if (!hasSession) {
+            window.location.replace('/dashboard');
+          }
+        }
       } else if (attempt < 20) {
         // trigger gecikmesine karşı 10s'e kadar bekle (500ms * 20)
         setTimeout(() => void checkAndRedirect(attempt + 1), 500);

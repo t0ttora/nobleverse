@@ -25,10 +25,14 @@ async function main() {
     const ico = await toIco(pngBuffers, { resize: false });
     await fs.writeFile(outIco, ico);
     await fs.writeFile(outIcoAlt, ico);
-    console.log(`Wrote ${outIco} and ${outIcoAlt} with sizes: ${SIZES.join(', ')}`);
 }
 
 main().catch((err) => {
-    console.error(err);
+    // Silent fail for lint cleanliness; process exit non-zero for CI
+    try {
+        console.error(String(err?.message || err));
+    } catch {
+        void 0; // noop
+    }
     process.exit(1);
 });

@@ -30,6 +30,10 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
   >('idle');
   const [additionalNotes, setAdditionalNotes] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
+  // MAS (must be as specified) fields state must be declared before any early return to satisfy hooks rules
+  const [masChecked, setMasChecked] = React.useState<{
+    [key: string]: boolean;
+  }>({});
 
   if (!formConfig)
     return <div className='text-red-500'>Form config not found.</div>;
@@ -81,10 +85,6 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
     }
   };
 
-  // MAS (must be as specified) fields state
-  const [masChecked, setMasChecked] = React.useState<{
-    [key: string]: boolean;
-  }>({});
   const masFields = sections.flatMap((section) =>
     section.fields.filter((f) => f.mas)
   );
