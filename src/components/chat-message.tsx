@@ -42,6 +42,7 @@ import {
 } from '@/components/chat-cards/card-renderer';
 import { createEvent, notifyUsersAboutEvent } from '@/lib/calendar';
 import { useProfileRole } from '@/hooks/use-profile-role';
+import EmojiPicker from '@/components/ui/emoji-picker';
 
 interface ChatMessageItemProps {
   message: ChatMessage & { room_id?: string };
@@ -189,15 +190,13 @@ export const ChatMessageItem = ({
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) return;
-    await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: message.id,
-        actor_id: uid,
-        event_type: 'emoji',
-        payload: { emoji }
-      });
+    await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: message.id,
+      actor_id: uid,
+      event_type: 'emoji',
+      payload: { emoji }
+    });
     setEmojiOpen(false);
   }
   async function toggle(type: 'pin' | 'star') {
@@ -205,14 +204,12 @@ export const ChatMessageItem = ({
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) return;
-    await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: message.id,
-        actor_id: uid,
-        event_type: type
-      });
+    await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: message.id,
+      actor_id: uid,
+      event_type: type
+    });
   }
   // Load reply preview
   useEffect(() => {
@@ -342,31 +339,11 @@ export const ChatMessageItem = ({
                   <Smile className='size-4' />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className='w-44 p-1' align='center'>
-                <div className='grid grid-cols-6 gap-1 text-lg'>
-                  {[
-                    '👍',
-                    '❤️',
-                    '🔥',
-                    '🎉',
-                    '🤣',
-                    '👏',
-                    '😮',
-                    '😢',
-                    '😡',
-                    '🙏',
-                    '✅',
-                    '❌'
-                  ].map((e) => (
-                    <button
-                      key={e}
-                      className='hover:bg-accent rounded'
-                      onClick={() => void addReaction(e)}
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
+              <PopoverContent className='w-fit p-0' align='center'>
+                <EmojiPicker
+                  className='h-[342px]'
+                  onPick={(e) => void addReaction(e)}
+                />
               </PopoverContent>
             </Popover>
             <Popover open={menuOpen} onOpenChange={setMenuOpen}>
@@ -788,31 +765,11 @@ export const ChatMessageItem = ({
                   <Smile className='size-4' />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className='w-44 p-1' align='center'>
-                <div className='grid grid-cols-6 gap-1 text-lg'>
-                  {[
-                    '👍',
-                    '❤️',
-                    '🔥',
-                    '🎉',
-                    '🤣',
-                    '👏',
-                    '😮',
-                    '😢',
-                    '😡',
-                    '🙏',
-                    '✅',
-                    '❌'
-                  ].map((e) => (
-                    <button
-                      key={e}
-                      className='hover:bg-accent rounded'
-                      onClick={() => void addReaction(e)}
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
+              <PopoverContent className='w-fit p-0' align='center'>
+                <EmojiPicker
+                  className='h-[342px]'
+                  onPick={(e) => void addReaction(e)}
+                />
               </PopoverContent>
             </Popover>
             <Popover open={menuOpen} onOpenChange={setMenuOpen}>
@@ -1074,15 +1031,13 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
     if (!uid) return;
     const roomId = (card as any).room_id || null;
     // Audit event
-    await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: null,
-        actor_id: uid,
-        event_type: 'card_action',
-        payload: { action, card }
-      });
+    await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: null,
+      actor_id: uid,
+      event_type: 'card_action',
+      payload: { action, card }
+    });
 
     // Behaviors by action
     switch (action.action) {
@@ -1148,64 +1103,54 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'report_issue': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'shipment_issue',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'shipment_issue',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'update_status': {
         // Milestone entry for shipment
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'shipment_milestone',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'shipment_milestone',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'upload_document': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'shipment_document_uploaded',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'shipment_document_uploaded',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'mark_customs_cleared': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'customs_cleared',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'customs_cleared',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'request_missing_docs': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'request_missing_docs',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'request_missing_docs',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'open_invoice_list': {
@@ -1218,27 +1163,23 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'match_payment': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            message_id: null,
-            actor_id: uid,
-            event_type: 'match_payment',
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          message_id: null,
+          actor_id: uid,
+          event_type: 'match_payment',
+          payload: action.payload || {}
+        });
         break;
       }
       case 'create_offer': {
         const requestId = (action.payload as any)?.request_id;
         if (requestId) {
-          await supabase
-            .from('offers')
-            .insert({
-              request_id: requestId,
-              status: 'draft',
-              details: {} as any
-            });
+          await supabase.from('offers').insert({
+            request_id: requestId,
+            status: 'draft',
+            details: {} as any
+          });
         }
         break;
       }
@@ -1271,15 +1212,13 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
           }
           // Emit chat event for timeline
           try {
-            await supabase
-              .from('chat_events')
-              .insert({
-                room_id: roomId,
-                message_id: null,
-                actor_id: uid,
-                event_type: 'offer_accepted',
-                payload: { offer_id: offerId }
-              });
+            await supabase.from('chat_events').insert({
+              room_id: roomId,
+              message_id: null,
+              actor_id: uid,
+              event_type: 'offer_accepted',
+              payload: { offer_id: offerId }
+            });
           } catch {
             /* ignore */
           }
@@ -1304,15 +1243,13 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
           }
           // Log chat event to keep the flow visible; users can send a new negotiation card from composer
           try {
-            await supabase
-              .from('chat_events')
-              .insert({
-                room_id: roomId,
-                message_id: null,
-                actor_id: uid,
-                event_type: 'negotiation_countered',
-                payload: { offer_id: offerId }
-              });
+            await supabase.from('chat_events').insert({
+              room_id: roomId,
+              message_id: null,
+              actor_id: uid,
+              event_type: 'negotiation_countered',
+              payload: { offer_id: offerId }
+            });
           } catch {
             /* ignore */
           }
@@ -1356,47 +1293,39 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'open_request_requirements': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'open_request_requirements',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'open_request_requirements',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'flag_compliance_risk': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'compliance_risk_flagged',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'compliance_risk_flagged',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'open_cost_estimate': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'open_cost_estimate',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'open_cost_estimate',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'save_for_review': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'saved_for_review',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'saved_for_review',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'pay_invoice': {
@@ -1428,14 +1357,12 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
       }
       case 'issue_invoice': {
         const payload = action.payload as any;
-        await supabase
-          .from('invoices')
-          .insert({
-            amount: payload?.amount || null,
-            due_date: payload?.due_date || null,
-            status: 'issued',
-            request_id: payload?.request_id || null
-          });
+        await supabase.from('invoices').insert({
+          amount: payload?.amount || null,
+          due_date: payload?.due_date || null,
+          status: 'issued',
+          request_id: payload?.request_id || null
+        });
         break;
       }
       case 'update_invoice_info': {
@@ -1469,14 +1396,12 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
       }
       case 'create_task': {
         const p = action.payload as any;
-        await supabase
-          .from('tasks')
-          .insert({
-            title: p?.title || 'Task',
-            assigned_to: p?.assigned_to || null,
-            status: 'open',
-            deadline: p?.deadline || null
-          });
+        await supabase.from('tasks').insert({
+          title: p?.title || 'Task',
+          assigned_to: p?.assigned_to || null,
+          status: 'open',
+          deadline: p?.deadline || null
+        });
         break;
       }
       case 'reassign_task': {
@@ -1499,14 +1424,12 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'upload_task_document': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'task_document_uploaded',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'task_document_uploaded',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'approve_expense_task': {
@@ -1598,25 +1521,21 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'verify_payment': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'payment_verified',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'payment_verified',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'send_payment_reminder': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'payment_reminder_sent',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'payment_reminder_sent',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'reconcile_payment': {
@@ -1638,80 +1557,66 @@ async function handleCardAction(action: NobleAction, card: NobleCard) {
         break;
       }
       case 'link_customs_file': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'link_customs_file',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'link_customs_file',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'link_clearance_task': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'link_clearance_task',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'link_clearance_task',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'reply_note': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'note_replied',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'note_replied',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'pin_note': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'note_pinned',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'note_pinned',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'share_note': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'note_shared',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'note_shared',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'attach_compliance_file': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'compliance_file_attached',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'compliance_file_attached',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       case 'add_customs_note': {
-        await supabase
-          .from('chat_events')
-          .insert({
-            room_id: roomId,
-            event_type: 'customs_note_added',
-            actor_id: uid,
-            payload: action.payload || {}
-          });
+        await supabase.from('chat_events').insert({
+          room_id: roomId,
+          event_type: 'customs_note_added',
+          actor_id: uid,
+          payload: action.payload || {}
+        });
         break;
       }
       default:

@@ -40,8 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import EmojiPicker from '@/components/ui/emoji-picker';
 
 type Profile = {
   id: string;
@@ -408,10 +407,8 @@ export function NewMessageDialog({
               </PopoverTrigger>
               <PopoverContent className='p-0' align='start'>
                 <div className='w-[320px]'>
-                  <Picker
-                    data={data}
-                    onEmojiSelect={(emoji: any) => {
-                      const symbol = emoji.native || emoji.shortcodes || '';
+                  <EmojiPicker
+                    onPick={(symbol: string) => {
                       const ta = document.querySelector(
                         'textarea'
                       ) as HTMLTextAreaElement | null;
@@ -430,7 +427,6 @@ export function NewMessageDialog({
                         ta.setSelectionRange(pos, pos);
                       });
                     }}
-                    theme='light'
                   />
                 </div>
               </PopoverContent>

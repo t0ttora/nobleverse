@@ -25,13 +25,12 @@ import {
   CheckSquare,
   StickyNote
 } from 'lucide-react';
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger
 } from '@/components/ui/popover';
+import EmojiPicker from '@/components/ui/emoji-picker';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -233,7 +232,6 @@ export const RealtimeChat = ({
 
   // Emoji theme + recents
   const { resolvedTheme } = useTheme();
-  const pickerTheme = (resolvedTheme === 'dark' ? 'dark' : 'light') as any;
   const RECENT_KEY = 'nv_recent_emojis';
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
 
@@ -447,14 +445,12 @@ export const RealtimeChat = ({
           insertedId = (inserted?.id as string) || null;
         }
         if (insertedId) {
-          await supabase
-            .from('chat_events')
-            .insert({
-              room_id: roomName,
-              message_id: insertedId,
-              actor_id: uid,
-              event_type: 'receipt'
-            });
+          await supabase.from('chat_events').insert({
+            room_id: roomName,
+            message_id: insertedId,
+            actor_id: uid,
+            event_type: 'receipt'
+          });
           const { data: members } = await supabase
             .from('chat_members')
             .select('user_id')
@@ -463,19 +459,17 @@ export const RealtimeChat = ({
             .map((m) => m.user_id as string)
             .filter((id) => id !== uid);
           if (recipients.length) {
-            await supabase
-              .from('notifications')
-              .insert(
-                recipients.map((r) => ({
-                  user_id: r,
-                  actor_id: uid,
-                  type: 'chat_message',
-                  title: `${username} sent a new message.`,
-                  body: content.slice(0, 120),
-                  category: 'inbox',
-                  data: { room_id: roomName }
-                }))
-              );
+            await supabase.from('notifications').insert(
+              recipients.map((r) => ({
+                user_id: r,
+                actor_id: uid,
+                type: 'chat_message',
+                title: `${username} sent a new message.`,
+                body: content.slice(0, 120),
+                category: 'inbox',
+                data: { room_id: roomName }
+              }))
+            );
           }
         }
         return { ok: true };
@@ -1349,29 +1343,11 @@ export const RealtimeChat = ({
             </PopoverTrigger>
             <PopoverContent className='p-0' align='end'>
               <div className='w-[320px]'>
-                {recentEmojis.length > 0 && (
-                  <div className='flex flex-wrap gap-1 border-b px-2 py-1'>
-                    {recentEmojis.slice(0, 12).map((e) => (
-                      <button
-                        key={e}
-                        className='text-lg'
-                        onClick={() =>
-                          insertAtCursorStrict(textareaRef, setNewMessage, e)
-                        }
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <Picker
-                  data={data}
-                  onEmojiSelect={(emoji: any) => {
-                    const symbol = emoji.native || emoji.shortcodes || '';
-                    insertAtCursorStrict(textareaRef, setNewMessage, symbol);
-                    pushRecentEmoji(symbol);
+                <EmojiPicker
+                  onPick={(emoji) => {
+                    insertAtCursorStrict(textareaRef, setNewMessage, emoji);
+                    pushRecentEmoji(emoji);
                   }}
-                  theme={pickerTheme}
                 />
               </div>
             </PopoverContent>

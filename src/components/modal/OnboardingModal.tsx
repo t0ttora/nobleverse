@@ -9,7 +9,7 @@ import {
   formatLocation
 } from '@/components/onboarding/LocationPicker';
 import Confetti from '@/components/onboarding/Confetti';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Icons } from '@/components/icons';
 import PixelBlast from '@/components/PixelBlast';
 import type { Profile } from '@/types/profile';

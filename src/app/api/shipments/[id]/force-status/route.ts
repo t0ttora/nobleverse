@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createClient as createSupabaseServerClient } from '@/../utils/supabase/server';
 
 type RouteContext = { params: { id: string } };
 
@@ -8,7 +8,8 @@ type RouteContext = { params: { id: string } };
 // Only participants or admins (role check) may force status.
 export async function PATCH(req: NextRequest, context: RouteContext | any) {
   const { params } = context as RouteContext;
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServerClient(cookieStore);
   const { status } = (await req.json().catch(() => ({}))) as {
     status?: string;
   };
