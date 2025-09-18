@@ -2,7 +2,8 @@ import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
 // Define the base Next.js configuration
-const baseConfig: NextConfig = {
+// Extend the type locally to allow the `turbopack` field until types catch up
+const baseConfig: NextConfig & { turbopack?: { root?: string } } = {
   images: {
     remotePatterns: [
       {
@@ -16,6 +17,10 @@ const baseConfig: NextConfig = {
   // Don't fail production builds on ESLint errors. Keep linting in CI or via `pnpm lint`.
   eslint: {
     ignoreDuringBuilds: true
+  },
+  // Pin Turbopack root to this project to avoid parent lockfile confusion
+  turbopack: {
+    root: __dirname
   }
 };
 

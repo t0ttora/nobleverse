@@ -58,8 +58,25 @@ export default function SupabaseSignInForm() {
     setLoading(false);
     if (error) setError(error.message);
     else {
-      router.replace('/dashboard');
-      router.refresh(); // Layout'u anında güncelle
+      // Ensure session is available and cookies are persisted before navigating
+      const waitForSession = async () => {
+        for (let i = 0; i < 4; i++) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session) return true;
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        return false;
+      };
+      const hasSession = await waitForSession();
+      // Try SPA nav first, then hard reload to guarantee SSR sees cookies
+      try {
+        router.replace('/dashboard');
+        router.refresh();
+      } finally {
+        if (!hasSession) {
+          window.location.replace('/dashboard');
+        }
+      }
     }
   };
 

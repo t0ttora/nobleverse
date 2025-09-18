@@ -43,16 +43,42 @@ export default function SupabaseSignUpForm() {
   });
 
   useEffect(() => {
-    // Eğer kullanıcı giriş yaptıysa, dashboard'a yönlendir
-    const checkSession = async () => {
-      const {
-        data: { session }
-      } = await supabase.auth.getSession();
-      if (session) {
+    // Eğer kullanıcı giriş yaptıysa, profili var mı kontrol et; yoksa auth flow'da kal
+    const checkAndRedirect = async (attempt = 0) => {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      if (!user) return; // oturum yok, auth flow'da kal
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.id) {
         router.replace('/dashboard');
+      } else if (attempt < 20) {
+        // trigger gecikmesine karşı 10s'e kadar bekle (500ms * 20)
+        setTimeout(() => void checkAndRedirect(attempt + 1), 500);
       }
     };
-    checkSession();
+    void checkAndRedirect();
+
+    // Oturum başka bir sekmede doğrulanırsa bu sekmede de yakala ve yönlendir
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) void checkAndRedirect();
+    });
+
+    // Callback sayfasından gelen mesajı dinle
+    const onMessage = (e: MessageEvent) => {
+      if (e?.data?.type === 'supabase:auth:signed-in') {
+        void checkAndRedirect();
+      }
+    };
+    window.addEventListener('message', onMessage);
+
+    return () => {
+      sub.subscription?.unsubscribe();
+      window.removeEventListener('message', onMessage);
+    };
   }, [router]);
 
   const onSubmit = async (data: FormValues) => {
@@ -60,10 +86,16 @@ export default function SupabaseSignUpForm() {
     setLoading(true);
     setResendError('');
     setResendSuccess('');
+    const redirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
     const { error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
+        // Verification email tıklandığında bu route'a dön
+        emailRedirectTo: redirectTo,
         data: {
           first_name: data.firstName,
           last_name: data.lastName
