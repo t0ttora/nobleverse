@@ -314,11 +314,16 @@ export const ChatMessageItem = ({
     <div
       className={`group relative flex ${compact ? 'mt-1' : 'mt-3'} ${isOwnMessage ? 'justify-end' : 'justify-start'} overflow-x-hidden`}
     >
-      <div className='flex max-w-full items-center gap-2'>
+      <div
+        className={cn(
+          'flex max-w-full items-center',
+          isOwnMessage ? 'gap-0' : 'gap-2'
+        )}
+      >
         {/* Side: for incoming show avatar on left, for outgoing show actions on left */}
         {isOwnMessage ? (
           // Outgoing: actions on left
-          <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+          <div className='mr-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
             <Button
               variant='ghost'
               size='icon'
@@ -461,8 +466,8 @@ export const ChatMessageItem = ({
 
         {/* Content column (bubble + extras) */}
         <div
-          className={cn('flex w-fit max-w-[75%] flex-col', {
-            'items-end': isOwnMessage
+          className={cn('flex w-full max-w-[75%] min-w-0 flex-col', {
+            'ml-auto items-end': isOwnMessage
           })}
         >
           {/* Reply preview outside bubble (above the main message) */}
@@ -615,20 +620,18 @@ export const ChatMessageItem = ({
           {/* Cards under message (attachment-like) */}
           {cards.length > 0 && (
             <div
-              className={cn('mt-2 w-full px-1', { 'ml-auto': isOwnMessage })}
+              className={cn('mt-2', isOwnMessage ? 'self-end' : 'self-start')}
             >
               <div
                 className={cn(
-                  'grid w-full gap-2',
-                  isOwnMessage ? 'justify-items-end' : 'justify-items-start'
+                  'flex flex-col gap-2',
+                  isOwnMessage ? 'items-end' : 'items-start'
                 )}
               >
                 {cards.map((c, i) => (
                   <div
                     key={i}
-                    className={cn(
-                      isOwnMessage ? 'justify-self-end' : 'justify-self-start'
-                    )}
+                    className={cn(isOwnMessage ? 'self-end' : 'self-start')}
                   >
                     <CardRenderer
                       card={c}
@@ -643,12 +646,12 @@ export const ChatMessageItem = ({
           {/* Attachments under message */}
           {attachments.length > 0 && (
             <div
-              className={cn('mt-2 w-full px-1', { 'ml-auto': isOwnMessage })}
+              className={cn('mt-2', isOwnMessage ? 'self-end' : 'self-start')}
             >
               {/* responsive auto-fit columns, align to sender side */}
               <div
                 className={cn(
-                  'grid w-full [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))] gap-2',
+                  'grid [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))] gap-2',
                   isOwnMessage ? 'justify-items-end' : 'justify-items-start'
                 )}
               >
@@ -656,9 +659,7 @@ export const ChatMessageItem = ({
                   (a, idx) => (
                     <div
                       key={idx}
-                      className={cn(
-                        isOwnMessage ? 'justify-self-end' : 'justify-self-start'
-                      )}
+                      className={cn(isOwnMessage ? 'self-end' : 'self-start')}
                     >
                       <AttachmentChip att={a} />
                     </div>
@@ -670,7 +671,7 @@ export const ChatMessageItem = ({
                     onClick={() => setShowAllAtt(true)}
                     className={cn(
                       'bg-card text-card-foreground hover:bg-accent/50 inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-sm',
-                      isOwnMessage ? 'justify-self-end' : 'justify-self-start'
+                      isOwnMessage ? 'self-end' : 'self-start'
                     )}
                     aria-label={`Show ${attachments.length - 6} more attachments`}
                   >
@@ -731,20 +732,10 @@ export const ChatMessageItem = ({
           )}
           {/* No bottom avatar; avatar is shown side-centered when needed */}
         </div>
-        {/* Side: for incoming show actions on right, for outgoing show avatar on right */}
-        {isOwnMessage ? (
-          // Outgoing: avatar on right
-          <div className='flex w-7 items-center justify-center'>
-            {showBottomAvatar && (
-              <Avatar className='size-6'>
-                <AvatarImage src={avatarUrl} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-            )}
-          </div>
-        ) : (
+        {/* Side: for incoming show actions on right; for outgoing keep spacer */}
+        {!isOwnMessage ? (
           // Incoming: actions on right
-          <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
+          <div className='ml-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
             <Button
               variant='ghost'
               size='icon'
@@ -874,7 +865,7 @@ export const ChatMessageItem = ({
               </PopoverContent>
             </Popover>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -865,6 +865,12 @@ export const RealtimeChat = ({
         ref={containerRef}
         className='absolute inset-x-0 top-0 bottom-0 space-y-3 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-36 md:space-y-4 md:px-4 md:pt-4'
       >
+        {/* Debug guide: enable with ?debugChat=1 to verify right edge */}
+        {typeof window !== 'undefined' &&
+          new URLSearchParams(window.location.search).get('debugChat') ===
+            '1' && (
+            <div className='pointer-events-none absolute inset-y-0 right-9 z-50 w-px bg-fuchsia-500/50 md:right-10' />
+          )}
         {/* Unread banner */}
         {seenReady && unreadCount > 0 && (
           <div className='bg-card/80 sticky top-0 z-10 flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs shadow-sm backdrop-blur'>
