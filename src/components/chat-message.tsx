@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -75,13 +74,9 @@ export const ChatMessageItem = ({
   const [readers, setReaders] = useState<
     Array<{ id: string; name: string; avatar_url?: string | null }>
   >([]);
-  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(
-    (((message as any).user?.avatar_url as string | undefined) || undefined) as
-      | string
-      | undefined
-  );
+  // Avatar state removed (no longer needed)
   const [showAllAtt, setShowAllAtt] = useState(false);
-  const initials = (message.user.name || 'U').slice(0, 2).toUpperCase();
+  // Initials removed (no longer needed)
   const roomId = (message as any).room_id as string | undefined;
   const meta = useMemo(
     () => extractMeta(message.content ?? ''),
@@ -165,26 +160,7 @@ export const ChatMessageItem = ({
     };
   }, [message.id]);
 
-  // Ensure we display sender avatar even if not present in payload
-  useEffect(() => {
-    let active = true;
-    async function loadAvatar() {
-      if (avatarUrl) return;
-      const uid = message.user.id;
-      if (!uid) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('avatar_url')
-        .eq('id', uid)
-        .single();
-      if (active)
-        setAvatarUrl((data?.avatar_url as string | null) || undefined);
-    }
-    void loadAvatar();
-    return () => {
-      active = false;
-    };
-  }, [message.user.id, avatarUrl]);
+  // Avatar effect removed (no longer needed)
   async function addReaction(emoji: string) {
     if (!roomId) return;
     const { data: auth } = await supabase.auth.getUser();
@@ -310,9 +286,18 @@ export const ChatMessageItem = ({
       void supabase.removeChannel(channel);
     };
   }, [message.id]);
+  // Kenar boşluğu (her iki taraf için aynı değişken)
+  const edgePadding = 'px-1 sm:px-1 md:px-1'; // Buradan ayar çekebilirsiniz
+  // Balon padding (her iki taraf için aynı değişken)
+  const balloonPadding = 'px-3.5 py-2.5'; // Buradan ayar çekebilirsiniz
+
+  // Mesajlar arası mesafe için değişken
+  const messageSpacing = 'mb-0.5 md:mb-0.5'; // Buradan ayar çekebilirsiniz
+
   return (
     <div
-      className={`group relative flex ${compact ? 'mt-1' : 'mt-3'} ${isOwnMessage ? 'justify-end' : 'justify-start'} overflow-x-hidden`}
+      className={`group relative flex ${isOwnMessage ? 'justify-end' : 'justify-start'} ${edgePadding} ${messageSpacing}`}
+      style={{ overflow: 'visible' }}
     >
       <div
         className={cn(
@@ -452,25 +437,25 @@ export const ChatMessageItem = ({
               </PopoverContent>
             </Popover>
           </div>
-        ) : (
-          // Incoming: avatar on left
-          <div className='flex w-7 items-center justify-center'>
-            {showBottomAvatar && (
-              <Avatar className='size-6'>
-                <AvatarImage src={avatarUrl} />
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-            )}
-          </div>
-        )}
+        ) : null}
 
         {/* Content column (bubble + extras) */}
         <div
-          className={cn('flex w-full max-w-[75%] min-w-0 flex-col', {
-            'ml-auto items-end': isOwnMessage
-          })}
+          className={cn(
+            'flex w-full max-w-[75%] min-w-0 flex-col',
+            isOwnMessage ? 'ml-auto items-end' : 'mr-auto items-start'
+          )}
+          style={{ overflow: 'visible' }}
         >
-          {/* Reply preview outside bubble (above the main message) */}
+          {/* Incoming header: avatar + name (her zaman reply preview'dan önce) */}
+          {!isOwnMessage && showHeader && (
+            <div className='mb-1 flex items-center gap-2'>
+              <span className='text-muted-foreground truncate text-xs font-medium'>
+                @{message.user.name}
+              </span>
+            </div>
+          )}
+          {/* Reply preview outside bubble (above the main message, header'dan sonra) */}
           {replyPreview && replyTo && (
             <div
               className={cn('mb-1', isOwnMessage ? 'self-end' : 'self-start')}
@@ -500,7 +485,7 @@ export const ChatMessageItem = ({
             {(textWithoutCards || replyTo) && (
               <div
                 className={cn(
-                  compact ? 'px-3 py-2' : 'px-3.5 py-2.5',
+                  balloonPadding,
                   'w-fit rounded-2xl border text-sm break-words whitespace-pre-wrap shadow-sm',
                   'bg-card text-foreground border-border/50'
                 )}
@@ -582,15 +567,13 @@ export const ChatMessageItem = ({
                 <PopoverTrigger asChild>
                   <div className='absolute right-1 -bottom-3 flex -space-x-2'>
                     {readers.slice(0, 3).map((u) => (
-                      <Avatar
+                      <span
                         key={u.id}
-                        className='ring-background size-4 ring-1'
+                        className='bg-muted text-muted-foreground border-border inline-flex size-4 items-center justify-center rounded-full border text-[10px] font-bold'
+                        title={u.name}
                       >
-                        <AvatarImage src={u.avatar_url || undefined} />
-                        <AvatarFallback>
-                          {(u.name || 'U').slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                        {(u.name || 'U').slice(0, 2).toUpperCase()}
+                      </span>
                     ))}
                   </div>
                 </PopoverTrigger>
@@ -602,12 +585,12 @@ export const ChatMessageItem = ({
                         key={u.id}
                         className='flex items-center gap-2 text-sm'
                       >
-                        <Avatar className='size-5'>
-                          <AvatarImage src={u.avatar_url || undefined} />
-                          <AvatarFallback>
-                            {(u.name || 'U').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <span
+                          className='bg-muted text-muted-foreground border-border mr-2 inline-flex size-5 items-center justify-center rounded-full border text-xs font-bold'
+                          title={u.name}
+                        >
+                          {(u.name || 'U').slice(0, 2).toUpperCase()}
+                        </span>
                         <span>{u.name}</span>
                       </div>
                     ))}
@@ -715,12 +698,12 @@ export const ChatMessageItem = ({
                     <div className='space-y-1 text-sm'>
                       {r.users.map((u) => (
                         <div key={u.id} className='flex items-center gap-2'>
-                          <Avatar className='size-5'>
-                            <AvatarImage src={u.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {(u.name || 'U').slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <span
+                            className='bg-muted text-muted-foreground border-border mr-2 inline-flex size-5 items-center justify-center rounded-full border text-xs font-bold'
+                            title={u.name}
+                          >
+                            {(u.name || 'U').slice(0, 2).toUpperCase()}
+                          </span>
                           <span className='truncate'>{u.name}</span>
                         </div>
                       ))}
@@ -955,7 +938,7 @@ function formatTime(iso: string | Date) {
   }).format(d);
 }
 
-function extractAttachments(content: string): {
+export function extractAttachments(content: string): {
   body: string;
   attachments: Attachment[];
 } {
@@ -989,7 +972,7 @@ function extractAttachments(content: string): {
 }
 
 // Card extraction: detect fenced block starting with ```nvcard and parse JSON inside
-function extractCardsFromBody(body: string): {
+export function extractCardsFromBody(body: string): {
   text: string;
   cards: NobleCard[];
 } {
@@ -1641,7 +1624,7 @@ function stripMentions(content: string): string {
   return content;
 }
 
-function extractMeta(content: string): {
+export function extractMeta(content: string): {
   replyTo: string | null;
   edited: boolean;
   body: string;
@@ -1771,10 +1754,12 @@ function MentionHover({ id, label }: { id: string; label: string }) {
         <div className='bg-muted h-16' />
         <div className='-mt-6 px-3 pb-3'>
           <div className='flex items-end gap-3'>
-            <Avatar className='ring-background size-10 ring-2'>
-              <AvatarImage src={avatar} />
-              <AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
-            </Avatar>
+            <span
+              className='bg-muted text-muted-foreground border-border inline-flex size-10 items-center justify-center rounded-full border text-lg font-bold'
+              title={name}
+            >
+              {name.slice(0, 2).toUpperCase()}
+            </span>
             <div className='min-w-0'>
               <div className='truncate leading-tight font-medium'>{name}</div>
               {role && (

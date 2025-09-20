@@ -1,4 +1,5 @@
 'use client';
+import { ArrowDown } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { ChatMessageItem } from '@/components/chat-message';
@@ -76,7 +77,24 @@ export const RealtimeChat = ({
   mode = 'chat',
   shipmentId
 }: RealtimeChatProps) => {
+  // useChatScroll must be called at the top, only once
   const { containerRef, scrollToBottom } = useChatScroll();
+  // Show 'Go to latest' button if user is not near the bottom
+  const [showGoToBottom, setShowGoToBottom] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
+      setShowGoToBottom(!nearBottom);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true } as any);
+    // Check on mount
+    handleScroll();
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+    };
+  }, [containerRef]);
 
   const {
     messages: realtimeMessages,
@@ -90,6 +108,12 @@ export const RealtimeChat = ({
 
   // Persisted shipment messages (DB) to complement ephemeral broadcast
   const [persistedMessages, setPersistedMessages] = useState<ChatMessage[]>([]);
+  // Eğer yukarıdan messages prop'u geliyorsa, local state'i güncel tut
+  useEffect(() => {
+    if (initialMessages && initialMessages.length > 0) {
+      setPersistedMessages(initialMessages);
+    }
+  }, [initialMessages]);
   const profileCache = useRef<
     Record<string, { name: string; avatar_url?: string }>
   >({});
@@ -338,9 +362,41 @@ export const RealtimeChat = ({
   useEffect(() => {
     onMessage?.(allMessages);
   }, [allMessages, onMessage]);
+
+  // İlk açılışta/oda değişiminde otomatik en alta kaydır
+
+  const justOpenedRef = useRef(true);
   useEffect(() => {
-    scrollToBottom();
-  }, [allMessages, scrollToBottom]);
+    justOpenedRef.current = true;
+  }, [roomName]);
+
+  // Disable justOpenedRef on any user scroll
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onUserScroll = () => {
+      if (justOpenedRef.current) {
+        justOpenedRef.current = false;
+      }
+    };
+    el.addEventListener('scroll', onUserScroll, { passive: true } as any);
+    return () => {
+      el.removeEventListener('scroll', onUserScroll);
+    };
+  }, [containerRef]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (justOpenedRef.current) {
+      scrollToBottom();
+      // justOpenedRef.current = false; // Artık scroll event'iyle kapanacak
+      return;
+    }
+    // Sadece kullanıcı zaten en alttaysa otomatik kaydır
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
+    if (nearBottom) scrollToBottom();
+  }, [allMessages, scrollToBottom, roomName]);
 
   // Auto mark-as-read when scrolled to bottom
   useEffect(() => {
@@ -900,28 +956,26 @@ export const RealtimeChat = ({
             const prevMessage = index > 0 ? allMessages[index - 1] : null;
             const nextMessage =
               index < allMessages.length - 1 ? allMessages[index + 1] : null;
-            const showHeader =
-              !prevMessage || prevMessage.user.id !== message.user.id;
-            // Group tail for avatar (uninterrupted run by same user)
-            const showBottomAvatar =
-              !nextMessage || nextMessage.user.id !== message.user.id;
-            // Per-minute timestamp: only show on last message of the same minute run
-            const sameMinute = (
-              a?: ChatMessage | null,
-              b?: ChatMessage | null
-            ) => {
-              if (!a || !b) return false;
-              const da = new Date(a.createdAt);
-              const db = new Date(b.createdAt);
+            // Grup başı: kullanıcı değiştiğinde veya gün değiştiğinde
+            const isNewDay = (() => {
+              if (!prevMessage) return true;
+              const d1 = new Date(prevMessage.createdAt);
+              const d2 = new Date(message.createdAt);
               return (
-                da.getFullYear() === db.getFullYear() &&
-                da.getMonth() === db.getMonth() &&
-                da.getDate() === db.getDate() &&
-                da.getHours() === db.getHours() &&
-                da.getMinutes() === db.getMinutes()
+                d1.getFullYear() !== d2.getFullYear() ||
+                d1.getMonth() !== d2.getMonth() ||
+                d1.getDate() !== d2.getDate()
               );
-            };
-            const showTimestamp = !sameMinute(message, nextMessage);
+            })();
+            const isGroupStart =
+              !prevMessage || prevMessage.user.id !== message.user.id;
+            const showHeader = isGroupStart || isNewDay;
+            // Alt köşede avatar asla gösterme
+            const showBottomAvatar = false;
+            // Timestamp: sadece kullanıcı değiştiğinde veya son mesajda
+            const isGroupEnd =
+              !nextMessage || nextMessage.user.id !== message.user.id;
+            const showTimestamp = isGroupEnd;
             const renderDateDivider = (() => {
               const d1 = prevMessage ? new Date(prevMessage.createdAt) : null;
               const d2 = new Date(message.createdAt);
@@ -932,12 +986,8 @@ export const RealtimeChat = ({
                 d1.getDate() !== d2.getDate()
               );
             })();
-            // Compact grouping: same sender and same minute as previous message
-            const compact = Boolean(
-              prevMessage &&
-                prevMessage.user.id === message.user.id &&
-                sameMinute(prevMessage, message)
-            );
+            // Compact grouping: kaldırıldı, grouping sadece kullanıcıya göre
+            const compact = false;
             return (
               <div
                 key={message.id}
@@ -969,6 +1019,22 @@ export const RealtimeChat = ({
           })}
         </div>
       </div>
+
+      {/* Go to latest button */}
+      <button
+        type='button'
+        onClick={scrollToBottom}
+        className={
+          'bg-muted/80 hover:bg-muted border-border fixed right-6 bottom-28 z-30 flex items-center gap-1 rounded-full border px-2 py-1 shadow transition-all duration-300 md:right-12 md:bottom-32 ' +
+          (showGoToBottom
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none translate-y-4 opacity-0')
+        }
+        aria-label='Go to latest message'
+        style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)' }}
+      >
+        <ArrowDown className='text-muted-foreground h-4 w-4' />
+      </button>
 
       {/* Composer */}
       <form
@@ -1448,6 +1514,7 @@ function formatBannerTime(iso: string) {
     hour: 'numeric',
     minute: '2-digit'
   };
+  return new Intl.DateTimeFormat('en-US', opts).format(d);
   const time = new Intl.DateTimeFormat(undefined, opts).format(d);
   const month = new Intl.DateTimeFormat(undefined, { month: 'long' }).format(d);
   const year = d.getFullYear();

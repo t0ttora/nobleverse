@@ -1,5 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+// Card extraction helpers from chat-message
+import { extractMeta, extractAttachments } from '@/components/chat-message';
+import { extractCardsFromBody } from '@/components/chat-message';
 import { useSearchParams } from 'next/navigation';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -294,6 +300,25 @@ export default function InboxPage() {
   }
 
   // Derived
+  // Chat preview güncelleme: aktif konuşmada yeni mesaj gelirse rooms listesini güncelle
+  useEffect(() => {
+    if (!activeId || !initialMessages.length) return;
+    const last = initialMessages[initialMessages.length - 1];
+    if (!last) return;
+    setRooms((prev) =>
+      prev.map((room) =>
+        room.id === activeId
+          ? {
+              ...room,
+              lastMessage: {
+                content: last.content,
+                created_at: last.createdAt
+              }
+            }
+          : room
+      )
+    );
+  }, [activeId, initialMessages]);
   const active = useMemo(
     () => rooms.find((r) => r.id === activeId) || null,
     [rooms, activeId]
@@ -666,9 +691,86 @@ export default function InboxPage() {
               </time>
             </div>
             <div className='text-muted-foreground max-w-[240px] truncate text-xs'>
-              {(r.lastMessage?.content || '')
-                .replace(/\n/g, ' ')
-                .slice(0, 80) || 'No messages yet'}
+              {(() => {
+                const raw = r.lastMessage?.content || '';
+                if (!raw) return 'No messages yet';
+                // Extract meta, attachments, cards
+                const meta = extractMeta(raw);
+                const { body } = extractAttachments(meta.body);
+                const { text, cards } = extractCardsFromBody(body);
+                // If card(s) exist, show a summary for the first card
+                if (cards && cards.length > 0) {
+                  const card = cards[0];
+                  // Show a short label for the card type
+                  let label = '';
+                  switch (card.type) {
+                    case 'shipment_card':
+                      label = `📦 Shipment: ${card.title || card.id}`;
+                      break;
+                    case 'calendar_card':
+                      label = `📅 Calendar: ${card.title || card.id}`;
+                      break;
+                    case 'request_card':
+                      label = `📝 Request: ${card.id}`;
+                      break;
+                    case 'negotiation_card':
+                      label = `🤝 Negotiation: ${card.request_code || card.id}`;
+                      break;
+                    case 'invoice_card':
+                      label = `💸 Invoice: ${card.id}`;
+                      break;
+                    case 'payment_status_card':
+                      label = `💰 Payment: ${card.status || card.id}`;
+                      break;
+                    case 'task_card':
+                      label = `✅ Task: ${card.title || card.id}`;
+                      break;
+                    case 'approval_card':
+                      label = `✔️ Approval: ${card.subject || card.id}`;
+                      break;
+                    case 'note_card':
+                      label = `🗒️ Note: ${card.author || card.id}`;
+                      break;
+                    default:
+                      label = 'Card';
+                  }
+                  return label;
+                }
+                // Otherwise, render markdown preview (single line, truncated)
+                return (
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      maxWidth: 220,
+                      verticalAlign: 'middle'
+                    }}
+                  >
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={{
+                        p: ({ children }) => <span>{children}</span>,
+                        a: (props) => (
+                          <a {...props} style={{ color: '#2563eb' }} />
+                        ),
+                        code: ({ children }) => (
+                          <span
+                            style={{
+                              fontFamily: 'monospace',
+                              background: '#f3f3f3',
+                              borderRadius: 2,
+                              padding: '0 2px'
+                            }}
+                          >
+                            {children}
+                          </span>
+                        )
+                      }}
+                    >
+                      {text.replace(/\n/g, ' ').slice(0, 80)}
+                    </ReactMarkdown>
+                  </span>
+                );
+              })()}
             </div>
           </button>
           <div className='ml-auto flex items-center gap-1'>
