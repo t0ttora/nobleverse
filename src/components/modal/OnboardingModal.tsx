@@ -401,6 +401,90 @@ export default function OnboardingModal({
               )}
               <div className='relative min-h-0 flex-1 overflow-visible pr-2 pb-2'>
                 <AnimatePresence mode='wait' initial={false}>
+                  {step === 2 && (
+                    <motion.div
+                      key='step2'
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className='flex flex-col'
+                    >
+                      <label className='mb-2 block text-sm font-medium'>
+                        NobleID
+                      </label>
+                      <div className='relative'>
+                        <div className='flex items-stretch rounded-xl border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
+                          <span className='px-3 py-3 text-zinc-500 select-none'>
+                            @
+                          </span>
+                          <input
+                            name='username'
+                            value={form.username ?? ''}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                username: slugify(e.target.value || '')
+                              }))
+                            }
+                            placeholder={emailLocal}
+                            autoComplete='off'
+                            className='w-full bg-transparent px-0 py-3 pr-10 focus:outline-none'
+                          />
+                          <div className='pointer-events-none absolute top-1/2 right-3 -translate-y-1/2'>
+                            {usernameState === 'checking' && (
+                              <Icons.spinner
+                                className='animate-spin text-zinc-400'
+                                size={18}
+                              />
+                            )}
+                            {usernameState === 'available' && (
+                              <Icons.check
+                                className='text-green-600'
+                                size={18}
+                              />
+                            )}
+                            {usernameState === 'taken' && (
+                              <Icons.warning
+                                className='text-red-600'
+                                size={18}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <p className='mt-2 text-xs text-zinc-600 dark:text-zinc-400'>
+                        Tip: Keep it short and memorable. Allowed: letters,
+                        numbers, dot, dash, underscore.
+                      </p>
+                    </motion.div>
+                  )}
+                  {step === 3 && (
+                    <motion.div
+                      key='step3'
+                      initial={{ y: 8, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -8, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className='flex h-full flex-col'
+                    >
+                      <div className='mt-2 space-y-2'>
+                        <LocationPicker
+                          value={loc}
+                          onChange={(v) => {
+                            setLoc(v);
+                            setForm((f) => ({
+                              ...f,
+                              location: formatLocation(v)
+                            }));
+                          }}
+                        />
+                        <div className='text-muted-foreground text-xs'>
+                          Location (Country, City)
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
                   {step === 1 && (
                     <motion.div
                       key='step1'
@@ -436,119 +520,29 @@ export default function OnboardingModal({
                               }
                               role='radio'
                               aria-checked={selected}
-                              className={`group relative flex items-start gap-4 rounded-2xl border p-5 text-left transition-all duration-150 ${
+                              className={`group relative flex cursor-pointer items-start gap-2 rounded-2xl border p-2 text-left transition-all duration-150 sm:p-3 ${
                                 selected
                                   ? 'border-2 border-orange-600 bg-orange-50 dark:bg-orange-900/30'
                                   : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
                               }`}
                             >
-                              <div className='flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400'>
-                                <RoleIcon size={20} />
+                              <div className='flex h-7 w-7 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400'>
+                                <RoleIcon size={14} />
                               </div>
                               <div className='flex flex-col'>
-                                <span className='font-semibold'>
+                                <span className='text-sm font-semibold sm:text-base'>
                                   {role.label}
                                 </span>
-                                <span className='text-muted-foreground text-xs'>
+                                <span className='text-muted-foreground text-xs sm:text-xs'>
                                   {ROLE_DESCRIPTIONS[role.value]}
                                 </span>
                               </div>
-                              {/* Removed check badge and right-side indicator per request */}
                             </button>
                           );
                         })}
                       </div>
                     </motion.div>
                   )}
-
-                  {step === 2 && (
-                    <motion.div
-                      key='step2'
-                      initial={{ y: 8, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: -8, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className='flex h-full flex-col'
-                    >
-                      <div className='mt-2'>
-                        <label className='mb-2 block text-sm font-medium'>
-                          NobleID
-                        </label>
-                        <div className='relative'>
-                          <div className='flex items-stretch rounded-xl border bg-white focus-within:ring-2 focus-within:ring-orange-500 dark:border-zinc-700 dark:bg-zinc-900'>
-                            <span className='px-3 py-3 text-zinc-500 select-none'>
-                              @
-                            </span>
-                            <input
-                              name='username'
-                              value={form.username ?? ''}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  username: slugify(e.target.value || '')
-                                }))
-                              }
-                              placeholder={emailLocal}
-                              autoComplete='off'
-                              className='w-full bg-transparent px-0 py-3 pr-10 focus:outline-none'
-                            />
-                            <div className='pointer-events-none absolute top-1/2 right-3 -translate-y-1/2'>
-                              {usernameState === 'checking' && (
-                                <Icons.spinner
-                                  className='animate-spin text-zinc-400'
-                                  size={18}
-                                />
-                              )}
-                              {usernameState === 'available' && (
-                                <Icons.check
-                                  className='text-green-600'
-                                  size={18}
-                                />
-                              )}
-                              {usernameState === 'taken' && (
-                                <Icons.warning
-                                  className='text-red-600'
-                                  size={18}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <p className='mt-2 text-xs text-zinc-600 dark:text-zinc-400'>
-                          Tip: Keep it short and memorable. Allowed: letters,
-                          numbers, dot, dash, underscore.
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {step === 3 && (
-                    <motion.div
-                      key='step3'
-                      initial={{ y: 8, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: -8, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className='flex h-full flex-col'
-                    >
-                      <div className='mt-2 space-y-2'>
-                        <LocationPicker
-                          value={loc}
-                          onChange={(v) => {
-                            setLoc(v);
-                            setForm((f) => ({
-                              ...f,
-                              location: formatLocation(v)
-                            }));
-                          }}
-                        />
-                        <div className='text-muted-foreground text-xs'>
-                          Location (Country, City)
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-
                   {step === 4 && (
                     <motion.div
                       key='step4'
@@ -580,7 +574,7 @@ export default function OnboardingModal({
                               }
                               role='radio'
                               aria-checked={selected}
-                              className={`flex items-center justify-between rounded-2xl border p-4 transition-all ${
+                              className={`flex cursor-pointer items-center justify-between rounded-2xl border p-4 transition-all ${
                                 selected
                                   ? 'border-2 border-orange-600 bg-orange-50 dark:bg-orange-900/30'
                                   : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'

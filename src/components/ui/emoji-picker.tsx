@@ -62,7 +62,7 @@ export default function EmojiPicker({
             ),
             Emoji: ({ emoji, ...props }) => (
               <button
-                className='flex size-8 items-center justify-center rounded-md text-lg data-[active]:bg-neutral-100 dark:data-[active]:bg-neutral-800'
+                className='flex size-8 cursor-pointer items-center justify-center rounded-md text-lg data-[active]:bg-neutral-100 dark:data-[active]:bg-neutral-800'
                 {...props}
               >
                 {emoji.emoji}

@@ -1559,7 +1559,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                     Export Request
                   </Button>
                   {role === 'forwarder' &&
-                    (!myOffer ? (
+                    (!myOffer && request?.status === 'pending' ? (
                       <Button
                         size='sm'
                         onClick={() => setShowEmbeddedOffer(true)}

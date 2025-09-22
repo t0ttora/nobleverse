@@ -2,6 +2,7 @@
 import React, { forwardRef, useImperativeHandle } from 'react';
 import { SidePanel } from '@/components/ui/side-panel';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { getOfferConfig, type OfferField } from '@/lib/forwarder-offer-schema';
 import { supabase } from '@/lib/supabaseClient';
 import { createOffer, updateOffer } from '../../../utils/supabase/offers';
@@ -82,9 +83,9 @@ export const ForwarderOfferForm = forwardRef<
     }
   }, [embedded, open]);
 
+  // Only prefill when modal is first opened, not on every prop change
   React.useEffect(() => {
-    // Prefill when new request details come in and no existing offer
-    if (!existingOffer && requestDetails) {
+    if (!embedded && open && !existingOffer && requestDetails) {
       setFormData((prev) => {
         const d = requestDetails || {};
         return {
@@ -98,10 +99,11 @@ export const ForwarderOfferForm = forwardRef<
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestId, existingOffer?.id]);
+  }, [embedded, open]);
 
-  // When editing, prefill from existing offer details
+  // When editing, prefill from existing offer details only when modal is opened and offer changes
   React.useEffect(() => {
+    if (embedded || !open) return;
     if (
       existingOffer?.details !== undefined &&
       existingOffer?.details !== null
@@ -122,7 +124,7 @@ export const ForwarderOfferForm = forwardRef<
           d.total_price_currency || prev.total_price_currency || 'USD'
       }));
     }
-  }, [existingOffer?.id]);
+  }, [embedded, open, existingOffer?.id]);
 
   const current = sections[step];
   const isLast = step === sections.length - 1;
@@ -326,14 +328,15 @@ export const ForwarderOfferForm = forwardRef<
       case 'number': {
         return (
           <div className='flex gap-2'>
-            <input
+            <Input
               id={field.id}
               type='text'
-              className='focus:ring-primary flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
               inputMode='decimal'
-              pattern='[0-9]*[.,]?[0-9]*'
               value={val ?? ''}
-              onChange={(e) => updateField(field, e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                updateField(field, e.target.value)
+              }
+              autoComplete='off'
             />
             {field.id === 'total_price' && (
               <div className='bg-muted text-foreground/80 rounded-md px-2 py-2 text-xs'>
@@ -409,11 +412,7 @@ export const ForwarderOfferForm = forwardRef<
               >
                 {i + 1}
               </div>
-              <span
-                className={`mt-2 text-center text-[11px] ${i === step ? 'text-primary' : 'text-neutral-400 dark:text-neutral-500'}`}
-              >
-                {s.title}
-              </span>
+              <span>{s.title}</span>
             </div>
             {i < sections.length - 1 && (
               <div className='from-primary/30 to-primary/30 mx-2 h-0.5 flex-1 bg-gradient-to-r via-neutral-300 dark:via-neutral-700' />

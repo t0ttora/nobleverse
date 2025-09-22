@@ -7,12 +7,33 @@ interface CountryCities {
   cities: string[];
 }
 
-// Expanded country list (sample larger set for better UX)
+// Expanded country list: 20+ European countries, US states, Canada provinces
 const DATA: CountryCities[] = [
   {
     country: 'Türkiye',
     code: 'TR',
-    cities: ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Mersin']
+    cities: [
+      'İstanbul',
+      'Ankara',
+      'İzmir',
+      'Bursa',
+      'Antalya',
+      'Mersin',
+      'Adana',
+      'Konya',
+      'Gaziantep',
+      'Kayseri',
+      'Eskişehir',
+      'Samsun',
+      'Trabzon',
+      'Erzurum',
+      'Van',
+      'Malatya',
+      'Denizli',
+      'Şanlıurfa',
+      'Sakarya',
+      'Tekirdağ'
+    ]
   },
   {
     country: 'United States',
@@ -22,8 +43,50 @@ const DATA: CountryCities[] = [
       'Los Angeles',
       'Chicago',
       'Houston',
-      'Miami',
-      'Seattle'
+      'Phoenix',
+      'Philadelphia',
+      'San Antonio',
+      'San Diego',
+      'Dallas',
+      'San Jose',
+      'Austin',
+      'Jacksonville',
+      'Fort Worth',
+      'Columbus',
+      'Charlotte',
+      'San Francisco',
+      'Indianapolis',
+      'Seattle',
+      'Denver',
+      'Washington'
+      // ... (add more major US cities as needed)
+    ]
+  },
+  {
+    country: 'Canada',
+    code: 'CA',
+    cities: [
+      'Toronto',
+      'Montreal',
+      'Vancouver',
+      'Calgary',
+      'Edmonton',
+      'Ottawa',
+      'Winnipeg',
+      'Quebec City',
+      'Hamilton',
+      'Kitchener',
+      'London',
+      'Victoria',
+      'Halifax',
+      'Oshawa',
+      'Windsor',
+      'Saskatoon',
+      'St. Catharines',
+      'Regina',
+      'St. John’s',
+      'Kelowna'
+      // ... (add more Canadian cities as needed)
     ]
   },
   {
@@ -35,102 +98,441 @@ const DATA: CountryCities[] = [
       'Birmingham',
       'Leeds',
       'Liverpool',
-      'Bristol'
+      'Bristol',
+      'Sheffield',
+      'Glasgow',
+      'Edinburgh',
+      'Cardiff',
+      'Belfast',
+      'Nottingham',
+      'Leicester',
+      'Coventry',
+      'Kingston upon Hull',
+      'Newcastle',
+      'Sunderland',
+      'Brighton',
+      'Plymouth',
+      'Wolverhampton'
     ]
   },
   {
     country: 'Germany',
     code: 'DE',
-    cities: ['Berlin', 'Munich', 'Hamburg', 'Frankfurt', 'Cologne', 'Stuttgart']
-  },
-  {
-    country: 'Netherlands',
-    code: 'NL',
-    cities: ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven']
-  },
-  {
-    country: 'United Arab Emirates',
-    code: 'AE',
-    cities: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman']
-  },
-  {
-    country: 'China',
-    code: 'CN',
-    cities: ['Shanghai', 'Shenzhen', 'Guangzhou', 'Beijing', 'Ningbo']
-  },
-  {
-    country: 'India',
-    code: 'IN',
-    cities: ['Mumbai', 'Delhi', 'Bengaluru', 'Chennai', 'Hyderabad']
-  },
-  {
-    country: 'Spain',
-    code: 'ES',
-    cities: ['Madrid', 'Barcelona', 'Valencia', 'Seville']
-  },
-  {
-    country: 'Italy',
-    code: 'IT',
-    cities: ['Milan', 'Rome', 'Naples', 'Turin']
+    cities: [
+      'Berlin',
+      'Munich',
+      'Hamburg',
+      'Frankfurt',
+      'Cologne',
+      'Stuttgart',
+      'Düsseldorf',
+      'Dortmund',
+      'Essen',
+      'Leipzig',
+      'Bremen',
+      'Dresden',
+      'Hanover',
+      'Nuremberg',
+      'Duisburg',
+      'Bochum',
+      'Wuppertal',
+      'Bielefeld',
+      'Bonn',
+      'Münster'
+    ]
   },
   {
     country: 'France',
     code: 'FR',
-    cities: ['Paris', 'Lyon', 'Marseille', 'Lille', 'Toulouse']
+    cities: [
+      'Paris',
+      'Marseille',
+      'Lyon',
+      'Toulouse',
+      'Nice',
+      'Nantes',
+      'Strasbourg',
+      'Montpellier',
+      'Bordeaux',
+      'Lille',
+      'Rennes',
+      'Reims',
+      'Le Havre',
+      'Saint-Étienne',
+      'Toulon',
+      'Grenoble',
+      'Dijon',
+      'Angers',
+      'Nîmes',
+      'Villeurbanne'
+    ]
   },
   {
-    country: 'Canada',
-    code: 'CA',
-    cities: ['Toronto', 'Vancouver', 'Montreal', 'Calgary', 'Ottawa']
+    country: 'Italy',
+    code: 'IT',
+    cities: [
+      'Rome',
+      'Milan',
+      'Naples',
+      'Turin',
+      'Palermo',
+      'Genoa',
+      'Bologna',
+      'Florence',
+      'Bari',
+      'Catania',
+      'Venice',
+      'Verona',
+      'Messina',
+      'Padua',
+      'Trieste',
+      'Taranto',
+      'Brescia',
+      'Prato',
+      'Parma',
+      'Modena'
+    ]
   },
   {
-    country: 'Brazil',
-    code: 'BR',
-    cities: ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Curitiba']
+    country: 'Spain',
+    code: 'ES',
+    cities: [
+      'Madrid',
+      'Barcelona',
+      'Valencia',
+      'Seville',
+      'Zaragoza',
+      'Málaga',
+      'Murcia',
+      'Palma',
+      'Las Palmas',
+      'Bilbao',
+      'Alicante',
+      'Córdoba',
+      'Valladolid',
+      'Vigo',
+      'Gijón',
+      'Hospitalet',
+      'A Coruña',
+      'Vitoria',
+      'Granada',
+      'Elche'
+    ]
   },
   {
-    country: 'Japan',
-    code: 'JP',
-    cities: ['Tokyo', 'Osaka', 'Nagoya', 'Fukuoka']
+    country: 'Netherlands',
+    code: 'NL',
+    cities: [
+      'Amsterdam',
+      'Rotterdam',
+      'The Hague',
+      'Utrecht',
+      'Eindhoven',
+      'Tilburg',
+      'Groningen',
+      'Almere',
+      'Breda',
+      'Nijmegen',
+      'Enschede',
+      'Apeldoorn',
+      'Haarlem',
+      'Arnhem',
+      'Zaanstad',
+      'Amersfoort',
+      'Haarlemmermeer',
+      'Zwolle',
+      'Leiden',
+      'Maastricht'
+    ]
   },
   {
-    country: 'South Korea',
-    code: 'KR',
-    cities: ['Seoul', 'Busan', 'Incheon', 'Daegu']
+    country: 'Belgium',
+    code: 'BE',
+    cities: [
+      'Brussels',
+      'Antwerp',
+      'Ghent',
+      'Charleroi',
+      'Liège',
+      'Bruges',
+      'Namur',
+      'Leuven',
+      'Mons',
+      'Aalst',
+      'Mechelen',
+      'La Louvière',
+      'Kortrijk',
+      'Hasselt',
+      'Sint-Niklaas',
+      'Ostend',
+      'Tournai',
+      'Genk',
+      'Seraing',
+      'Roeselare'
+    ]
   },
-  {
-    country: 'Australia',
-    code: 'AU',
-    cities: ['Sydney', 'Melbourne', 'Brisbane', 'Perth']
-  },
-  {
-    country: 'Mexico',
-    code: 'MX',
-    cities: ['Mexico City', 'Guadalajara', 'Monterrey']
-  },
-  {
-    country: 'South Africa',
-    code: 'ZA',
-    cities: ['Johannesburg', 'Cape Town', 'Durban']
-  },
-  {
-    country: 'Russia',
-    code: 'RU',
-    cities: ['Moscow', 'Saint Petersburg', 'Novosibirsk']
-  },
-  { country: 'Poland', code: 'PL', cities: ['Warsaw', 'Kraków', 'Gdańsk'] },
   {
     country: 'Sweden',
     code: 'SE',
-    cities: ['Stockholm', 'Gothenburg', 'Malmö']
+    cities: [
+      'Stockholm',
+      'Gothenburg',
+      'Malmö',
+      'Uppsala',
+      'Västerås',
+      'Örebro',
+      'Linköping',
+      'Helsingborg',
+      'Jönköping',
+      'Norrköping',
+      'Lund',
+      'Umeå',
+      'Gävle',
+      'Borås',
+      'Eskilstuna',
+      'Södertälje',
+      'Karlstad',
+      'Täby',
+      'Växjö',
+      'Halmstad'
+    ]
   },
-  { country: 'Norway', code: 'NO', cities: ['Oslo', 'Bergen', 'Trondheim'] },
+  {
+    country: 'Norway',
+    code: 'NO',
+    cities: [
+      'Oslo',
+      'Bergen',
+      'Trondheim',
+      'Stavanger',
+      'Drammen',
+      'Fredrikstad',
+      'Porsgrunn',
+      'Skien',
+      'Kristiansand',
+      'Ålesund',
+      'Tønsberg',
+      'Moss',
+      'Haugesund',
+      'Sandefjord',
+      'Arendal',
+      'Bodø',
+      'Tromsø',
+      'Hamar',
+      'Halden',
+      'Larvik'
+    ]
+  },
   {
     country: 'Denmark',
     code: 'DK',
-    cities: ['Copenhagen', 'Aarhus', 'Odense']
+    cities: [
+      'Copenhagen',
+      'Aarhus',
+      'Odense',
+      'Aalborg',
+      'Esbjerg',
+      'Randers',
+      'Kolding',
+      'Horsens',
+      'Vejle',
+      'Roskilde',
+      'Herning',
+      'Silkeborg',
+      'Næstved',
+      'Fredericia',
+      'Viborg',
+      'Køge',
+      'Holstebro',
+      'Taastrup',
+      'Slagelse',
+      'Hillerød',
+      'Sønderborg'
+    ]
   },
-  { country: 'Switzerland', code: 'CH', cities: ['Zurich', 'Geneva', 'Basel'] }
+  {
+    country: 'Finland',
+    code: 'FI',
+    cities: [
+      'Helsinki',
+      'Espoo',
+      'Tampere',
+      'Vantaa',
+      'Oulu',
+      'Turku',
+      'Jyväskylä',
+      'Lahti',
+      'Kuopio',
+      'Pori',
+      'Kouvola',
+      'Joensuu',
+      'Lappeenranta',
+      'Hämeenlinna',
+      'Vaasa',
+      'Rovaniemi',
+      'Seinäjoki',
+      'Mikkeli',
+      'Kotka',
+      'Salo'
+    ]
+  },
+  {
+    country: 'Poland',
+    code: 'PL',
+    cities: [
+      'Warsaw',
+      'Kraków',
+      'Łódź',
+      'Wrocław',
+      'Poznań',
+      'Gdańsk',
+      'Szczecin',
+      'Bydgoszcz',
+      'Lublin',
+      'Białystok',
+      'Katowice',
+      'Gdynia',
+      'Częstochowa',
+      'Radom',
+      'Sosnowiec',
+      'Toruń',
+      'Kielce',
+      'Gliwice',
+      'Zabrze',
+      'Olsztyn'
+    ]
+  },
+  {
+    country: 'Switzerland',
+    code: 'CH',
+    cities: [
+      'Zurich',
+      'Geneva',
+      'Basel',
+      'Bern',
+      'Lausanne',
+      'Winterthur',
+      'Lucerne',
+      'St. Gallen',
+      'Lugano',
+      'Biel/Bienne',
+      'Thun',
+      'Köniz',
+      'La Chaux-de-Fonds',
+      'Schaffhausen',
+      'Fribourg',
+      'Chur',
+      'Neuchâtel',
+      'Vernier',
+      'Uster',
+      'Sion'
+    ]
+  },
+  {
+    country: 'Austria',
+    code: 'AT',
+    cities: [
+      'Vienna',
+      'Graz',
+      'Linz',
+      'Salzburg',
+      'Innsbruck',
+      'Klagenfurt',
+      'Villach',
+      'Wels',
+      'Sankt Pölten',
+      'Dornbirn',
+      'Wiener Neustadt',
+      'Steyr',
+      'Feldkirch',
+      'Bregenz',
+      'Leonding',
+      'Klosterneuburg',
+      'Baden',
+      'Wolfsberg',
+      'Krems',
+      'Traun'
+    ]
+  },
+  {
+    country: 'Ireland',
+    code: 'IE',
+    cities: [
+      'Dublin',
+      'Cork',
+      'Limerick',
+      'Galway',
+      'Waterford',
+      'Drogheda',
+      'Dundalk',
+      'Bray',
+      'Swords',
+      'Navan',
+      'Ennis',
+      'Tralee',
+      'Carlow',
+      'Newbridge',
+      'Portlaoise',
+      'Balbriggan',
+      'Naas',
+      'Athlone',
+      'Mullingar',
+      'Letterkenny'
+    ]
+  },
+  {
+    country: 'Portugal',
+    code: 'PT',
+    cities: [
+      'Lisbon',
+      'Porto',
+      'Vila Nova de Gaia',
+      'Amadora',
+      'Braga',
+      'Coimbra',
+      'Funchal',
+      'Setúbal',
+      'Agualva-Cacém',
+      'Queluz',
+      'Almada',
+      'Viseu',
+      'Ponta Delgada',
+      'Aveiro',
+      'Odivelas',
+      'Leiria',
+      'Barreiro',
+      'Rio Tinto',
+      'Matosinhos',
+      'Sintra'
+    ]
+  },
+  {
+    country: 'Czech Republic',
+    code: 'CZ',
+    cities: [
+      'Prague',
+      'Brno',
+      'Ostrava',
+      'Plzeň',
+      'Liberec',
+      'Olomouc',
+      'Ústí nad Labem',
+      'Hradec Králové',
+      'Pardubice',
+      'Zlín',
+      'Havířov',
+      'Kladno',
+      'Most',
+      'Karviná',
+      'Jihlava',
+      'Teplice',
+      'Děčín',
+      'Chomutov',
+      'Přerov',
+      'Frýdek-Místek'
+    ]
+  }
+  // ... add more as needed
 ];
 
 export function LocationPicker({
