@@ -122,6 +122,41 @@
   }
 }
 
+/* Compact density adjustments */
+.density-compact body {
+  --compact-scale: 0.9;
+}
+.density-compact .p-4 {
+  padding: 0.9rem;
+}
+.density-compact .p-3 {
+  padding: 0.65rem;
+}
+.density-compact .px-4 {
+  padding-left: 0.9rem;
+  padding-right: 0.9rem;
+}
+.density-compact .py-4 {
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+.density-compact .py-3 {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+.density-compact .gap-4 {
+  gap: 0.75rem;
+}
+.density-compact .gap-3 {
+  gap: 0.5rem;
+}
+.density-compact .h-8 {
+  height: 1.9rem;
+}
+.density-compact .rounded-md {
+  border-radius: 0.45rem;
+}
+
 /* View Transition Wave Effect */
 ::view-transition-old(root),
 ::view-transition-new(root) {

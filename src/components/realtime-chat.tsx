@@ -54,7 +54,9 @@ import { toast } from 'sonner';
 
 interface RealtimeChatProps {
   roomName: string;
-  username: string;
+  nobleId?: string;
+  // deprecated: use nobleId instead; kept for back-compat
+  username?: string;
   userId?: string;
   onMessage?: (messages: ChatMessage[]) => void;
   messages?: ChatMessage[];
@@ -67,6 +69,7 @@ interface RealtimeChatProps {
 
 export const RealtimeChat = ({
   roomName,
+  nobleId,
   username,
   onMessage,
   messages: initialMessages = [],
@@ -77,6 +80,7 @@ export const RealtimeChat = ({
   mode = 'chat',
   shipmentId
 }: RealtimeChatProps) => {
+  const effectiveNobleId = nobleId ?? username ?? 'me';
   // useChatScroll must be called at the top, only once
   const { containerRef, scrollToBottom } = useChatScroll();
   // Show 'Go to latest' button if user is not near the bottom
@@ -102,7 +106,7 @@ export const RealtimeChat = ({
     isConnected
   } = useRealtimeChat({
     roomName,
-    username,
+    nobleId: effectiveNobleId,
     userId: userId || 'me'
   });
 
@@ -520,7 +524,7 @@ export const RealtimeChat = ({
                 user_id: r,
                 actor_id: uid,
                 type: 'chat_message',
-                title: `${username} sent a new message.`,
+                title: `${effectiveNobleId} sent a new message.`,
                 body: content.slice(0, 120),
                 category: 'inbox',
                 data: { room_id: roomName }
@@ -534,7 +538,7 @@ export const RealtimeChat = ({
       }
       return { ok: false, error: 'Unknown error' };
     },
-    [roomName, username, mode, shipmentId]
+    [roomName, effectiveNobleId, mode, shipmentId]
   );
 
   const handleSendMessage = useCallback(
@@ -551,7 +555,9 @@ export const RealtimeChat = ({
         const uploads = await Promise.all(
           files.map(async (f) => {
             try {
-              const path = `${roomName}/${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`;
+              const path = `${roomName}/${Date.now()}_${Math.random()
+                .toString(36)
+                .slice(2)}_${f.name}`;
               const up = await supabase.storage.from(bucket).upload(path, f, {
                 cacheControl: '3600',
                 upsert: false,
@@ -624,7 +630,7 @@ export const RealtimeChat = ({
           const optimistic: ChatMessage = {
             id: tempId,
             content,
-            user: { id: actualUid, name: username },
+            user: { id: actualUid, name: effectiveNobleId },
             createdAt: new Date().toISOString()
           };
           setPersistedMessages((cur) => [...cur, optimistic]);

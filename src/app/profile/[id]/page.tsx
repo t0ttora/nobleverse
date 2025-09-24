@@ -1,4 +1,4 @@
-import { ensureProfileServer, getProfileByUsername } from '@/lib/profile';
+import { ensureProfileServer, getProfileByNobleId } from '@/lib/profile';
 import TouchLastActive from '@/features/profile/components/touch-last-active';
 import { cookies } from 'next/headers';
 import { createClient as createSupabaseServerClient } from '@/../utils/supabase/server';
@@ -31,7 +31,7 @@ export default async function ProfilePage({
     // best-effort: ignore ensureProfileServer failure
   }
 
-  const profile = await getProfileByUsername(id);
+  const profile = await getProfileByNobleId(id);
   if (!profile) {
     return (
       <div className='text-muted-foreground py-10 text-center'>

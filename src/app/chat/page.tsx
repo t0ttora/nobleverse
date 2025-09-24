@@ -4,7 +4,7 @@ import { RealtimeChat } from '@/components/realtime-chat';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function ChatDemoPage() {
-  const [username, setUsername] = useState<string>('guest');
+  const [nobleId, setNobleId] = useState<string>('guest');
   useEffect(() => {
     let active = true;
     (async () => {
@@ -22,7 +22,7 @@ export default function ChatDemoPage() {
         (profile?.email
           ? (profile.email as string).split('@')[0]
           : (profile?.display_name as string) || 'user');
-      setUsername(u);
+      setNobleId(u);
     })();
     return () => {
       active = false;
@@ -34,7 +34,7 @@ export default function ChatDemoPage() {
 
   return (
     <div className='h-[calc(100vh-64px)] p-4'>
-      <RealtimeChat roomName={roomName} username={username} />
+      <RealtimeChat roomName={roomName} nobleId={nobleId} />
     </div>
   );
 }

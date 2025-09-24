@@ -323,7 +323,7 @@ export default function InboxPage() {
     () => rooms.find((r) => r.id === activeId) || null,
     [rooms, activeId]
   );
-  const username = useMemo(() => me?.email?.split('@')[0] || 'me', [me]);
+  const nobleId = useMemo(() => me?.email?.split('@')[0] || 'me', [me]);
   const filteredRooms = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rooms;
@@ -1083,7 +1083,7 @@ export default function InboxPage() {
               <div className='min-w-0 flex-1'>
                 <RealtimeChat
                   roomName={active.id}
-                  username={username}
+                  nobleId={nobleId}
                   userId={me?.id}
                   messages={initialMessages}
                   roomTitle={roomDisplayName || undefined}

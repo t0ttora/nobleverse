@@ -4,13 +4,11 @@
 		{
 			"label": "Typecheck (tsc)",
 			"type": "shell",
-			"command": "pnpm",
+			"command": "powershell",
 			"args": [
-				"exec",
-				"tsc",
-				"-p",
-				"tsconfig.json",
-				"--noEmit"
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
 			],
 			"problemMatcher": [
 				"$tsc"

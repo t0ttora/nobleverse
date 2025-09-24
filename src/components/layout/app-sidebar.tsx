@@ -29,6 +29,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../navigation/org-switcher';
+import { SettingsDialogRoot } from '@/components/settings/settings-dialog';
+import { openSettingsDialog } from '@/lib/settings-dialog-events';
 import {
   Drawer,
   DrawerTrigger,
@@ -270,6 +272,8 @@ export default function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {/* Mount settings dialog at app level */}
+        <SettingsDialogRoot />
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -285,14 +289,11 @@ export default function AppSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
-              asChild
               tooltip='settings'
-              isActive={pathname === '/settings'}
+              onClick={() => openSettingsDialog('profile')}
             >
-              <Link href='/settings'>
-                <Icons.settings />
-                <span>Settings</span>
-              </Link>
+              <Icons.settings />
+              <span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

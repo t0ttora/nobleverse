@@ -119,13 +119,13 @@ export async function ensureProfileServer() {
   return inserted as Pick<DbProfile, 'id' | 'username'> | null;
 }
 
-export async function getProfileByUsername(username: string) {
+export async function getProfileByNobleId(nobleId: string) {
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient(cookieStore);
   const { data } = await supabase
     .from('profiles')
     .select('*')
-    .eq('username', username)
+    .eq('display_name', nobleId)
     .maybeSingle();
   return (data as DbProfile | null) ?? null;
 }

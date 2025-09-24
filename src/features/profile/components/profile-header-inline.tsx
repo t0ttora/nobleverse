@@ -7,6 +7,7 @@ import { EditableText, EditableTextarea } from './editable';
 import { Role } from '@/types/profile';
 import { ArrowRight, Pencil, Settings as SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
+import { openSettingsDialog } from '@/lib/settings-dialog-events';
 
 type Props = {
   profile: any;
@@ -105,10 +106,13 @@ export default function ProfileHeaderInline({
           <Button size='sm' className='gap-2' asChild>
             <Link href={`/profile/${username}`}>View public</Link>
           </Button>
-          <Button size='sm' variant='outline' className='gap-2' asChild>
-            <Link href='/profile/settings'>
-              <SettingsIcon className='h-4 w-4' /> Settings
-            </Link>
+          <Button
+            size='sm'
+            variant='outline'
+            className='gap-2'
+            onClick={() => openSettingsDialog('profile')}
+          >
+            <SettingsIcon className='h-4 w-4' /> Settings
           </Button>
         </div>
       </div>

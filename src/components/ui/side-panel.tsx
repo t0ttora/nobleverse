@@ -24,7 +24,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
       />
       {/* Panel */}
       <div
-        className='animate-slidein fixed inset-y-0 right-0 left-0 z-[80] flex h-full w-screen translate-x-0 flex-col border-l border-neutral-200 bg-neutral-50 transition-transform duration-300 sm:left-auto sm:w-[60vw] sm:max-w-none sm:min-w-[320px] dark:border-neutral-800 dark:bg-neutral-900'
+        className='animate-slidein fixed inset-y-0 right-0 left-auto z-[80] flex h-full w-[60vw] max-w-none min-w-[320px] flex-col border-l border-neutral-200 bg-neutral-50 transition-transform duration-300 dark:border-neutral-800 dark:bg-neutral-900'
         role='dialog'
         aria-modal='true'
       >

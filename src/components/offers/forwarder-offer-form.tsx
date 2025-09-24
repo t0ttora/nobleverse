@@ -72,6 +72,11 @@ export const ForwarderOfferForm = forwardRef<
   const sections = config.sections;
   const [step, setStep] = React.useState(0);
   const [formData, setFormData] = React.useState<Record<string, any>>({});
+  // ---
+  // Robust field change handler (like MultiStepFreightForm)
+  const handleChange = (field: OfferField, value: any) => {
+    setFormData((prev) => ({ ...prev, [field.id]: value }));
+  };
   const [submitting, setSubmitting] = React.useState(false);
 
   // Reset on panel close (non-embedded)
@@ -182,8 +187,99 @@ export const ForwarderOfferForm = forwardRef<
     notifyState();
   }, [JSON.stringify(formData)]);
 
-  function updateField(field: OfferField, value: any) {
-    setFormData((p) => ({ ...p, [field.id]: value }));
+  // ---
+  // Render field by type (like MultiStepFreightForm)
+  function renderField(field: OfferField) {
+    const val = formData[field.id];
+    if (field.type === 'boolean') {
+      return (
+        <div className='mt-1 flex gap-4'>
+          <label className='inline-flex cursor-pointer items-center gap-1 select-none'>
+            <input
+              type='radio'
+              name={field.id}
+              checked={val === true}
+              onChange={() => handleChange(field, true)}
+              className='accent-primary'
+            />
+            <span>Yes</span>
+          </label>
+          <label className='inline-flex cursor-pointer items-center gap-1 select-none'>
+            <input
+              type='radio'
+              name={field.id}
+              checked={val === false}
+              onChange={() => handleChange(field, false)}
+              className='accent-primary'
+            />
+            <span>No</span>
+          </label>
+        </div>
+      );
+    }
+    if (field.type === 'number') {
+      return (
+        <Input
+          id={field.id}
+          type='number'
+          className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
+          value={val ?? ''}
+          onChange={(e) => handleChange(field, e.target.value)}
+        />
+      );
+    }
+    if (field.type === 'select' && Array.isArray(field.options)) {
+      return (
+        <select
+          id={field.id}
+          className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
+          value={val ?? ''}
+          onChange={(e) => handleChange(field, e.target.value)}
+        >
+          <option value=''>Select...</option>
+          {field.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (field.type === 'multiselect') {
+      const selected: string[] = Array.isArray(val) ? val : [];
+      return (
+        <div className='flex flex-wrap gap-1'>
+          {(field.options || []).map((o) => {
+            const isOn = selected.includes(o);
+            return (
+              <button
+                type='button'
+                key={o}
+                onClick={() => {
+                  const next = isOn
+                    ? selected.filter((x) => x !== o)
+                    : [...selected, o];
+                  handleChange(field, next);
+                }}
+                className={`rounded border px-2 py-1 text-xs ${isOn ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-foreground border-border'}`}
+              >
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    // default: text
+    return (
+      <input
+        id={field.id}
+        type='text'
+        className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
+        value={val ?? ''}
+        onChange={(e) => handleChange(field, e.target.value)}
+      />
+    );
   }
 
   async function handleSubmit() {
@@ -297,111 +393,12 @@ export const ForwarderOfferForm = forwardRef<
     ]
   );
 
-  function FieldView({ field }: { field: OfferField }) {
-    const val = (formData as any)[field.id];
-    switch (field.type) {
-      case 'boolean':
-        return (
-          <div className='mt-1 flex gap-4'>
-            <label className='inline-flex cursor-pointer items-center gap-1 select-none'>
-              <input
-                type='radio'
-                name={field.id}
-                checked={val === true}
-                onChange={() => updateField(field, true)}
-                className='accent-primary'
-              />
-              <span>Yes</span>
-            </label>
-            <label className='inline-flex cursor-pointer items-center gap-1 select-none'>
-              <input
-                type='radio'
-                name={field.id}
-                checked={val === false}
-                onChange={() => updateField(field, false)}
-                className='accent-primary'
-              />
-              <span>No</span>
-            </label>
-          </div>
-        );
-      case 'number': {
-        return (
-          <div className='flex gap-2'>
-            <Input
-              id={field.id}
-              type='text'
-              inputMode='decimal'
-              value={val ?? ''}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                updateField(field, e.target.value)
-              }
-              autoComplete='off'
-            />
-            {field.id === 'total_price' && (
-              <div className='bg-muted text-foreground/80 rounded-md px-2 py-2 text-xs'>
-                USD
-              </div>
-            )}
-          </div>
-        );
-      }
-      case 'select':
-        return (
-          <select
-            id={field.id}
-            className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
-            value={val ?? ''}
-            onChange={(e) => updateField(field, e.target.value)}
-          >
-            <option value=''>Select...</option>
-            {(field.options || []).map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-        );
-      case 'multiselect':
-        return (
-          <div className='flex flex-wrap gap-1'>
-            {(field.options || []).map((o) => {
-              const selected: string[] = Array.isArray(val) ? val : [];
-              const isOn = selected.includes(o);
-              return (
-                <button
-                  type='button'
-                  key={o}
-                  onClick={() => {
-                    const next = isOn
-                      ? selected.filter((x) => x !== o)
-                      : [...selected, o];
-                    updateField(field, next);
-                  }}
-                  className={`rounded border px-2 py-1 text-xs ${isOn ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-foreground border-border'}`}
-                >
-                  {o}
-                </button>
-              );
-            })}
-          </div>
-        );
-      case 'text':
-      default:
-        return (
-          <input
-            id={field.id}
-            type='text'
-            className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
-            value={val ?? ''}
-            onChange={(e) => updateField(field, e.target.value)}
-          />
-        );
-    }
-  }
-
   const Content = (
-    <div className='flex min-h-[60vh] flex-col'>
+    <form
+      className='flex min-h-[60vh] flex-col'
+      onSubmit={(e) => e.preventDefault()}
+      autoComplete='off'
+    >
       {/* Stepper */}
       <div className='mb-6 flex items-center justify-center gap-0'>
         {sections.map((s, i) => (
@@ -439,7 +436,7 @@ export const ForwarderOfferForm = forwardRef<
                   <span className='ml-1 text-red-500'>*</span>
                 )}
               </label>
-              <FieldView field={f as OfferField} />
+              {renderField(f as OfferField)}
             </div>
           ))}
         </div>
@@ -449,6 +446,7 @@ export const ForwarderOfferForm = forwardRef<
       {!useExternalFooter && (
         <div className='sticky bottom-0 flex justify-end gap-2 border-t border-neutral-200 bg-white px-4 pt-4 pb-4 dark:border-neutral-800 dark:bg-neutral-900'>
           <Button
+            type='button'
             variant='outline'
             onClick={() =>
               step > 0
@@ -462,6 +460,7 @@ export const ForwarderOfferForm = forwardRef<
           </Button>
           {!isLast ? (
             <Button
+              type='button'
               onClick={() =>
                 isCurrentStepValidInternal() && setStep((s) => s + 1)
               }
@@ -469,13 +468,13 @@ export const ForwarderOfferForm = forwardRef<
               Next
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting}>
+            <Button type='button' onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'Submitting...' : 'Submit Offer'}
             </Button>
           )}
         </div>
       )}
-    </div>
+    </form>
   );
 
   if (embedded) return Content;

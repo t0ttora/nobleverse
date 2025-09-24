@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IconAlertTriangle, IconTrash } from '@tabler/icons-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SubmitHandler, useFieldArray, useForm } from 'react-hook-form';
 
 interface ProfileFormType {
@@ -49,7 +49,9 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [data, setData] = useState({});
 
+  const [emailPrefix, setEmailPrefix] = useState('');
   const defaultValues = {
+    nobleid: '',
     jobs: [
       {
         jobtitle: '',
@@ -62,11 +64,23 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
     ]
   };
 
-  const form = useForm<ProfileFormValues>({
+  const form = useForm<ProfileFormValues & { nobleid: string }>({
     resolver: zodResolver(profileSchema),
     defaultValues,
     mode: 'onChange'
   });
+
+  // Set default NobleID from email prefix when email changes
+  useEffect(() => {
+    const email = form.watch('email');
+    if (email && typeof email === 'string') {
+      const prefix = email.split('@')[0];
+      setEmailPrefix(prefix);
+      if (!form.getValues('nobleid')) {
+        form.setValue('nobleid', prefix);
+      }
+    }
+  }, [form.watch('email')]);
 
   const {
     control,
@@ -78,7 +92,26 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
     name: 'jobs'
   });
 
-  const processForm: SubmitHandler<ProfileFormValues> = (data) => {
+  const [nobleIdError, setNobleIdError] = useState<string | null>(null);
+  const processForm: SubmitHandler<
+    ProfileFormValues & { nobleid: string }
+  > = async (data) => {
+    setNobleIdError(null);
+    // Check NobleID uniqueness
+    if (data.nobleid) {
+      const res = await fetch('/api/profile/check-nobleid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nobleid: data.nobleid })
+      });
+      const result = await res.json();
+      if (!result.available) {
+        setNobleIdError(
+          'This NobleID is already taken. Please choose another.'
+        );
+        return;
+      }
+    }
     // Process form data
     setData(data);
     // api call and reset
@@ -204,6 +237,35 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
           >
             {currentStep === 0 && (
               <>
+                <FormField
+                  control={form.control}
+                  name='nobleid'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>NobleID</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={loading}
+                          placeholder='Your NobleID'
+                          {...field}
+                          value={field.value || emailPrefix}
+                        />
+                      </FormControl>
+                      {nobleIdError && (
+                        <div className='mt-1 flex items-center gap-1 text-xs text-red-600'>
+                          <span>{nobleIdError}</span>
+                          <span className='group relative'>
+                            <IconAlertTriangle className='h-4 w-4 cursor-pointer text-red-600' />
+                            <span className='absolute top-1/2 left-6 z-10 hidden min-w-[180px] -translate-y-1/2 rounded border border-gray-300 bg-white px-2 py-1 text-xs whitespace-nowrap text-gray-800 shadow-md group-hover:flex'>
+                              {nobleIdError}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name='firstname'

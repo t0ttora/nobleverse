@@ -134,6 +134,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   const [currencyFilter, setCurrencyFilter] = useState<string>('');
   const [ownerProfile, setOwnerProfile] = useState<{
     id: string;
+    display_name?: string | null;
     username?: string | null;
     company_name?: string | null;
     email?: string | null;
@@ -333,11 +334,15 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     })();
   }, [request]);
 
+  // Prefer display_name > company_name > username > email > fallback
   const ownerDisplay =
+    ownerProfile?.display_name ||
     ownerProfile?.company_name ||
     ownerProfile?.username ||
     ownerProfile?.email ||
+    request?.owner_company_name ||
     request?.owner_username ||
+    request?.user_id ||
     'User';
   const ownerAvatar =
     ownerProfile?.avatar_url || request?.owner_avatar_url || undefined;

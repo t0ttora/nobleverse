@@ -5,17 +5,16 @@ export async function ensureProfileClient() {
   const { data: auth } = await supabase.auth.getUser();
   const user = auth?.user;
   if (!user) return null;
-  const usernameBase = (user.email?.split('@')[0] || user.id).toLowerCase();
+  const nobleId = (user.email?.split('@')[0] || user.id).toLowerCase();
   const { data: existing } = await supabase
     .from('profiles')
-    .select('id, username')
+    .select('id, display_name')
     .eq('id', user.id)
     .maybeSingle();
   if (existing) return existing;
   const payload = {
     id: user.id,
-    username: usernameBase,
-    display_name: (user.user_metadata as any)?.full_name || usernameBase,
+    display_name: (user.user_metadata as any)?.full_name || nobleId,
     role: 'other',
     onboarding_completed: false,
     email: user.email,
@@ -36,7 +35,7 @@ export async function ensureProfileClient() {
   const { data } = await supabase
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('id, username')
+    .select('id, display_name')
     .single();
   return data;
 }

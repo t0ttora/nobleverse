@@ -205,7 +205,7 @@ export default function ShipmentRoom({
               <div className='flex flex-1 flex-col'>
                 <RealtimeChat
                   roomName={shipment.id}
-                  username={currentUserId.slice(0, 6)}
+                  nobleId={currentUserId.slice(0, 6)}
                   userId={currentUserId}
                   mode='chat'
                   messages={initialMessages}
@@ -291,7 +291,7 @@ export default function ShipmentRoom({
             <div className='flex flex-1 flex-col overflow-hidden'>
               <RealtimeChat
                 roomName={shipment.id}
-                username={currentUserId.slice(0, 6)}
+                nobleId={currentUserId.slice(0, 6)}
                 userId={currentUserId}
                 mode='chat'
                 messages={initialMessages}

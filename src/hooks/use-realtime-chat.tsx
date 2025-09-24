@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 interface UseRealtimeChatProps {
   roomName: string;
-  username: string;
+  nobleId: string;
   userId: string;
 }
 
@@ -25,7 +25,7 @@ const EVENT_MESSAGE_TYPE = 'message';
 
 export function useRealtimeChat({
   roomName,
-  username,
+  nobleId,
   userId
 }: UseRealtimeChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -73,7 +73,7 @@ export function useRealtimeChat({
         content,
         user: {
           id: userId,
-          name: username
+          name: nobleId
         },
         createdAt: new Date().toISOString()
       };
@@ -91,7 +91,7 @@ export function useRealtimeChat({
         payload: message
       });
     },
-    [channel, isConnected, username, userId]
+    [channel, isConnected, nobleId, userId]
   );
 
   return { messages, sendMessage, isConnected };
