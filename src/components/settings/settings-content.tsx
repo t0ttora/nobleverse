@@ -35,6 +35,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Slider } from '@/components/ui/slider';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProfileRole } from '@/hooks/use-profile-role';
 
@@ -96,7 +97,8 @@ export default function SettingsContent({
     theme: 'system',
     density: 'comfortable',
     brandColor: 'orange',
-    sidebarFeature: 'Recent Changes'
+    sidebarFeature: 'Recent Changes',
+    scale: 100
   });
   const initialOrg = React.useRef({ companyName: '', companyWebsite: '' });
   const initialOffers = React.useRef({ currency: 'USD', validityDays: '14' });
@@ -113,6 +115,7 @@ export default function SettingsContent({
   const [fullName, setFullName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [phone, setPhone] = React.useState('');
+  const [nobleId, setNobleId] = React.useState<string | null>(null);
 
   // Inline edit toggles
   const [editName, setEditName] = React.useState(false);
@@ -170,33 +173,61 @@ export default function SettingsContent({
       // auth.users prefill
       const { data: authData } = await supabase.auth.getUser();
       const u = authData.user;
-      const authFullName = (u?.user_metadata?.full_name ||
-        u?.user_metadata?.name ||
-        '') as string;
-      const authEmail = (u?.email || '') as string;
-      const authPhone = (u?.phone || '') as string;
+      const authEmail = ((u?.email as string) || '').trim();
+      const authPhone = ((u?.phone as string) || '').trim();
+      const meta = (u?.user_metadata ?? {}) as Record<string, unknown>;
+      const rawName = typeof meta.name === 'string' ? meta.name : '';
+      const displayNameFromMeta =
+        (typeof meta.display_name === 'string' && meta.display_name.trim()) ||
+        (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+        rawName.trim();
+      const splitRaw = rawName
+        .split(' ')
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const firstNameFromMeta =
+        (typeof meta.first_name === 'string' && meta.first_name.trim()) ||
+        (typeof meta.given_name === 'string' && meta.given_name.trim()) ||
+        (splitRaw[0] ?? '');
+      const lastNameFromMeta =
+        (typeof meta.last_name === 'string' && meta.last_name.trim()) ||
+        (typeof meta.family_name === 'string' && meta.family_name.trim()) ||
+        (splitRaw.slice(1).join(' ') ?? '');
+      const computedMetaFullName =
+        displayNameFromMeta ||
+        [firstNameFromMeta, lastNameFromMeta].filter(Boolean).join(' ').trim();
 
       // Profiles prefill and merge
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, email, phone, avatar_url')
+        .select('display_name, email, phone, avatar_url, nobleid')
         .eq('id', userId)
         .maybeSingle();
-      const f = (authFullName ||
-        (prof?.display_name as string) ||
-        '') as string;
-      const e = (authEmail || (prof?.email as string) || '') as string;
-      const ph = (authPhone || (prof?.phone as string) || '') as string;
-      const a = prof?.avatar_url ?? null;
-      setFullName(f);
-      setEmail(e);
-      setPhone(ph);
-      setAvatarUrl(a);
+      const profileDisplayName =
+        typeof prof?.display_name === 'string' ? prof.display_name.trim() : '';
+      const profileEmail =
+        typeof prof?.email === 'string' ? prof.email.trim() : '';
+      const profilePhone =
+        typeof prof?.phone === 'string' ? prof.phone.trim() : '';
+      const resolvedFullName =
+        computedMetaFullName || profileDisplayName || authEmail || '';
+      const resolvedEmail = (authEmail || profileEmail).trim();
+      const resolvedPhone = (authPhone || profilePhone).trim();
+      const avatar = prof?.avatar_url ?? null;
+      const resolvedNobleId =
+        typeof prof?.nobleid === 'string' && prof.nobleid.trim().length > 0
+          ? prof.nobleid.trim()
+          : null;
+      setFullName(resolvedFullName);
+      setEmail(resolvedEmail);
+      setPhone(resolvedPhone);
+      setAvatarUrl(avatar);
+      setNobleId(resolvedNobleId);
       initialProfile.current = {
-        fullName: f,
-        email: e,
-        phone: ph,
-        avatarUrl: a
+        fullName: resolvedFullName,
+        email: resolvedEmail,
+        phone: resolvedPhone,
+        avatarUrl: avatar
       };
 
       const { data: st } = await supabase
@@ -254,10 +285,18 @@ export default function SettingsContent({
         } catch {}
         const d = (u.density as any) || 'comfortable';
         setDensity(d);
-        const bc = (u.brand_color as any) || 'orange';
+        const bc = (u.theme_color as any) || u.brand_color || 'orange';
         setBrandColor(bc);
+        try {
+          applyPrimaryFromKey(bc);
+        } catch {}
         const sf = (u.sidebar_feature as any) || 'Recent Changes';
         setSidebarFeature(sf);
+        const sc = Number(u.scale ?? 100);
+        setUiScale(sc);
+        try {
+          applyUiScale(sc);
+        } catch {}
         try {
           const root = document.documentElement;
           if (d === 'compact') root.classList.add('density-compact');
@@ -267,7 +306,8 @@ export default function SettingsContent({
           theme: (u.theme as any) || 'system',
           density: (u.density as any) || 'comfortable',
           brandColor: bc,
-          sidebarFeature: sf
+          sidebarFeature: sf,
+          scale: sc
         } as any;
       }
       // Prefill security
@@ -345,12 +385,10 @@ export default function SettingsContent({
       } catch {
         /* ignore metadata update failure */
       }
-      await supabase
-        .from('settings')
-        .upsert({
-          user_id: userId,
-          profile: { language, region, full_name: fullName, email, phone }
-        });
+      await supabase.from('settings').upsert({
+        user_id: userId,
+        profile: { language, region, full_name: fullName, email, phone }
+      });
       toast.success('Saved');
     } catch (e: any) {
       toast.error('Save failed', { description: e?.message });
@@ -361,16 +399,14 @@ export default function SettingsContent({
 
   const saveNotifications = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        notifications: {
-          orders: notifOrders,
-          messages: notifMessages,
-          system: notifSystem
-        }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      notifications: {
+        orders: notifOrders,
+        messages: notifMessages,
+        system: notifSystem
+      }
+    });
     initialNotifications.current = {
       orders: notifOrders,
       messages: notifMessages,
@@ -381,18 +417,16 @@ export default function SettingsContent({
 
   const saveLanguage = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        profile: {
-          language,
-          region,
-          currency: lrCurrency,
-          timezone,
-          date_format: dateFormat
-        }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      profile: {
+        language,
+        region,
+        currency: lrCurrency,
+        timezone,
+        date_format: dateFormat
+      }
+    });
     initialLangRegion.current = {
       language,
       region,
@@ -408,15 +442,13 @@ export default function SettingsContent({
   const [sessionTimeout, setSessionTimeout] = React.useState('30');
   const savePrivacy = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        security: {
-          two_factor: twoFactor,
-          session_timeout_minutes: Number(sessionTimeout)
-        }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      security: {
+        two_factor: twoFactor,
+        session_timeout_minutes: Number(sessionTimeout)
+      }
+    });
     initialPrivacy.current = { twoFactor, sessionTimeout };
     toast.success('Privacy & Security saved');
   };
@@ -427,16 +459,14 @@ export default function SettingsContent({
   const [intOneDrive, setIntOneDrive] = React.useState(false);
   const saveIntegrations = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        integrations: {
-          slack: intSlack,
-          google: intGoogle,
-          onedrive: intOneDrive
-        }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      integrations: {
+        slack: intSlack,
+        google: intGoogle,
+        onedrive: intOneDrive
+      }
+    });
     initialIntegrations.current = {
       slack: intSlack,
       google: intGoogle,
@@ -455,24 +485,53 @@ export default function SettingsContent({
   const [brandColor, setBrandColor] = React.useState<string>('orange');
   const [sidebarFeature, setSidebarFeature] =
     React.useState<string>('Recent Changes');
+  const [uiScale, setUiScale] = React.useState<number>(100);
+
+  // Map theme color key to a hex to drive CSS var --primary
+  const themeColorHex: Record<string, string> = {
+    orange: '#f97316',
+    blue: '#3b82f6',
+    red: '#ef4444',
+    green: '#22c55e',
+    yellow: '#eab308',
+    indigo: '#6366f1',
+    cyan: '#06b6d4',
+    pink: '#ec4899',
+    teal: '#14b8a6'
+  };
+
+  function applyPrimaryFromKey(key: string) {
+    try {
+      const hex = themeColorHex[key] || key;
+      document.documentElement.style.setProperty('--primary', hex);
+    } catch {}
+  }
+
+  function applyUiScale(percent: number) {
+    try {
+      const clamped = Math.max(75, Math.min(150, Math.round(percent)));
+      document.documentElement.style.setProperty('font-size', `${clamped}%`);
+    } catch {}
+  }
   const saveAppearance = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        ui: {
-          theme: appearanceTheme,
-          density,
-          brand_color: brandColor,
-          sidebar_feature: sidebarFeature
-        }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      ui: {
+        theme: appearanceTheme,
+        density,
+        brand_color: brandColor, // backward compatibility
+        theme_color: brandColor,
+        sidebar_feature: sidebarFeature,
+        scale: uiScale
+      }
+    });
     initialAppearance.current = {
       theme: appearanceTheme,
       density,
       brandColor,
-      sidebarFeature
+      sidebarFeature,
+      scale: uiScale
     } as any;
     try {
       applyTheme(appearanceTheme);
@@ -481,6 +540,12 @@ export default function SettingsContent({
       const root = document.documentElement;
       if (density === 'compact') root.classList.add('density-compact');
       else root.classList.remove('density-compact');
+    } catch {}
+    try {
+      applyPrimaryFromKey(brandColor);
+    } catch {}
+    try {
+      applyUiScale(uiScale);
     } catch {}
     toast.success('Appearance saved');
   };
@@ -539,12 +604,10 @@ export default function SettingsContent({
   const [companyWebsite, setCompanyWebsite] = React.useState('');
   const saveOrg = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        org: { company_name: companyName, website: companyWebsite }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      org: { company_name: companyName, website: companyWebsite }
+    });
     initialOrg.current = { companyName, companyWebsite };
     toast.success('Organization saved');
   };
@@ -554,12 +617,10 @@ export default function SettingsContent({
   const [validityDays, setValidityDays] = React.useState('14');
   const saveOffers = async () => {
     if (!userId) return;
-    await supabase
-      .from('settings')
-      .upsert({
-        user_id: userId,
-        offers: { currency, validity_days: Number(validityDays) }
-      });
+    await supabase.from('settings').upsert({
+      user_id: userId,
+      offers: { currency, validity_days: Number(validityDays) }
+    });
     initialOffers.current = { currency, validityDays } as any;
     toast.success('Offers & Products saved');
   };
@@ -584,18 +645,23 @@ export default function SettingsContent({
     if (left === 'account') {
       supabase
         .from('profiles')
-        .select('display_name, email, phone, avatar_url')
+        .select('display_name, email, phone, avatar_url, nobleid')
         .eq('id', userId)
         .maybeSingle()
         .then(({ data }) => {
-          const f = data?.display_name ?? '';
-          const e = data?.email ?? '';
-          const ph = data?.phone ?? '';
+          const f = (data?.display_name ?? '').trim();
+          const e = (data?.email ?? '').trim();
+          const ph = (data?.phone ?? '').trim();
           const a = data?.avatar_url ?? null;
+          const nob =
+            typeof data?.nobleid === 'string' && data.nobleid.trim().length > 0
+              ? data.nobleid.trim()
+              : null;
           setFullName(f);
           setEmail(e);
           setPhone(ph);
           setAvatarUrl(a);
+          setNobleId(nob);
           initialProfile.current = {
             fullName: f,
             email: e,
@@ -659,6 +725,16 @@ export default function SettingsContent({
           } catch {}
           const d = (u.density as any) || 'comfortable';
           setDensity(d);
+          const bc = (u.theme_color as any) || u.brand_color || 'orange';
+          setBrandColor(bc);
+          try {
+            applyPrimaryFromKey(bc);
+          } catch {}
+          const sc = Number(u.scale ?? 100);
+          setUiScale(sc);
+          try {
+            applyUiScale(sc);
+          } catch {}
           try {
             const root = document.documentElement;
             if (d === 'compact') root.classList.add('density-compact');
@@ -666,7 +742,10 @@ export default function SettingsContent({
           } catch {}
           initialAppearance.current = {
             theme: (u.theme as any) || 'system',
-            density: (u.density as any) || 'comfortable'
+            density: (u.density as any) || 'comfortable',
+            brandColor: bc,
+            sidebarFeature: (u.sidebar_feature as any) || 'Recent Changes',
+            scale: sc
           } as any;
         } else if (left === 'privacy' && data.security) {
           const s = data.security as any;
@@ -765,7 +844,8 @@ export default function SettingsContent({
         i.theme !== appearanceTheme ||
         i.density !== density ||
         i.brandColor !== brandColor ||
-        i.sidebarFeature !== sidebarFeature
+        i.sidebarFeature !== sidebarFeature ||
+        (typeof i.scale === 'number' ? i.scale : 100) !== uiScale
       );
     }
     if (left === 'org') {
@@ -836,7 +916,7 @@ export default function SettingsContent({
   }, [isDirty]);
 
   return (
-    <div className='flex max-h-[85vh] min-h-[560px] w-full gap-0 rounded-lg bg-white text-[13px] leading-5 dark:bg-neutral-950'>
+    <div className='flex min-h-[560px] w-full gap-0 rounded-lg bg-white text-[13px] leading-5 dark:bg-neutral-950'>
       {/* Left nav */}
       <aside
         className={cn(
@@ -1033,7 +1113,7 @@ export default function SettingsContent({
             </div>
           )}
         </div>
-        {/* Scrollable content */}
+        {/* Scrollable content: only this area scrolls */}
         <ScrollArea className='flex-1 px-5 pb-5'>
           {left === 'account' && activeTab === 'profile' && (
             <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
@@ -1238,7 +1318,7 @@ export default function SettingsContent({
               {/* NobleID & Role (read-only) */}
               <Row label='Noble ID' hint='Your unique user identifier'>
                 <div className='text-neutral-600 dark:text-neutral-300'>
-                  {userId || '—'}
+                  {nobleId ?? '—'}
                 </div>
               </Row>
               <Row label='Role' hint='Role-based interface customization'>
@@ -1250,55 +1330,37 @@ export default function SettingsContent({
           )}
 
           {left === 'account' && activeTab === 'notifications' && (
-            <div className='rounded-md border border-neutral-200 dark:border-neutral-800'>
-              <div className='flex items-center justify-between border-b border-dashed p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Orders & Shipments</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Get notified when your orders update
-                  </div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row
+                label='Orders & Shipments'
+                hint='Get notified when your orders update'
+              >
                 <Switch
                   checked={notifOrders}
                   onCheckedChange={setNotifOrders}
                 />
-              </div>
-              <div className='flex items-center justify-between border-b border-dashed p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Messages</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Receive chat and inbox messages
-                  </div>
-                </div>
+              </Row>
+              <Row label='Messages' hint='Receive chat and inbox messages'>
                 <Switch
                   checked={notifMessages}
                   onCheckedChange={setNotifMessages}
                 />
-              </div>
-              <div className='flex items-center justify-between p-4'>
-                <div>
-                  <div className='font-medium'>System</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Product tips and announcements
-                  </div>
-                </div>
+              </Row>
+              <Row label='System' hint='Product tips and announcements'>
                 <Switch
                   checked={notifSystem}
                   onCheckedChange={setNotifSystem}
                 />
-              </div>
+              </Row>
             </div>
           )}
 
           {left === 'account' && activeTab === 'language' && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Language</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Display the app in your selected language.
-                  </div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row
+                label='Language'
+                hint='Display the app in your selected language.'
+              >
                 <Select value={language} onValueChange={setLanguage}>
                   <SelectTrigger size='sm' className='h-8 min-w-44'>
                     <SelectValue placeholder='Language' />
@@ -1312,14 +1374,8 @@ export default function SettingsContent({
                     <SelectItem value='Español'>Español</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Region</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Used to format dates and numbers
-                  </div>
-                </div>
+              </Row>
+              <Row label='Region' hint='Used to format dates and numbers'>
                 <Select value={region} onValueChange={setRegion}>
                   <SelectTrigger size='sm' className='h-8 min-w-44'>
                     <SelectValue placeholder='Region' />
@@ -1333,14 +1389,11 @@ export default function SettingsContent({
                     <SelectItem value='Turkey'>Turkey</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Currency</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    View balances in your selected currency.
-                  </div>
-                </div>
+              </Row>
+              <Row
+                label='Currency'
+                hint='View balances in your selected currency.'
+              >
                 <Select
                   value={lrCurrency}
                   onValueChange={(v) => setLrCurrency(v as any)}
@@ -1355,14 +1408,11 @@ export default function SettingsContent({
                     <SelectItem value='GBP'>British Pound (GBP)</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Timezone and Format</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Choose your timezone and preferred format.
-                  </div>
-                </div>
+              </Row>
+              <Row
+                label='Timezone and Format'
+                hint='Choose your timezone and preferred format.'
+              >
                 <Select value={timezone} onValueChange={setTimezone}>
                   <SelectTrigger size='sm' className='h-8 min-w-56'>
                     <SelectValue placeholder='Timezone' />
@@ -1385,14 +1435,11 @@ export default function SettingsContent({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Date Format</div>
-                  <div className='text-neutral-500 dark:text-neutral-400'>
-                    Choose your preferred date format.
-                  </div>
-                </div>
+              </Row>
+              <Row
+                label='Date Format'
+                hint='Choose your preferred date format.'
+              >
                 <Select
                   value={dateFormat}
                   onValueChange={(v) => setDateFormat(v as any)}
@@ -1407,28 +1454,22 @@ export default function SettingsContent({
                     <SelectItem value='YYYY-MM-DD'>YYYY-MM-DD</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Row>
             </div>
           )}
 
           {is('privacy') && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Two-factor authentication</div>
-                  <div className='text-neutral-500'>
-                    Extra security on sign-in
-                  </div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row
+                label='Two-factor authentication'
+                hint='Extra security on sign-in'
+              >
                 <Switch checked={twoFactor} onCheckedChange={setTwoFactor} />
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Session timeout</div>
-                  <div className='text-neutral-500'>
-                    Auto sign-out after inactivity
-                  </div>
-                </div>
+              </Row>
+              <Row
+                label='Session timeout'
+                hint='Auto sign-out after inactivity'
+              >
                 <Select
                   value={sessionTimeout}
                   onValueChange={setSessionTimeout}
@@ -1442,20 +1483,20 @@ export default function SettingsContent({
                     <SelectItem value='60'>60 minutes</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='space-y-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='font-medium'>Change Password</div>
+              </Row>
+              <div className='px-1 py-4'>
+                <div className='mb-2 font-medium'>Change Password</div>
                 <ChangePasswordBlock />
               </div>
-              <div className='space-y-3 rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='font-medium'>Active Sessions</div>
+              <div className='px-1 py-4'>
+                <div className='mb-2 font-medium'>Active Sessions</div>
                 <ActiveSessionsBlock />
               </div>
             </div>
           )}
 
           {is('integrations') && (
-            <div className='space-y-3 rounded-md border border-neutral-200 p-2 dark:border-neutral-800'>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
               <Row label='Slack'>
                 <Switch checked={intSlack} onCheckedChange={setIntSlack} />
               </Row>
@@ -1472,13 +1513,11 @@ export default function SettingsContent({
           )}
 
           {is('appearance') && (
-            <div className='space-y-4'>
-              {/* Interface Theme */}
-              <div className='rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='mb-2 font-medium'>Interface Theme</div>
-                <div className='mb-1 text-neutral-500 dark:text-neutral-400'>
-                  Select and customize your UI theme.
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row
+                label='Theme Mode'
+                hint='Choose Light, Dark, or Auto (System) with preview.'
+              >
                 <RadioGroup
                   value={appearanceTheme}
                   onValueChange={(v) => {
@@ -1487,29 +1526,63 @@ export default function SettingsContent({
                       applyTheme(v as any);
                     } catch {}
                   }}
-                  className='grid grid-cols-3 gap-3 sm:max-w-[360px]'
+                  className='grid grid-cols-3 gap-3 sm:max-w-[480px]'
                 >
-                  <label className='flex items-center gap-2'>
+                  <label className='flex cursor-pointer flex-col items-center gap-2'>
                     <RadioGroupItem value='light' id='theme-light' />
+                    <div className='rounded-md border p-1'>
+                      <div className='h-16 w-24 rounded-md bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]'>
+                        <div className='h-3 w-full rounded-t-md bg-neutral-100' />
+                        <div className='p-2'>
+                          <div className='mb-1 h-2 w-3/4 rounded bg-neutral-200' />
+                          <div className='h-2 w-1/2 rounded bg-[var(--primary)]' />
+                        </div>
+                      </div>
+                    </div>
                     <span>Light</span>
                   </label>
-                  <label className='flex items-center gap-2'>
+                  <label className='flex cursor-pointer flex-col items-center gap-2'>
                     <RadioGroupItem value='dark' id='theme-dark' />
+                    <div className='rounded-md border p-1'>
+                      <div className='h-16 w-24 rounded-md bg-neutral-900'>
+                        <div className='h-3 w-full rounded-t-md bg-neutral-800' />
+                        <div className='p-2'>
+                          <div className='mb-1 h-2 w-3/4 rounded bg-neutral-700' />
+                          <div className='h-2 w-1/2 rounded bg-[var(--primary)]' />
+                        </div>
+                      </div>
+                    </div>
                     <span>Dark</span>
                   </label>
-                  <label className='flex items-center gap-2'>
+                  <label className='flex cursor-pointer flex-col items-center gap-2'>
                     <RadioGroupItem value='system' id='theme-system' />
-                    <span>System</span>
+                    <div className='rounded-md border p-1'>
+                      <div className='h-16 w-24 overflow-hidden rounded-md'>
+                        <div className='float-left h-full w-1/2 bg-white'>
+                          <div className='h-3 w-full rounded-t-md bg-neutral-100' />
+                          <div className='p-2'>
+                            <div className='mb-1 h-2 w-5/6 rounded bg-neutral-200' />
+                            <div className='h-2 w-2/3 rounded bg-[var(--primary)]' />
+                          </div>
+                        </div>
+                        <div className='float-left h-full w-1/2 bg-neutral-900'>
+                          <div className='h-3 w-full rounded-t-md bg-neutral-800' />
+                          <div className='p-2'>
+                            <div className='mb-1 h-2 w-5/6 rounded bg-neutral-700' />
+                            <div className='h-2 w-2/3 rounded bg-[var(--primary)]' />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <span>Auto</span>
                   </label>
                 </RadioGroup>
-              </div>
-              {/* Brand Color */}
-              <div className='rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='mb-2 font-medium'>Brand Color</div>
-                <div className='mb-3 text-neutral-500 dark:text-neutral-400'>
-                  Select or customize your brand color.
-                </div>
-                <div className='flex flex-wrap items-center gap-3'>
+              </Row>
+              <Row
+                label='Theme Color'
+                hint='This accent color updates buttons and highlights.'
+              >
+                <div className='flex flex-wrap items-center justify-end gap-3'>
                   {[
                     { key: 'orange', class: 'bg-orange-500' },
                     { key: 'blue', class: 'bg-blue-500' },
@@ -1524,11 +1597,14 @@ export default function SettingsContent({
                     <button
                       key={c.key}
                       type='button'
-                      onClick={() => setBrandColor(c.key)}
+                      onClick={() => {
+                        setBrandColor(c.key);
+                        applyPrimaryFromKey(c.key);
+                      }}
                       className={cn(
                         'relative size-6 rounded-full ring-2 ring-transparent transition',
                         brandColor === c.key &&
-                          'ring-orange-500 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950'
+                          'ring-[var(--primary)] ring-offset-2 ring-offset-white dark:ring-offset-neutral-950'
                       )}
                       style={{ backgroundColor: undefined }}
                     >
@@ -1538,13 +1614,31 @@ export default function SettingsContent({
                     </button>
                   ))}
                 </div>
-              </div>
-              {/* Sidebar Feature */}
-              <div className='rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='mb-2 font-medium'>Sidebar Feature</div>
-                <div className='mb-3 text-neutral-500 dark:text-neutral-400'>
-                  What’s shows in the desktop sidebar.
+              </Row>
+              <Row label='UI Scale' hint='Adjust overall interface size'>
+                <div className='flex items-center gap-3'>
+                  <div className='w-56'>
+                    <Slider
+                      min={75}
+                      max={150}
+                      step={5}
+                      value={[uiScale]}
+                      onValueChange={(v) => {
+                        const sc = Array.isArray(v) ? v[0] : (v as any);
+                        setUiScale(sc);
+                        applyUiScale(sc);
+                      }}
+                    />
+                  </div>
+                  <div className='w-10 text-right text-sm tabular-nums'>
+                    {uiScale}%
+                  </div>
                 </div>
+              </Row>
+              <Row
+                label='Sidebar Feature'
+                hint='What shows in the desktop sidebar.'
+              >
                 <Select
                   value={sidebarFeature}
                   onValueChange={setSidebarFeature}
@@ -1562,12 +1656,8 @@ export default function SettingsContent({
                     <SelectItem value='Usage Stats'>Usage Stats</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div className='mb-2 font-medium'>Density</div>
-                <div className='mb-2 text-neutral-500'>
-                  Control spacing and compactness
-                </div>
+              </Row>
+              <Row label='Density' hint='Control spacing and compactness'>
                 <RadioGroup
                   value={density}
                   onValueChange={(v) => setDensity(v as any)}
@@ -1585,12 +1675,12 @@ export default function SettingsContent({
                     <span>Compact</span>
                   </label>
                 </RadioGroup>
-              </div>
+              </Row>
             </div>
           )}
 
           {is('org') && (
-            <div className='space-y-4'>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
               <Row label='Company Name'>
                 <Input
                   className='h-8 w-64'
@@ -1609,14 +1699,8 @@ export default function SettingsContent({
           )}
 
           {is('offers') && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Default currency</div>
-                  <div className='text-neutral-500'>
-                    Used in offers and pricing
-                  </div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row label='Default currency' hint='Used in offers and pricing'>
                 <Select
                   value={currency}
                   onValueChange={(v) => setCurrency(v as any)}
@@ -1630,14 +1714,11 @@ export default function SettingsContent({
                     <SelectItem value='TRY'>TRY</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Offer validity</div>
-                  <div className='text-neutral-500'>
-                    Default days your offer remains valid
-                  </div>
-                </div>
+              </Row>
+              <Row
+                label='Offer validity'
+                hint='Default days your offer remains valid'
+              >
                 <Select value={validityDays} onValueChange={setValidityDays}>
                   <SelectTrigger size='sm' className='h-8 min-w-36'>
                     <SelectValue />
@@ -1648,17 +1729,13 @@ export default function SettingsContent({
                     <SelectItem value='30'>30 days</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Row>
             </div>
           )}
 
           {is('billing') && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Plan</div>
-                  <div className='text-neutral-500'>Your subscription plan</div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row label='Plan' hint='Your subscription plan'>
                 <Select value={plan} onValueChange={(v) => setPlan(v as any)}>
                   <SelectTrigger size='sm' className='h-8 min-w-36'>
                     <SelectValue />
@@ -1669,8 +1746,8 @@ export default function SettingsContent({
                     <SelectItem value='Business'>Business</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='rounded-md border border-neutral-200 p-3 dark:border-neutral-800'>
+              </Row>
+              <div className='px-1 py-3'>
                 <div className='mb-2 text-sm font-medium'>Payment methods</div>
                 {methods.map((m) => (
                   <div
@@ -1720,14 +1797,8 @@ export default function SettingsContent({
           )}
 
           {is('shipping') && (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
-                <div>
-                  <div className='font-medium'>Default Incoterm</div>
-                  <div className='text-neutral-500'>
-                    Used when creating shipments
-                  </div>
-                </div>
+            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
+              <Row label='Default Incoterm' hint='Used when creating shipments'>
                 <Select
                   value={incoterm}
                   onValueChange={(v) => setIncoterm(v as any)}
@@ -1743,8 +1814,8 @@ export default function SettingsContent({
                     <SelectItem value='DDP'>DDP</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className='rounded-md border border-neutral-200 p-4 dark:border-neutral-800'>
+              </Row>
+              <div className='px-1 py-4'>
                 <div className='mb-2 font-medium'>Preferred carriers</div>
                 <div className='flex flex-wrap gap-2'>
                   {['Maersk', 'MSC', 'CMA CGM', 'DHL', 'FedEx'].map((c) => {
@@ -1842,7 +1913,7 @@ function TabBtn({
       {children}
       <span
         className={cn(
-          'absolute top-[calc(100%-1px)] right-0 left-0 h-[2px] bg-orange-500 opacity-0 transition-opacity',
+          'absolute top-[calc(100%-1px)] right-0 left-0 h-[2px] bg-[var(--primary)] opacity-0 transition-opacity',
           active && 'opacity-100'
         )}
       />

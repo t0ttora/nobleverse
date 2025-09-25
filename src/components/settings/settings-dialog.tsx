@@ -25,7 +25,7 @@ export function SettingsDialogRoot() {
       {/* Keep the chrome static; only inner content will scroll */}
       <DialogContent
         hideCloseButton
-        className='max-h-[85vh] overflow-hidden p-0 sm:max-w-[1100px]'
+        className='h-[85vh] max-h-[85vh] overflow-hidden p-0 sm:max-w-[1100px]'
       >
         <DialogTitle className='sr-only'>Account Settings</DialogTitle>
         <SettingsContent initialSection={section} />
