@@ -717,6 +717,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     <SidePanel
       open={open}
       onClose={onClose}
+      zIndexBase={90}
       title={
         <div className='flex items-center gap-2'>
           <button

@@ -71,7 +71,7 @@ export default function FloatingActionButton({ className }: FabProps) {
   return (
     <>
       {/* FAB toggle */}
-      <div className={cn('fixed right-5 bottom-5 z-50', className)}>
+      <div className={cn('fixed right-5 bottom-5 z-40', className)}>
         <button
           ref={ref}
           type='button'
@@ -95,7 +95,7 @@ export default function FloatingActionButton({ className }: FabProps) {
       {/* Minimal adjacent launcher (vertical stack, opens upward) */}
       <div
         className={cn(
-          'fixed z-50 flex transform-gpu transition-all duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
+          'fixed z-40 flex transform-gpu transition-all duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
           open
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-2 opacity-0'

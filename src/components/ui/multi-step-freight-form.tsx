@@ -7,21 +7,36 @@ import type {
 import { getFormConfig } from '@/lib/freight-form-schema';
 import { Button } from '@/components/ui/button';
 import { createRequest } from '../../../utils/supabase/requests';
+import { createShipment } from '../../../utils/supabase/shipments';
 import { supabase } from '../../../utils/supabase/client';
 // Popover kaldırıldı
 
 interface MultiStepFreightFormProps {
-  type: FreightFormType;
+  type?: FreightFormType; // optional when allowTypeSelection is true
   userId: string;
-  onSuccess?: (request: any) => void;
+  onSuccess?: (entity: any) => void;
+  mode?: 'request' | 'booking';
+  allowTypeSelection?: boolean;
+  onTypeChange?: (t: FreightFormType) => void;
 }
 
 export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
   type,
   userId,
-  onSuccess
+  onSuccess,
+  mode = 'request',
+  allowTypeSelection = false,
+  onTypeChange
 }) => {
-  const formConfig = getFormConfig(type);
+  const [currentType, setCurrentType] = React.useState<
+    FreightFormType | undefined
+  >(type);
+  React.useEffect(() => {
+    if (type && type !== currentType) setCurrentType(type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
+  const formConfig = currentType ? getFormConfig(currentType) : null;
   const [step, setStep] = React.useState(0);
   const [formData, setFormData] = React.useState<any>({});
   const [preview, setPreview] = React.useState(false);
@@ -35,8 +50,41 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
     [key: string]: boolean;
   }>({});
 
-  if (!formConfig)
+  // Freight type selection (when enabled)
+  const FREIGHT_TYPES: { value: FreightFormType; label: string }[] = [
+    { value: 'road', label: 'Road Freight' },
+    { value: 'sea', label: 'Sea Freight' },
+    { value: 'air', label: 'Air Freight' },
+    { value: 'rail', label: 'Rail Freight' },
+    { value: 'multimodal', label: 'Multimodal Freight' },
+    { value: 'courier', label: 'Courier / Express Shipping' }
+  ];
+
+  if (!formConfig) {
+    if (allowTypeSelection) {
+      return (
+        <div className='flex min-h-[40vh] flex-col items-center justify-center gap-4'>
+          <div className='text-base font-medium'>Select freight type</div>
+          <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+            {FREIGHT_TYPES.map((t) => (
+              <button
+                key={t.value}
+                className='hover:bg-accent/60 flex items-center justify-center rounded-md border px-4 py-2 text-sm shadow-sm transition-colors'
+                onClick={() => {
+                  setCurrentType(t.value);
+                  onTypeChange?.(t.value);
+                }}
+                type='button'
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     return <div className='text-red-500'>Form config not found.</div>;
+  }
 
   const sections = formConfig.sections;
   const currentSection = sections[step];
@@ -68,16 +116,33 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
         additionalNotes,
         draft: asDraft
       };
-      // supabase singleton instance already imported
-      const request = await createRequest({
-        supabase,
-        freightType: type,
-        details,
-        userId
-      });
-      setStatus('success');
-      toast.success('Request submitted successfully!');
-      if (onSuccess) onSuccess(request);
+      // Create Request or Shipment depending on mode
+      if (mode === 'booking') {
+        if (!currentType)
+          throw new Error('Freight type is required to create a booking');
+        const shipment = await createShipment({
+          supabase,
+          ownerId: userId,
+          forwarderId: null,
+          freightType: currentType,
+          details
+        });
+        setStatus('success');
+        toast.success('Booking created as shipment!');
+        onSuccess?.(shipment);
+      } else {
+        if (!currentType)
+          throw new Error('Freight type is required to create a request');
+        const request = await createRequest({
+          supabase,
+          freightType: currentType,
+          details,
+          userId
+        });
+        setStatus('success');
+        toast.success('Request submitted successfully!');
+        onSuccess?.(request);
+      }
     } catch (e: any) {
       setStatus('error');
       setError(e?.message || 'An error occurred.');
@@ -245,7 +310,7 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
   if (preview) {
     return (
       <div className='flex min-h-[60vh] flex-col'>
-        <div className='flex-1 space-y-6'>
+        <div className='flex-1 space-y-6 overflow-y-auto pr-1'>
           <h3 className='mb-2 text-lg font-semibold'>Preview</h3>
           <div className='rounded-xl bg-neutral-100 p-4 text-sm dark:bg-neutral-800'>
             {sections.map((section, idx) => (
@@ -307,8 +372,8 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
             </div>
           )}
         </div>
-        {/* Fixed footer butonları, yatayda formla aynı hizada */}
-        <div className='fixed right-0 bottom-0 left-0 z-10 mx-auto flex max-w-4xl flex-row justify-end gap-2 border-t border-neutral-200 bg-white px-4 pt-6 pb-4 dark:border-neutral-800 dark:bg-neutral-900'>
+        {/* Sticky in-panel footer */}
+        <div className='sticky right-0 bottom-0 left-0 z-10 mt-6 flex flex-row justify-end gap-2 border-t border-neutral-200 bg-white/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/90 dark:supports-[backdrop-filter]:bg-neutral-900/70'>
           <Button variant='outline' onClick={handleBack}>
             Back
           </Button>
@@ -340,11 +405,31 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
         handleNext();
       }}
     >
+      {allowTypeSelection && (
+        <div className='mb-4 flex flex-wrap items-center gap-2'>
+          <label className='text-sm font-medium'>Freight Type</label>
+          <select
+            className='focus:ring-primary rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm transition-all focus:ring-2 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900'
+            value={currentType || ''}
+            onChange={(e) => {
+              const v = e.target.value as FreightFormType;
+              setCurrentType(v);
+              onTypeChange?.(v);
+            }}
+          >
+            <option value='' disabled>
+              Select type...
+            </option>
+            {FREIGHT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <Stepper />
-      <div
-        className='flex-1 overflow-y-auto'
-        style={{ marginBottom: 90, paddingRight: 4, paddingLeft: 4 }}
-      >
+      <div className='flex-1 overflow-y-auto px-1'>
         <div className='mb-2 text-base font-semibold'>
           {currentSection.title}
         </div>
@@ -379,8 +464,8 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
         {/* Hata mesajı */}
         {error && <div className='mt-2 text-sm text-red-500'>{error}</div>}
       </div>
-      {/* Fixed footer butonları, yatayda formla aynı hizada */}
-      <div className='fixed right-0 bottom-0 left-0 z-10 flex flex-row justify-end gap-2 border-t border-neutral-200 bg-white px-4 pt-6 pb-4 dark:border-neutral-800 dark:bg-neutral-900'>
+      {/* Sticky in-panel footer */}
+      <div className='sticky right-0 bottom-0 left-0 z-10 mt-4 flex flex-row justify-end gap-2 border-t border-neutral-200 bg-white/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/90 dark:supports-[backdrop-filter]:bg-neutral-900/70'>
         <Button
           variant='outline'
           type='button'

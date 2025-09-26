@@ -3,10 +3,12 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+// import { ShipmentsTable } from '@/components/ui/shipments-table';
 import { SidePanel } from '@/components/ui/side-panel';
-import { ShipmentsTable } from '@/components/ui/shipments-table';
 import {
   Tooltip,
   TooltipProvider,
@@ -21,6 +23,10 @@ import SearchInput from '../navigation/search-input';
 import { UserNav } from './user-nav';
 import { ModeToggle } from './ThemeToggle/theme-toggle';
 import { CreateRequestDropdown } from '@/components/requests/create-request-dropdown';
+import { MultiStepFreightForm } from '@/components/ui/multi-step-freight-form';
+// SidePanel already imported above
+import { RequestBrowser } from '@/components/requests/request-browser';
+import { RequestDetailsPanel } from '@/components/requests/request-details-panel';
 import { useProfileRole } from '@/hooks/use-profile-role';
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
@@ -34,94 +40,30 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select';
+import type { FreightFormType } from '@/lib/freight-form-schema';
 
 function HeaderContent() {
   const [search, setSearch] = React.useState('');
   const [viewMode, setViewMode] = React.useState<'table' | 'grid'>('grid');
+  const [currentUserId, setCurrentUserId] = React.useState<string>('');
 
   const { role } = useProfileRole();
-  const [offerPanelOpen, setOfferPanelOpen] = React.useState(false);
-  const [requests, setRequests] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  // Unified create flow panel
+  const [createPanelOpen, setCreatePanelOpen] = React.useState(false);
+  const [createMode, setCreateMode] = React.useState<'browse' | 'booking'>(
+    'browse'
+  );
   const [selectedRequest, setSelectedRequest] = React.useState<any | null>(
     null
   );
-  // Offer counts and offeredMap for ShipmentsTable
-  const [offerCounts, setOfferCounts] = React.useState<Record<string, number>>(
-    {}
-  );
-  const [offeredMap, setOfferedMap] = React.useState<Record<string, boolean>>(
-    {}
+  const [bookingType, setBookingType] = React.useState<FreightFormType | null>(
+    null
   );
 
-  // Fetch and enrich requests for the sidepanel (like shipments/page.tsx)
-  const fetchRequests = React.useCallback(async (query = '') => {
-    setLoading(true);
-    try {
-      let q = supabase.from('requests').select('*').eq('status', 'pending');
-      if (query) {
-        q = q.ilike('code', `%${query}%`);
-      }
-      const { data, error } = await q
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (!error && data) {
-        // Enrich with owner profile
-        const uids = Array.from(
-          new Set((data || []).map((r: any) => r.user_id).filter(Boolean))
-        );
-        let profMap: Record<string, any> = {};
-        if (uids.length) {
-          const { data: profs } = await supabase
-            .from('profiles')
-            .select('id, username, company_name, avatar_url')
-            .in('id', uids);
-          for (const p of profs || []) profMap[String(p.id)] = p;
-        }
-        const enriched = (data || []).map((r: any) => {
-          const p = r.user_id ? profMap[String(r.user_id)] : null;
-          return {
-            ...r,
-            owner_company_name: p?.company_name ?? null,
-            owner_username: p?.username ?? null,
-            owner_avatar_url: p?.avatar_url ?? null
-          };
-        });
-        setRequests(enriched);
-        // Fetch offer counts
-        try {
-          const ids = enriched.map((r: any) => r.id);
-          // getOfferCountsByRequest is imported from utils/supabase/offers in shipments/page.tsx
-          // We'll use a local fetch for now (TODO: refactor to shared util)
-          const { data: offers } = await supabase
-            .from('offers')
-            .select('request_id')
-            .in('request_id', ids);
-          const counts: Record<string, number> = {};
-          const offered: Record<string, boolean> = {};
-          for (const o of offers || []) {
-            const rid = String(o.request_id);
-            counts[rid] = (counts[rid] || 0) + 1;
-            // TODO: mark as offered if current user is forwarder (future)
-          }
-          setOfferCounts(counts);
-          setOfferedMap(offered);
-        } catch {
-          setOfferCounts({});
-          setOfferedMap({});
-        }
-      } else {
-        setRequests([]);
-        setOfferCounts({});
-        setOfferedMap({});
-      }
-    } catch {
-      setRequests([]);
-      setOfferCounts({});
-      setOfferedMap({});
-    } finally {
-      setLoading(false);
-    }
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data?.user?.id || '');
+    });
   }, []);
 
   return (
@@ -143,54 +85,139 @@ function HeaderContent() {
               <Button
                 className='border-border focus:ring-ring flex items-center justify-center rounded-md border bg-black px-3 py-2 font-semibold text-white transition-colors hover:bg-gray-900 hover:text-white hover:opacity-90 focus:ring-2 focus:ring-offset-2 focus:outline-none dark:bg-white dark:text-black dark:hover:bg-gray-100 dark:hover:text-black'
                 onClick={() => {
-                  setOfferPanelOpen(true);
-                  fetchRequests();
+                  setCreatePanelOpen(true);
+                  setCreateMode('browse');
+                  setBookingType(null);
                 }}
               >
                 <span className='flex items-center gap-2'>
                   <Icons.addCircleFilled size={18} className='mr-1' />
-                  Create Offer
+                  Create offer
                 </span>
               </Button>
               <SidePanel
-                open={offerPanelOpen}
-                onClose={() => setOfferPanelOpen(false)}
+                open={createPanelOpen}
+                onClose={() => setCreatePanelOpen(false)}
                 title={
-                  <span className='flex items-center gap-2 text-xl font-bold'>
-                    <Icons.fileDescription size={20} />
-                    Create Offer
-                  </span>
+                  <div className='flex items-center gap-2'>
+                    <span className='flex items-center gap-2 text-xl font-bold'>
+                      <Icons.fileDescription size={20} />
+                      Create offer
+                    </span>
+                    <div className='text-muted-foreground ml-2 flex items-center gap-1 text-sm'>
+                      <span>or</span>
+                      <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                          <DropdownMenu>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  className='text-foreground font-medium underline-offset-4 hover:underline'
+                                  onClick={(e) => e.preventDefault()}
+                                >
+                                  New booking
+                                </button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Bring your existing request.
+                            </TooltipContent>
+                            <DropdownMenuContent align='end'>
+                              <DropdownMenuLabel>
+                                Freight type
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('road');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.road className='mr-2 h-4 w-4' /> Road
+                                Freight
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('sea');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.sea className='mr-2 h-4 w-4' /> Sea
+                                Freight
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('air');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.air className='mr-2 h-4 w-4' /> Air
+                                Freight
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('rail');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.rail className='mr-2 h-4 w-4' /> Rail
+                                Freight
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('multimodal');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.multimodal className='mr-2 h-4 w-4' />{' '}
+                                Multimodal Freight
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setBookingType('courier');
+                                  setCreateMode('booking');
+                                  setCreatePanelOpen(true);
+                                }}
+                              >
+                                <Icons.courier className='mr-2 h-4 w-4' />{' '}
+                                Courier / Express
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
                 }
               >
-                <div className='px-2 pt-2 pb-4'>
-                  <div className='mb-1 flex items-center justify-between'>
-                    <div>
-                      <div className='text-lg font-semibold'>Requests</div>
-                      <div className='text-muted-foreground text-xs'>
-                        Select a request to create a new offer
-                      </div>
-                    </div>
-                    <Button className='flex items-center gap-1 rounded-md bg-black px-3 py-1 text-sm font-semibold text-white dark:bg-white dark:text-black'>
-                      <Icons.addCircleFilled size={16} />
-                      New Booking
-                    </Button>
-                  </div>
-                  {/* Canonical ShipmentsTable for requests */}
-                  <ShipmentsTable
-                    data={requests}
-                    loading={loading}
-                    search={search}
-                    onSearchChange={setSearch}
-                    variant='requests'
-                    offerCounts={offerCounts}
-                    offeredMap={offeredMap}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    onRowClick={setSelectedRequest}
-                    // TODO: Pass sortOptions to ShipmentsTable for custom sorting
-                  />
+                <div className='px-1 pt-2 pb-4'>
+                  {createMode === 'browse' ? (
+                    <RequestBrowser
+                      forwarderId={currentUserId}
+                      onSelect={(row) => setSelectedRequest(row)}
+                    />
+                  ) : (
+                    <MultiStepFreightForm
+                      allowTypeSelection={!bookingType}
+                      type={bookingType || undefined}
+                      userId={currentUserId}
+                      mode='booking'
+                      onSuccess={() => setCreatePanelOpen(false)}
+                    />
+                  )}
                 </div>
               </SidePanel>
+              {/* Nested details panel for picked request */}
+              <RequestDetailsPanel
+                open={!!selectedRequest}
+                onClose={() => setSelectedRequest(null)}
+                request={selectedRequest}
+              />
             </React.Fragment>
           ) : role === 'shipper' || !role ? (
             <CreateRequestDropdown />

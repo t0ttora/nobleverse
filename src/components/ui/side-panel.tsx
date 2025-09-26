@@ -5,26 +5,30 @@ interface SidePanelProps {
   title?: React.ReactNode;
   onClose: () => void;
   children?: React.ReactNode;
+  zIndexBase?: number; // base z-index for overlay; panel uses base+10
 }
 
 export const SidePanel: React.FC<SidePanelProps> = ({
   open,
   title,
   onClose,
-  children
+  children,
+  zIndexBase = 70
 }) => {
   if (!open) return null;
   return (
     <>
       {/* Overlay */}
       <div
-        className='fixed inset-0 z-[70] bg-black/40 transition-opacity duration-300 dark:bg-neutral-900/70'
+        className='fixed inset-0 bg-black/40 transition-opacity duration-300 dark:bg-neutral-900/70'
+        style={{ zIndex: zIndexBase }}
         onClick={onClose}
         aria-label='Paneli kapatmak için tıkla'
       />
       {/* Panel */}
       <div
-        className='animate-slidein fixed inset-y-0 right-0 left-auto z-[80] flex h-full w-[60vw] max-w-none min-w-[320px] flex-col border-l border-neutral-200 bg-neutral-50 transition-transform duration-300 dark:border-neutral-800 dark:bg-neutral-900'
+        className='animate-slidein fixed top-3 right-3 bottom-3 left-auto flex w-[95vw] max-w-none min-w-[320px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 shadow-2xl transition-transform duration-300 sm:w-[80vw] lg:w-[60vw] dark:border-neutral-800 dark:bg-neutral-900'
+        style={{ zIndex: zIndexBase + 10 }}
         role='dialog'
         aria-modal='true'
       >

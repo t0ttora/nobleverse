@@ -17,6 +17,9 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ForwarderOfferForm } from '@/components/offers/forwarder-offer-form';
+import { SidePanel } from '@/components/ui/side-panel';
+// import { ShipmentsTable } from '@/components/ui/shipments-table';
+import { RequestBrowser } from '@/components/requests/request-browser';
 
 function Section({
   title,
@@ -73,13 +76,19 @@ export function ForwarderDashboard() {
   const [req, setReq] = React.useState<any | null>(null);
   // Restore state for requests modal (for incoming requests section)
   const [offerModalOpen, setOfferModalOpen] = React.useState(false);
-  const [requests, setRequests] = React.useState<any[]>([]);
-  const [search, setSearch] = React.useState('');
-  const [loadingRequests, setLoadingRequests] = React.useState(false);
+  // const [requests, setRequests] = React.useState<any[]>([]);
+  // const [search, setSearch] = React.useState('');
+  // const [loadingRequests, setLoadingRequests] = React.useState(false);
   const [selectedRequest, setSelectedRequest] = React.useState<any | null>(
     null
   );
   const [offerFormOpen, setOfferFormOpen] = React.useState(false);
+  const [createOpen, setCreateOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id || ''));
+  }, []);
+  // Legacy fetching replaced by RequestBrowser
 
   return (
     <>
@@ -101,8 +110,18 @@ export function ForwarderDashboard() {
       />
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
         <Section title='Incoming Requests'>
-          {/* Only remove the New Offer button from here, keep the rest */}
-          {/* ...existing code for listing requests, if any, remains here... */}
+          <div className='mb-2 flex items-center justify-between gap-2'>
+            <div className='text-muted-foreground text-xs'>
+              Browse new requests to make offers.
+            </div>
+            <Button
+              size='sm'
+              onClick={() => setCreateOpen(true)}
+              className='bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100'
+            >
+              Create Request
+            </Button>
+          </div>
         </Section>
         <div className='flex flex-col gap-4'>
           <Section title='Recent Offers'>
@@ -124,6 +143,20 @@ export function ForwarderDashboard() {
         onClose={() => setOpen(false)}
         request={req}
       />
+      {/* Create Request flow sidepanel for forwarder */}
+      <SidePanel
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title={<span className='font-bold'>Create Request</span>}
+      >
+        <RequestBrowser
+          forwarderId={me}
+          onSelect={(row) => {
+            setReq(row);
+            setOpen(true);
+          }}
+        />
+      </SidePanel>
       {/* Restore modal logic for incoming requests if needed */}
       {/* ...existing code for modal and offer form, if any, can be restored here... */}
     </>
