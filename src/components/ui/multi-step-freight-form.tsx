@@ -18,6 +18,8 @@ interface MultiStepFreightFormProps {
   mode?: 'request' | 'booking';
   allowTypeSelection?: boolean;
   onTypeChange?: (t: FreightFormType) => void;
+  // Called whenever footer action JSX should update; parent places it into SidePanel footer.
+  onFooterChange?: (footer: React.ReactNode) => void;
 }
 
 export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
@@ -26,7 +28,8 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
   onSuccess,
   mode = 'request',
   allowTypeSelection = false,
-  onTypeChange
+  onTypeChange,
+  onFooterChange
 }) => {
   const [currentType, setCurrentType] = React.useState<
     FreightFormType | undefined
@@ -95,15 +98,15 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
     setFormData((prev: any) => ({ ...prev, [field.id]: value }));
   };
 
-  const handleNext = () => {
+  const handleNext = React.useCallback(() => {
     if (!isLastStep) setStep((s) => s + 1);
     else setPreview(true);
-  };
+  }, [isLastStep]);
 
-  const handleBack = () => {
+  const handleBack = React.useCallback(() => {
     if (preview) setPreview(false);
     else if (!isFirstStep) setStep((s) => s - 1);
-  };
+  }, [preview, isFirstStep]);
 
   const handleSubmit = async (asDraft = false) => {
     setStatus('submitting');
@@ -307,6 +310,57 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
     );
   };
 
+  // Footer element memo & change detection to avoid infinite render loop
+  const footerElement = React.useMemo(() => {
+    if (preview) {
+      return (
+        <>
+          <Button variant='outline' onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => handleSubmit(true)}
+            disabled={status === 'submitting'}
+          >
+            Submit as draft
+          </Button>
+          <Button
+            type='button'
+            onClick={() => handleSubmit(false)}
+            disabled={status === 'submitting'}
+          >
+            Submit
+          </Button>
+        </>
+      );
+    }
+    return (
+      <>
+        <Button
+          variant='outline'
+          type='button'
+          onClick={handleBack}
+          disabled={isFirstStep && !preview}
+        >
+          Back
+        </Button>
+        <Button type='button' onClick={handleNext}>
+          {isLastStep ? 'Preview' : 'Next'}
+        </Button>
+      </>
+    );
+  }, [preview, isFirstStep, isLastStep, status, handleBack]);
+
+  const lastFooterRef = React.useRef<React.ReactNode>(null);
+  React.useEffect(() => {
+    if (lastFooterRef.current !== footerElement) {
+      lastFooterRef.current = footerElement;
+      onFooterChange?.(footerElement);
+    }
+  }, [footerElement, onFooterChange]);
+
   if (preview) {
     return (
       <div className='flex min-h-[60vh] flex-col'>
@@ -371,27 +425,6 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
               for your request. This will be visible to potential providers.
             </div>
           )}
-        </div>
-        {/* Sticky in-panel footer */}
-        <div className='sticky right-0 bottom-0 left-0 z-10 mt-6 flex flex-row justify-end gap-2 border-t border-neutral-200 bg-white/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/90 dark:supports-[backdrop-filter]:bg-neutral-900/70'>
-          <Button variant='outline' onClick={handleBack}>
-            Back
-          </Button>
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={() => handleSubmit(true)}
-            disabled={status === 'submitting'}
-          >
-            Submit as draft
-          </Button>
-          <Button
-            type='button'
-            onClick={() => handleSubmit(false)}
-            disabled={status === 'submitting'}
-          >
-            Submit
-          </Button>
         </div>
       </div>
     );
@@ -464,20 +497,7 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
         {/* Hata mesajı */}
         {error && <div className='mt-2 text-sm text-red-500'>{error}</div>}
       </div>
-      {/* Sticky in-panel footer */}
-      <div className='sticky right-0 bottom-0 left-0 z-10 mt-4 flex flex-row justify-end gap-2 border-t border-neutral-200 bg-white/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/90 dark:supports-[backdrop-filter]:bg-neutral-900/70'>
-        <Button
-          variant='outline'
-          type='button'
-          onClick={handleBack}
-          disabled={isFirstStep && !preview}
-        >
-          Back
-        </Button>
-        <Button type='button' onClick={handleNext}>
-          {isLastStep ? 'Preview' : 'Next'}
-        </Button>
-      </div>
+      {/* Footer removed: actions now provided via onFooterChange -> SidePanel footer */}
     </form>
   );
 

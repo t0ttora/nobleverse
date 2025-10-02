@@ -32,6 +32,7 @@ export interface ForwarderOfferFormProps {
   ownerId?: string;
   // Optional: existing offer for edit
   existingOffer?: { id: string; details: any } | null;
+  onFooterChange?: (footer: React.ReactNode) => void; // new: expose actions
 }
 
 export type ForwarderOfferFormHandle = {
@@ -61,10 +62,10 @@ export const ForwarderOfferForm = forwardRef<
     forwarderId,
     requestDetails,
     onSubmitted,
-    useExternalFooter,
     onStateChange,
     ownerId,
-    existingOffer
+    existingOffer,
+    onFooterChange
   }: ForwarderOfferFormProps,
   ref
 ) {
@@ -393,6 +394,45 @@ export const ForwarderOfferForm = forwardRef<
     ]
   );
 
+  // Build footer actions (internal or external consumer)
+  const buildFooter = React.useCallback(() => {
+    return (
+      <>
+        <Button
+          type='button'
+          variant='outline'
+          onClick={() =>
+            step > 0
+              ? setStep((s) => s - 1)
+              : embedded
+                ? onCancel?.()
+                : onClose?.()
+          }
+        >
+          Back
+        </Button>
+        {!isLast ? (
+          <Button
+            type='button'
+            onClick={() =>
+              isCurrentStepValidInternal() && setStep((s) => s + 1)
+            }
+          >
+            Next
+          </Button>
+        ) : (
+          <Button type='button' onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Submitting...' : 'Submit Offer'}
+          </Button>
+        )}
+      </>
+    );
+  }, [step, isLast, embedded, submitting, onCancel, onClose, formData]);
+
+  React.useEffect(() => {
+    onFooterChange?.(buildFooter());
+  }, [buildFooter, onFooterChange]);
+
   const Content = (
     <form
       className='flex min-h-[60vh] flex-col'
@@ -442,38 +482,7 @@ export const ForwarderOfferForm = forwardRef<
         </div>
       </div>
 
-      {/* Internal Footer (hidden when using external footer) */}
-      {!useExternalFooter && (
-        <div className='sticky bottom-0 flex justify-end gap-2 border-t border-neutral-200 bg-white px-4 pt-4 pb-4 dark:border-neutral-800 dark:bg-neutral-900'>
-          <Button
-            type='button'
-            variant='outline'
-            onClick={() =>
-              step > 0
-                ? setStep((s) => s - 1)
-                : embedded
-                  ? onCancel?.()
-                  : onClose?.()
-            }
-          >
-            Back
-          </Button>
-          {!isLast ? (
-            <Button
-              type='button'
-              onClick={() =>
-                isCurrentStepValidInternal() && setStep((s) => s + 1)
-              }
-            >
-              Next
-            </Button>
-          ) : (
-            <Button type='button' onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Submitting...' : 'Submit Offer'}
-            </Button>
-          )}
-        </div>
-      )}
+      {/* Footer removed; now provided externally via onFooterChange */}
     </form>
   );
 
@@ -483,6 +492,7 @@ export const ForwarderOfferForm = forwardRef<
       open={open!}
       onClose={onClose!}
       title={<span className='font-semibold'>Create Offer</span>}
+      footer={buildFooter()}
     >
       {Content}
     </SidePanel>

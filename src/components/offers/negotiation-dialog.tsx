@@ -214,16 +214,18 @@ export function NegotiationDialog({
       }}
     >
       <DialogContent
-        overlayClassName='z-[130]'
-        className='z-[140] w-[95vw] sm:max-w-2xl'
+        overlayClassName='z-[300]'
+        className='z-[310] w-[95vw] sm:max-w-2xl'
       >
         <DialogHeader>
-          <DialogTitle>Negotiate Offer</DialogTitle>
+          <DialogTitle className='text-base font-semibold'>
+            Negotiate offer
+          </DialogTitle>
         </DialogHeader>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-          <div className='bg-muted/20 rounded-md border p-3'>
-            <div className='text-muted-foreground mb-2 text-xs font-semibold'>
-              Previous Terms
+          <div className='rounded-md border border-neutral-200/70 bg-neutral-50/60 p-3 dark:border-neutral-800/60 dark:bg-neutral-900/50'>
+            <div className='text-muted-foreground mb-2 text-[11px] font-medium'>
+              Previous terms
             </div>
             <div className='grid grid-cols-2 gap-2 text-xs'>
               {prevPrice && (
@@ -260,9 +262,9 @@ export function NegotiationDialog({
               )}
             </div>
           </div>
-          <div className='bg-muted/10 rounded-md border p-3'>
-            <div className='text-muted-foreground mb-2 text-xs font-semibold'>
-              Your Counter
+          <div className='rounded-md border border-neutral-200/70 bg-neutral-50/40 p-3 dark:border-neutral-800/60 dark:bg-neutral-900/40'>
+            <div className='text-muted-foreground mb-2 text-[11px] font-medium'>
+              Your counter
             </div>
             <div className='grid grid-cols-2 items-start gap-2'>
               <div className='col-span-2'>
@@ -287,7 +289,7 @@ export function NegotiationDialog({
               </div>
               <div>
                 <div className='text-muted-foreground mb-1 text-[11px]'>
-                  Valid Until
+                  Valid until
                 </div>
                 <Input
                   type='datetime-local'

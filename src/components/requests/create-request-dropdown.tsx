@@ -36,6 +36,8 @@ export function CreateRequestDropdown({
     null
   );
   const [userId, setUserId] = React.useState<string>('');
+  const [footerContent, setFooterContent] =
+    React.useState<React.ReactNode>(null);
 
   React.useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -108,6 +110,7 @@ export function CreateRequestDropdown({
           )
         }
         onClose={handleCloseDrawer}
+        footer={footerContent}
       >
         {drawerType && (
           <MultiStepFreightForm
@@ -116,6 +119,9 @@ export function CreateRequestDropdown({
             onSuccess={(request) => {
               if (onRequestCreated) onRequestCreated(request);
               handleCloseDrawer();
+            }}
+            onFooterChange={(f) => {
+              setFooterContent((prev) => (prev === f ? prev : f));
             }}
           />
         )}

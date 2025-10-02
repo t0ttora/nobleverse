@@ -1,6 +1,5 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { SidePanel } from '../ui/side-panel';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
@@ -48,6 +47,14 @@ import {
 } from '@/components/offers/forwarder-offer-form';
 import { CompareOffersPanel } from '@/components/offers/compare-offers';
 import { OfferDetailsDialog } from '@/components/offers/offer-details-dialog';
+import { getOfferConfig as buildOfferConfig } from '@/lib/forwarder-offer-schema';
+// Temporary alias to satisfy stale type reference (remove if not needed after cleanup)
+// Removed stale placeholder that previously shadowed buildOfferConfig / getOfferConfig to avoid TS confusion.
+// Renamed alias to force TS program refresh (previous stale diagnostics referenced getOfferConfig)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _offerSchemaConfigBuilder = buildOfferConfig;
+import NegotiationDialog from '@/components/offers/negotiation-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface RequestDetailsPanelProps {
   open: boolean;
@@ -97,9 +104,128 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   >({});
   const [offerOpen, setOfferOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  // compareMode: when true we show selection checkboxes & toolbar. First click on "Compare Offers" toggles this instead of opening dialog.
+  const [compareMode, setCompareMode] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<any | null>(null);
+  // Multi-select state for comparing specific offers (owner side)
+  const [compareSelection, setCompareSelection] = useState<Set<string>>(
+    new Set()
+  );
+  // Maintain explicit ordering array for selected offers to support drag & reorder
+  const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
   const [showEmbeddedOffer, setShowEmbeddedOffer] = useState(false);
+  const [negotiationOpen, setNegotiationOpen] = useState(false);
+  // Inject animation styles once
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const id = 'nv-offer-details-anim-styles';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.innerHTML = `@keyframes nvOfferSlideInDesktop{0%{opacity:0;transform:translateX(12px)}100%{opacity:1;transform:translateX(0)}}@keyframes nvOfferSlideInMobile{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:translateY(0)}}.nv-offer-details-anim{animation: nvOfferSlideInDesktop .32s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}@media (max-width: 639px){.nv-offer-details-anim{animation: nvOfferSlideInMobile .34s cubic-bezier(.4,0,.2,1)}}`;
+    document.head.appendChild(style);
+  }, []);
+  // When request changes, clear offer detail related UI state to avoid stale memory
+  useEffect(() => {
+    setSelectedOffer(null);
+    setDetailsOpen(false);
+    setShowEmbeddedOffer(false);
+    setNegotiationOpen(false);
+    setCompareSelection(new Set());
+    setSelectionOrder([]);
+    setCompareMode(false);
+  }, [request?.id]);
+
+  // Deep-link: open offer from URL (?offer=ID) when panel opens / request changes
+  useEffect(() => {
+    if (!open || !request?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    const oid = params.get('offer');
+    if (oid && offers.length) {
+      const found = offers.find((o) => String(o.id) === oid);
+      if (found) {
+        setSelectedOffer(found);
+        setDetailsOpen(true);
+      }
+    }
+  }, [open, request?.id, offers]);
+
+  // Sync URL param when opening/closing offer details
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const current = params.get('offer');
+    if (detailsOpen && selectedOffer) {
+      const idStr = String(selectedOffer.id);
+      if (current !== idStr) {
+        params.set('offer', idStr);
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}?${params.toString()}`
+        );
+      }
+    } else if (!detailsOpen && current) {
+      params.delete('offer');
+      const qs = params.toString();
+      const url = qs
+        ? `${window.location.pathname}?${qs}`
+        : window.location.pathname;
+      window.history.replaceState(null, '', url);
+    }
+  }, [detailsOpen, selectedOffer]);
+
+  // ESC priority: first close offer details, then (next ESC) close side panel
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (detailsOpen) {
+          e.stopPropagation();
+          setDetailsOpen(false);
+          setSelectedOffer(null);
+          setNegotiationOpen(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler, { capture: true });
+    return () =>
+      window.removeEventListener('keydown', handler, { capture: true } as any);
+  }, [open, detailsOpen, onClose]);
+
+  // Overlay click priority: close offer detail first, second click will bubble to close panel
+  useEffect(() => {
+    if (!open) return;
+    const overlayHandler = (e: Event) => {
+      if (detailsOpen) {
+        // Prevent panel from closing by preventing default (cancelable event)
+        setDetailsOpen(false);
+        setSelectedOffer(null);
+        setNegotiationOpen(false);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener(
+      'noble:sidepanel:overlay-click',
+      overlayHandler as any
+    );
+    return () =>
+      window.removeEventListener(
+        'noble:sidepanel:overlay-click',
+        overlayHandler as any
+      );
+  }, [open, detailsOpen]);
+
+  // Clear selection when details panel closes (ensures highlight removal)
+  useEffect(() => {
+    if (!detailsOpen && selectedOffer) {
+      // Defer to next frame to avoid race with other closing handlers
+      requestAnimationFrame(() => setSelectedOffer(null));
+    }
+  }, [detailsOpen, selectedOffer]);
   const offerFormRef = useRef<ForwarderOfferFormHandle | null>(null);
   const [formState, setFormState] = useState<{
     isFirst: boolean;
@@ -434,7 +560,40 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     return list;
   }, [parsedOffers, ownerQuery, statusFilter, currencyFilter, ownerSort]);
 
+  // Prune compareSelection if offers change (remove IDs no longer present)
+  useEffect(() => {
+    if (!compareSelection.size) return;
+    const validIds = new Set(parsedOffers.map((o) => String(o.id)));
+    let changed = false;
+    const next = new Set<string>();
+    compareSelection.forEach((id) => {
+      if (validIds.has(id)) next.add(id);
+      else changed = true;
+    });
+    if (changed) setCompareSelection(next);
+  }, [parsedOffers]);
+
+  const toggleCompare = (id: string) => {
+    setCompareSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setSelectionOrder((o) => o.filter((x) => x !== id));
+      } else {
+        next.add(id);
+        setSelectionOrder((o) => (o.includes(id) ? o : [...o, id]));
+      }
+      return next;
+    });
+  };
+
   function exportOffersCSV() {
+    // Signal export mode to suppress diff highlighting visuals
+    try {
+      if (typeof document !== 'undefined') {
+        document.body.dataset.exporting = 'true';
+      }
+    } catch {}
     // Export all offers for this request, not just filtered
     const rows = parsedOffers;
     const headers = [
@@ -490,9 +649,21 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    // Clear export flag (next frame to ensure paint not affected)
+    requestAnimationFrame(() => {
+      try {
+        if (typeof document !== 'undefined')
+          delete (document.body.dataset as any).exporting;
+      } catch {}
+    });
   }
 
   async function handleExportPDF() {
+    try {
+      if (typeof document !== 'undefined') {
+        document.body.dataset.exporting = 'true';
+      }
+    } catch {}
     if (!exportRef.current) return;
     // Dynamic import to avoid SSR issues
     const [html2canvas, jsPDFModule] = await Promise.all([
@@ -711,13 +882,20 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     URL.revokeObjectURL(url);
     // Clean up container
     container.remove();
+    // Clear export flag
+    requestAnimationFrame(() => {
+      try {
+        if (typeof document !== 'undefined')
+          delete (document.body.dataset as any).exporting;
+      } catch {}
+    });
   }
 
   return (
     <SidePanel
       open={open}
       onClose={onClose}
-      zIndexBase={90}
+      zIndexBase={200}
       title={
         <div className='flex items-center gap-2'>
           <button
@@ -799,6 +977,224 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
               </div>
             </HoverCardContent>
           </HoverCard>
+        </div>
+      }
+      footer={
+        <div className='mx-2 flex w-full items-center justify-between gap-4'>
+          {/* Left side: moved compare selection chips (was in content area above offers list) */}
+          <div className='min-w-0 flex-1'>
+            {compareMode && selectionOrder.length > 0 && (
+              <div className='relative'>
+                {/* Scrollable chips row with dynamic fades */}
+                <div
+                  className='group nv-scroll-hide flex items-stretch gap-2 overflow-x-auto scroll-smooth pr-1 pl-0.5'
+                  aria-label={`Selected offers for comparison (${selectionOrder.length}). Drag to reorder.`}
+                  ref={(el) => {
+                    if (!el) return;
+                    const container = el;
+                    const leftFade =
+                      container.parentElement?.querySelector<HTMLDivElement>(
+                        '[data-fade="left"]'
+                      );
+                    const rightFade =
+                      container.parentElement?.querySelector<HTMLDivElement>(
+                        '[data-fade="right"]'
+                      );
+                    function update() {
+                      const { scrollLeft, scrollWidth, clientWidth } =
+                        container;
+                      const atStart = scrollLeft <= 1;
+                      const atEnd = scrollLeft + clientWidth >= scrollWidth - 1;
+                      if (leftFade)
+                        leftFade.style.opacity = atStart ? '0' : '1';
+                      if (rightFade)
+                        rightFade.style.opacity = atEnd ? '0' : '1';
+                    }
+                    update();
+                    container.addEventListener('scroll', update, {
+                      passive: true
+                    });
+                    // Enable horizontal scrolling with Ctrl + mouse wheel (vertical) without showing scrollbar
+                    const wheelHandler = (e: WheelEvent) => {
+                      if (!e.ctrlKey) return; // only intercept when Ctrl pressed
+                      // Prevent browser zoom (Ctrl + wheel) default behavior
+                      e.preventDefault();
+                      // Use vertical delta to scroll horizontally
+                      const delta = e.deltaY || e.deltaX;
+                      if (delta) {
+                        container.scrollLeft += delta;
+                        update();
+                      }
+                    };
+                    container.addEventListener('wheel', wheelHandler, {
+                      passive: false
+                    });
+                    const ro = new ResizeObserver(update);
+                    ro.observe(container);
+                    return () => {
+                      container.removeEventListener('scroll', update);
+                      container.removeEventListener(
+                        'wheel',
+                        wheelHandler as any
+                      );
+                      ro.disconnect();
+                    };
+                  }}
+                >
+                  {selectionOrder.map((id, idx) => {
+                    const offer = parsedOffers.find((o) => String(o.id) === id);
+                    if (!offer) return null;
+                    const d = (offer as any).__details || {};
+                    const price = d.total_price
+                      ? `${d.total_price} ${d.total_price_currency || d.currency || ''}`
+                      : '—';
+                    const actor = (offer as any).__actor;
+                    const colorClasses = [
+                      'bg-blue-600 text-white',
+                      'bg-emerald-600 text-white',
+                      'bg-violet-600 text-white',
+                      'bg-amber-600 text-white',
+                      'bg-rose-600 text-white'
+                    ];
+                    const badgeClass =
+                      colorClasses[idx] || 'bg-primary text-primary-foreground';
+                    return (
+                      <div
+                        key={id}
+                        className='bg-background/90 ring-border hover:border-primary/40 hover:bg-muted/60 hover:ring-primary/30 focus-within:ring-primary/40 relative flex max-w-[160px] min-w-[128px] flex-col justify-between rounded-md border px-2 py-1.5 text-[10px] shadow-sm ring-1'
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', id);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const sourceId = e.dataTransfer.getData('text/plain');
+                          if (!sourceId || sourceId === id) return;
+                          setSelectionOrder((old) => {
+                            const next = [...old];
+                            const from = next.indexOf(sourceId);
+                            const to = next.indexOf(id);
+                            if (from === -1 || to === -1) return old;
+                            next.splice(from, 1);
+                            next.splice(to, 0, sourceId);
+                            return next;
+                          });
+                        }}
+                      >
+                        <div className='mb-0.5 flex items-center justify-between'>
+                          <span
+                            className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${badgeClass}`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <button
+                            type='button'
+                            className='text-muted-foreground/70 hover:text-destructive focus-visible:ring-primary/40 ml-1 rounded-full px-1 text-[12px] leading-none focus:outline-none focus-visible:ring-2'
+                            onClick={() => toggleCompare(id)}
+                            title='Remove from selection'
+                            aria-label={`Remove offer ${idx + 1} from selection`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className='truncate leading-tight font-medium'>
+                          {price}
+                        </div>
+                        <div className='truncate leading-tight opacity-70'>
+                          {actor?.company_name ||
+                            actor?.username ||
+                            'Forwarder'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Dynamic fades: left hidden until scrolled, right hidden when at end */}
+                <div
+                  data-fade='left'
+                  aria-hidden='true'
+                  className='from-background/95 via-background/80 pointer-events-none absolute inset-y-0 left-0 w-6 rounded-l-md bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-200 dark:from-neutral-900/95 dark:via-neutral-900/70'
+                />
+                <div
+                  data-fade='right'
+                  aria-hidden='true'
+                  className='from-background/95 via-background/80 pointer-events-none absolute inset-y-0 right-0 w-6 rounded-r-md bg-gradient-to-l to-transparent transition-opacity duration-200 dark:from-neutral-900/95 dark:via-neutral-900/70'
+                />
+              </div>
+            )}
+          </div>
+          {/* Right side actions */}
+          {!showEmbeddedOffer ? (
+            <div className='flex items-center gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={handleExportPDF}
+                className='font-semibold'
+              >
+                Export Request
+              </Button>
+              {role === 'forwarder' &&
+                (!myOffer && request?.status === 'pending' ? (
+                  <Button
+                    size='sm'
+                    onClick={() => setShowEmbeddedOffer(true)}
+                    className='bg-orange-500 font-bold text-white hover:bg-orange-600'
+                  >
+                    Make an Offer
+                  </Button>
+                ) : (
+                  <Button
+                    size='sm'
+                    variant='secondary'
+                    onClick={() => setShowEmbeddedOffer(true)}
+                  >
+                    Preview Offer
+                  </Button>
+                ))}
+            </div>
+          ) : (
+            <div className='flex items-center gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => {
+                  if (formState.isFirst) {
+                    setShowEmbeddedOffer(false);
+                  } else {
+                    offerFormRef.current?.back();
+                  }
+                }}
+              >
+                {formState.isFirst ? 'Cancel' : 'Back'}
+              </Button>
+              {!formState.isLast ? (
+                <Button
+                  size='sm'
+                  disabled={!formState.currentValid}
+                  onClick={() => offerFormRef.current?.next()}
+                >
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  size='sm'
+                  onClick={() => offerFormRef.current?.submit()}
+                  disabled={formState.submitting || !formState.currentValid}
+                  className='bg-orange-500 font-bold text-white hover:bg-orange-600'
+                >
+                  {formState.submitting
+                    ? myOffer
+                      ? 'Saving...'
+                      : 'Submitting...'
+                    : myOffer
+                      ? 'Save Changes'
+                      : 'Submit Offer'}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       }
     >
@@ -1107,6 +1503,68 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                         >
                           Export Offers CSV
                         </Button>
+                        {(role === 'shipper' || role === 'other' || !role) &&
+                          offers.length > 1 &&
+                          (!compareMode ? (
+                            <Button
+                              variant='secondary'
+                              size='sm'
+                              onClick={() => setCompareMode(true)}
+                            >
+                              Compare Offers
+                            </Button>
+                          ) : (
+                            <div className='flex items-center gap-2'>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() => {
+                                  const ids = derivedOffers.map((o) =>
+                                    String(o.id)
+                                  );
+                                  setCompareSelection(new Set(ids));
+                                  setSelectionOrder(ids);
+                                }}
+                                disabled={
+                                  compareSelection.size === derivedOffers.length
+                                }
+                              >
+                                Select All
+                              </Button>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() => {
+                                  setCompareSelection(new Set());
+                                  setSelectionOrder([]);
+                                }}
+                                disabled={compareSelection.size === 0}
+                              >
+                                Clear
+                              </Button>
+                              <Button
+                                variant='secondary'
+                                size='sm'
+                                disabled={compareSelection.size < 2}
+                                onClick={() => setCompareOpen(true)}
+                              >
+                                {compareSelection.size < 2
+                                  ? 'Select 2+'
+                                  : `Compare (${compareSelection.size})`}
+                              </Button>
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                onClick={() => {
+                                  setCompareMode(false);
+                                  setCompareSelection(new Set());
+                                  setSelectionOrder([]);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          ))}
                       </div>
                     )}
                   {role === 'forwarder' && myOffer && !showEmbeddedOffer && (
@@ -1164,22 +1622,77 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                         const actor = o.__actor as any;
                         const hasNegotiation =
                           (negotiationCounts[String(o.id)] || 0) > 0;
+                        const idStr = String(o.id);
+                        const selectedForCompare = compareSelection.has(idStr);
+                        const orderIndex = selectionOrder.indexOf(idStr);
+                        const colorClasses = [
+                          'bg-blue-600 text-white',
+                          'bg-emerald-600 text-white',
+                          'bg-violet-600 text-white',
+                          'bg-amber-600 text-white',
+                          'bg-rose-600 text-white'
+                        ];
+                        const badgeClass =
+                          orderIndex !== -1
+                            ? colorClasses[orderIndex] ||
+                              'bg-primary text-primary-foreground'
+                            : '';
                         return (
                           <div
                             key={o.id}
-                            className={`bg-card rounded-lg border p-3 ${isOwner ? 'hover:bg-muted/30 cursor-pointer transition-colors' : ''}`}
-                            onClick={() => {
+                            className={`group bg-card/95 relative min-h-[96px] rounded-lg border p-2 backdrop-blur-sm transition-colors sm:min-h-[0] ${isOwner ? 'hover:border-primary/40 hover:bg-muted/40 cursor-pointer' : ''} ${selectedOffer && selectedOffer.id === o.id && detailsOpen ? 'ring-primary/40 border-primary/40 bg-muted/60 ring-2 dark:bg-neutral-800/60' : ''} ${compareMode && selectedForCompare ? 'border-primary/60 ring-primary/50 bg-primary/5 ring-1' : ''}`}
+                            tabIndex={isOwner ? 0 : -1}
+                            onKeyDown={(e) => {
                               if (!isOwner) return;
-                              setSelectedOffer(o);
-                              setDetailsOpen(true);
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (compareMode) toggleCompare(idStr);
+                                else {
+                                  setSelectedOffer(o);
+                                  setDetailsOpen(true);
+                                }
+                              }
+                              if (e.key === 'v' && compareMode) {
+                                setSelectedOffer(o);
+                                setDetailsOpen(true);
+                              }
                             }}
-                            role={isOwner ? 'button' : undefined}
-                            aria-label={
-                              isOwner ? 'View offer details' : undefined
+                            onClick={(e) => {
+                              if (!isOwner) return;
+                              if (compareMode) {
+                                toggleCompare(idStr);
+                              } else {
+                                setSelectedOffer(o);
+                                setDetailsOpen(true);
+                              }
+                            }}
+                            aria-pressed={
+                              compareMode ? selectedForCompare : undefined
                             }
                           >
+                            {/* Selection overlay icon */}
+                            {compareMode && (
+                              <div className='pointer-events-none absolute inset-0 flex items-start justify-end p-1'>
+                                <div
+                                  className={`flex h-6 min-w-6 items-center justify-center rounded-md border text-[10px] font-medium shadow-sm transition-colors ${selectedForCompare ? 'bg-primary text-primary-foreground border-primary' : 'bg-background/80 border-border text-muted-foreground group-hover:text-foreground backdrop-blur'} ${selectedForCompare ? '' : 'group-hover:border-primary/40'}`}
+                                >
+                                  {selectedForCompare ? (
+                                    <span className='scale-110'>✓</span>
+                                  ) : (
+                                    <span className='opacity-70'>+</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {/* Order badge when selected */}
+                            {compareMode && selectedForCompare && (
+                              <div
+                                className={`absolute -top-2 -left-2 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold shadow-md ${badgeClass}`}
+                              >
+                                {orderIndex + 1}
+                              </div>
+                            )}
                             <div className='grid grid-cols-[1fr_auto] items-center gap-3'>
-                              {/* Left: budget (price) and info */}
                               <div className='min-w-0'>
                                 <div className='flex items-center gap-2 text-base font-semibold'>
                                   <span>{total ? `${total} ${ccy}` : '—'}</span>
@@ -1187,6 +1700,11 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                                     <Badge className='border-amber-200 bg-amber-50 px-1 py-0 text-[10px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/30 dark:text-amber-300'>
                                       Negotiation
                                     </Badge>
+                                  )}
+                                  {compareMode && !selectedForCompare && (
+                                    <span className='text-muted-foreground/60 group-hover:text-muted-foreground/80 text-[10px] font-normal tracking-wide'>
+                                      Tap to select
+                                    </span>
                                   )}
                                 </div>
                                 <div className='text-[11px] opacity-80'>
@@ -1196,7 +1714,6 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                                   {scope}
                                 </div>
                               </div>
-                              {/* Right: centered avatar + username */}
                               <div className='flex w-24 flex-col items-center justify-center'>
                                 <img
                                   src={actor?.avatar_url || '/logomark.svg'}
@@ -1208,6 +1725,19 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                                     actor?.username ||
                                     'Forwarder'}
                                 </div>
+                                {compareMode && (
+                                  <button
+                                    type='button'
+                                    className='border-border bg-background/70 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:ring-primary/40 mt-1 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium focus:outline-none focus-visible:ring-2'
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedOffer(o);
+                                      setDetailsOpen(true);
+                                    }}
+                                  >
+                                    View
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1215,18 +1745,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                       })}
                     </div>
                   )}
-                  {(role === 'shipper' || role === 'other' || !role) &&
-                    offers.length > 1 && (
-                      <div className='flex justify-end'>
-                        <Button
-                          variant='secondary'
-                          size='sm'
-                          onClick={() => setCompareOpen(true)}
-                        >
-                          Compare Offers
-                        </Button>
-                      </div>
-                    )}
+                  {/* Compare Offers panel instance removed (duplicate). Single instance lives near root below. */}
                 </div>
               </TabsContent>
             </Tabs>
@@ -1529,14 +2048,13 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           }}
         />
       )}
-      {/* Owner offer details dialog */}
+      {/* Offer details split-view (replaces dialog) */}
       {detailsOpen && selectedOffer && (
-        <OfferDetailsDialog
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          offer={selectedOffer}
+        <OfferDetailsSplitView
+          offer={selectedOffer as any}
           actor={actors[(selectedOffer as any).forwarder_id] as any}
           isOwner={isOwner}
+          onClose={() => setDetailsOpen(false)}
           onAccepted={async () => {
             try {
               const rows = await getOffersByRequest(
@@ -1548,86 +2066,497 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           }}
         />
       )}
-      {/* Footer portal: export + offer flow actions */}
-      {typeof document !== 'undefined' &&
-        document.getElementById('sidepanel-footer-slot') &&
-        createPortal(
-          <div className='w-full border-t border-neutral-200 bg-white/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-neutral-800 dark:bg-neutral-900/95'>
-            <div className='mx-4 flex items-center justify-between gap-2'>
-              {!showEmbeddedOffer ? (
-                <div className='ml-auto flex items-center gap-2'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    onClick={handleExportPDF}
-                    className='font-semibold'
-                  >
-                    Export Request
-                  </Button>
-                  {role === 'forwarder' &&
-                    (!myOffer && request?.status === 'pending' ? (
-                      <Button
-                        size='sm'
-                        onClick={() => setShowEmbeddedOffer(true)}
-                        className='bg-orange-500 font-bold text-white hover:bg-orange-600'
-                      >
-                        Make an Offer
-                      </Button>
-                    ) : (
-                      <Button
-                        size='sm'
-                        variant='secondary'
-                        onClick={() => setShowEmbeddedOffer(true)}
-                      >
-                        Preview Offer
-                      </Button>
-                    ))}
-                </div>
-              ) : (
-                <div className='ml-auto flex items-center gap-2'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    onClick={() => {
-                      if (formState.isFirst) {
-                        setShowEmbeddedOffer(false);
-                      } else {
-                        offerFormRef.current?.back();
-                      }
-                    }}
-                  >
-                    {formState.isFirst ? 'Cancel' : 'Back'}
-                  </Button>
-                  {!formState.isLast ? (
-                    <Button
-                      size='sm'
-                      disabled={!formState.currentValid}
-                      onClick={() => offerFormRef.current?.next()}
-                    >
-                      Next
-                    </Button>
-                  ) : (
-                    <Button
-                      size='sm'
-                      onClick={() => offerFormRef.current?.submit()}
-                      disabled={formState.submitting || !formState.currentValid}
-                      className='bg-orange-500 font-bold text-white hover:bg-orange-600'
-                    >
-                      {formState.submitting
-                        ? myOffer
-                          ? 'Saving...'
-                          : 'Submitting...'
-                        : myOffer
-                          ? 'Save Changes'
-                          : 'Submit Offer'}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>,
-          document.getElementById('sidepanel-footer-slot') as HTMLElement
-        )}
     </SidePanel>
   );
 };
+
+// --- Inline split view component for offer details (desktop 40% left, mobile full-screen) ---
+function OfferDetailsSplitView({
+  offer,
+  actor,
+  isOwner,
+  onClose,
+  onAccepted
+}: {
+  offer: any;
+  actor: any;
+  isOwner: boolean;
+  onClose: () => void;
+  onAccepted?: (updated?: any) => void;
+  onNegotiate?: () => void;
+  onEdit?: () => void;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+  const [accepting, setAccepting] = React.useState(false);
+  const [closing, setClosing] = React.useState(false);
+  const details = React.useMemo(() => {
+    try {
+      return typeof offer.details === 'string'
+        ? JSON.parse(offer.details)
+        : offer.details || {};
+    } catch {
+      return {};
+    }
+  }, [offer.details]);
+  // Build offer schema configuration once (import alias used to avoid any potential name shadow issues)
+  const offerSchemaConfig = React.useMemo(() => buildOfferConfig(), []);
+  const sections = offerSchemaConfig.sections || [];
+  const [negOpen, setNegOpen] = React.useState(false);
+
+  function fmt(val: any, key?: string) {
+    if (Array.isArray(val)) return val.join(', ');
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (val === null || val === undefined || val === '') return '—';
+    if (key === 'offer_validity') return `${val} days`;
+    return String(val);
+  }
+
+  // Position calculation (desktop): place panel immediately to LEFT of sidepanel with a gap
+  const PANEL_MIN = 360;
+  const PANEL_MAX = 560;
+  const GAP = 12;
+  const [pos, setPos] = React.useState<{
+    left: number;
+    top: number;
+    height: number;
+    width: number;
+  }>({ left: 8, top: 8, height: 0, width: 420 });
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const compute = React.useCallback(() => {
+    const sp = document.querySelector(
+      '[data-nv-sidepanel="true"]'
+    ) as HTMLElement | null;
+    if (!sp) return;
+    const r = sp.getBoundingClientRect();
+    const desiredWidth = Math.min(
+      Math.max(window.innerWidth * 0.32, PANEL_MIN),
+      PANEL_MAX
+    );
+    // Left edge cannot go beyond 8px
+    const left = Math.max(8, r.left - GAP - desiredWidth);
+    setPos({ left, top: r.top, height: r.height, width: desiredWidth });
+  }, []);
+  React.useEffect(() => {
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('noble:sidepanel:resize', compute as any);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('noble:sidepanel:resize', compute as any);
+    };
+  }, [compute]);
+  React.useEffect(() => {
+    // After first paint measure actual width if CSS clamp differs
+    if (panelRef.current) {
+      const w = panelRef.current.getBoundingClientRect().width;
+      if (Math.abs(w - pos.width) > 4) setPos((p) => ({ ...p, width: w }));
+    }
+  }, [pos.width]);
+
+  const isMobile =
+    typeof window !== 'undefined'
+      ? window.matchMedia('(max-width: 639px)').matches
+      : false;
+
+  if (isMobile) {
+    return (
+      <div
+        className={`pointer-events-none fixed inset-0 z-[2147483600] flex items-end justify-center ${closing ? 'motion-safe:animate-offerSplitOut' : 'motion-safe:animate-offerSplitIn'}`}
+      >
+        <div
+          className='pointer-events-auto absolute inset-0 bg-black/30 backdrop-blur-sm'
+          onClick={() => {
+            setClosing(true);
+            setTimeout(onClose, 160);
+          }}
+        />
+        <div
+          ref={panelRef}
+          className='pointer-events-auto relative flex h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl border border-neutral-200 bg-neutral-50 shadow-2xl ring-1 ring-neutral-200/70 dark:border-neutral-800 dark:bg-neutral-900 dark:ring-neutral-800/70'
+        >
+          {/* header+content+footer remain same below */}
+          <div className='flex items-stretch gap-3 border-b border-neutral-200/80 bg-neutral-50 px-4 py-3 dark:border-neutral-800/70 dark:bg-neutral-900'>
+            <button
+              onClick={() => {
+                setClosing(true);
+                setTimeout(onClose, 180);
+              }}
+              className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:bg-neutral-100 active:scale-95 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800'
+              aria-label='Geri'
+            >
+              <span className='text-base'>&larr;</span>
+            </button>
+            <div className='flex min-w-0 flex-col'>
+              <div className='flex items-center gap-2'>
+                <span className='max-w-[140px] truncate text-sm font-semibold'>
+                  {actor?.company_name || actor?.username || 'Forwarder'}
+                </span>
+                {offer.status && (
+                  <span className='rounded bg-neutral-200 px-2 py-0.5 text-[10px] font-medium tracking-wide capitalize dark:bg-neutral-800'>
+                    {offer.status}
+                  </span>
+                )}
+              </div>
+              <div className='text-[11px] text-neutral-500 dark:text-neutral-400'>
+                {offer.created_at
+                  ? new Date(offer.created_at).toLocaleString()
+                  : ''}
+              </div>
+            </div>
+            <div className='ml-auto flex flex-col items-end gap-1'>
+              <div className='text-[11px] text-neutral-500'>Total</div>
+              <div className='text-sm font-semibold'>
+                {fmt(details.total_price)}{' '}
+                {details.total_price_currency || details.currency || ''}
+              </div>
+            </div>
+          </div>
+          {/* Content (mobile) */}
+          <div className='scrollbar-thin flex-1 space-y-6 overflow-y-auto p-5 select-text'>
+            {/* duplicate of content below; keep single source? left as is for clarity */}
+            <div className='grid grid-cols-2 gap-2 sm:grid-cols-4'>
+              <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+                <div className='text-muted-foreground text-[11px]'>Transit</div>
+                <div className='font-semibold'>
+                  {fmt(details.transit_time)}{' '}
+                  {details.transit_time ? 'days' : ''}
+                </div>
+              </div>
+              <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+                <div className='text-muted-foreground text-[11px]'>Payment</div>
+                <div className='truncate font-semibold'>
+                  {fmt(details.payment_terms)}
+                </div>
+              </div>
+              <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+                <div className='text-muted-foreground text-[11px]'>
+                  Validity
+                </div>
+                <div className='font-semibold'>
+                  {fmt(details.offer_validity, 'offer_validity')}
+                </div>
+              </div>
+              <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+                <div className='text-muted-foreground text-[11px]'>Status</div>
+                <div className='font-semibold capitalize'>
+                  {offer.status || '—'}
+                </div>
+              </div>
+            </div>
+            <div className='space-y-4'>
+              {sections.map((section: any) => {
+                const visible = section.fields.filter((f: any) => {
+                  const val = details[f.id];
+                  return val !== undefined && val !== null && val !== '';
+                });
+                if (visible.length === 0) return null;
+                return (
+                  <div
+                    key={section.title}
+                    className='bg-background/70 rounded-xl border border-neutral-200/70 p-4 dark:border-neutral-800/60'
+                  >
+                    <div className='mb-3 text-[12px] font-semibold tracking-wide text-neutral-700 dark:text-neutral-300'>
+                      {section.title}
+                    </div>
+                    <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                      {visible.map((f: any) => (
+                        <div key={f.id} className='flex flex-col gap-1'>
+                          <div className='text-[11px] tracking-wide text-neutral-500 dark:text-neutral-400'>
+                            {f.label}
+                          </div>
+                          <div className='text-sm font-medium break-words'>
+                            {fmt(details[f.id], f.id)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className='flex items-center justify-between gap-3 border-t border-neutral-200/80 bg-neutral-50 px-4 py-3 dark:border-neutral-800/70 dark:bg-neutral-900'>
+            <div className='flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400' />
+            <div className='flex items-center gap-2'>
+              <button
+                onClick={() => setNegOpen(true)}
+                disabled={!offer.forwarder_id}
+                className='bg-background inline-flex h-9 items-center rounded-md border border-neutral-300 px-3 text-sm font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800'
+              >
+                Negotiate
+              </button>
+              {isOwner && (
+                <button
+                  onClick={() => setConfirming(true)}
+                  disabled={offer.status === 'accepted' || accepting}
+                  className='bg-primary text-primary-foreground inline-flex h-9 items-center rounded-md px-4 text-sm font-medium hover:opacity-90 disabled:opacity-50'
+                >
+                  {offer.status === 'accepted'
+                    ? 'Accepted'
+                    : accepting
+                      ? 'Accepting...'
+                      : 'Accept'}
+                </button>
+              )}
+            </div>
+          </div>
+          {negOpen && offer.forwarder_id && (
+            <NegotiationDialog
+              open={negOpen}
+              onOpenChange={(v: boolean) => setNegOpen(v)}
+              offer={offer as any}
+              forwarderLabel={
+                actor?.company_name || actor?.username || 'Forwarder'
+              }
+            />
+          )}
+        </div>
+        {confirming && (
+          <div className='pointer-events-auto fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4'>
+            <div className='bg-background w-full max-w-sm rounded-xl border border-neutral-200 p-5 shadow-xl dark:border-neutral-800'>
+              <div className='mb-3 text-lg font-semibold'>Teklifi onayla</div>
+              <p className='mb-4 text-sm text-neutral-600 dark:text-neutral-400'>
+                Bu teklifi kabul etmek diğer tüm teklifleri reddedecek ve bir
+                shipment yaratacak. Emin misin?
+              </p>
+              <div className='flex justify-end gap-2'>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className='bg-background inline-flex h-9 items-center rounded-md border border-neutral-300 px-4 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'
+                >
+                  Vazgeç
+                </button>
+                <button
+                  onClick={async () => {
+                    if (accepting) return;
+                    setAccepting(true);
+                    try {
+                      const res = await fetch(
+                        `/api/offers/${offer.id}/accept`,
+                        { method: 'POST' }
+                      );
+                      if (!res.ok) throw new Error('Accept failed');
+                      setConfirming(false);
+                      onAccepted?.();
+                      onClose();
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setAccepting(false);
+                    }
+                  }}
+                  disabled={accepting}
+                  className='bg-primary text-primary-foreground inline-flex h-9 items-center rounded-md px-4 text-sm font-medium hover:opacity-90 disabled:opacity-50'
+                >
+                  {accepting ? 'Onaylanıyor...' : 'Evet, kabul et'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop adjacent panel (no global overlay) ----------------
+  return (
+    <div
+      className={`fixed z-[206] ${closing ? 'motion-safe:animate-offerSplitOut' : 'motion-safe:animate-offerSplitIn'}`}
+      style={{
+        top: pos.top,
+        left: pos.left,
+        height: pos.height,
+        width: pos.width
+      }}
+      ref={panelRef}
+    >
+      <div className='pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 shadow-2xl ring-1 ring-neutral-200/60 dark:border-neutral-800 dark:bg-neutral-900 dark:ring-neutral-800/60'>
+        <div className='flex items-stretch gap-3 border-b border-neutral-200/80 bg-neutral-50 px-4 py-3 dark:border-neutral-800/70 dark:bg-neutral-900'>
+          <button
+            onClick={() => {
+              setClosing(true);
+              setTimeout(onClose, 180);
+            }}
+            className='inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:bg-neutral-100 active:scale-95 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800'
+            aria-label='Geri'
+          >
+            <span className='text-base'>&larr;</span>
+          </button>
+          <div className='flex min-w-0 flex-col'>
+            <div className='flex items-center gap-2'>
+              <span className='max-w-[140px] truncate text-sm font-semibold'>
+                {actor?.company_name || actor?.username || 'Forwarder'}
+              </span>
+              {offer.status && (
+                <span className='rounded bg-neutral-200 px-2 py-0.5 text-[10px] font-medium tracking-wide capitalize dark:bg-neutral-800'>
+                  {offer.status}
+                </span>
+              )}
+            </div>
+            <div className='text-[11px] text-neutral-500 dark:text-neutral-400'>
+              {offer.created_at
+                ? new Date(offer.created_at).toLocaleString()
+                : ''}
+            </div>
+          </div>
+          <div className='ml-auto flex flex-col items-end gap-1'>
+            <div className='text-[11px] text-neutral-500'>Total</div>
+            <div className='text-sm font-semibold'>
+              {fmt(details.total_price)}{' '}
+              {details.total_price_currency || details.currency || ''}
+            </div>
+          </div>
+        </div>
+        <div className='scrollbar-thin flex-1 space-y-6 overflow-y-auto p-5 select-text'>
+          <div className='grid grid-cols-2 gap-2 sm:grid-cols-4'>
+            <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+              <div className='text-muted-foreground text-[11px]'>Transit</div>
+              <div className='font-semibold'>
+                {fmt(details.transit_time)} {details.transit_time ? 'days' : ''}
+              </div>
+            </div>
+            <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+              <div className='text-muted-foreground text-[11px]'>Payment</div>
+              <div className='truncate font-semibold'>
+                {fmt(details.payment_terms)}
+              </div>
+            </div>
+            <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+              <div className='text-muted-foreground text-[11px]'>Validity</div>
+              <div className='font-semibold'>
+                {fmt(details.offer_validity, 'offer_validity')}
+              </div>
+            </div>
+            <div className='bg-muted/40 rounded-md border border-neutral-200/70 p-2 dark:border-neutral-800/60'>
+              <div className='text-muted-foreground text-[11px]'>Status</div>
+              <div className='font-semibold capitalize'>
+                {offer.status || '—'}
+              </div>
+            </div>
+          </div>
+          <div className='space-y-4'>
+            {sections.map((section: any) => {
+              const visible = section.fields.filter((f: any) => {
+                const val = details[f.id];
+                return val !== undefined && val !== null && val !== '';
+              });
+              if (visible.length === 0) return null;
+              return (
+                <div
+                  key={section.title}
+                  className='bg-background/70 rounded-xl border border-neutral-200/70 p-4 dark:border-neutral-800/60'
+                >
+                  <div className='mb-3 text-[12px] font-semibold tracking-wide text-neutral-700 dark:text-neutral-300'>
+                    {section.title}
+                  </div>
+                  <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                    {visible.map((f: any) => (
+                      <div key={f.id} className='flex flex-col gap-1'>
+                        <div className='text-[11px] tracking-wide text-neutral-500 dark:text-neutral-400'>
+                          {f.label}
+                        </div>
+                        <div className='text-sm font-medium break-words'>
+                          {fmt(details[f.id], f.id)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className='flex items-center justify-between gap-3 border-t border-neutral-200/80 bg-neutral-50 px-4 py-3 dark:border-neutral-800/70 dark:bg-neutral-900'>
+          <div className='flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400' />
+          <div className='flex items-center gap-2'>
+            <button
+              onClick={() => setNegOpen(true)}
+              disabled={!offer.forwarder_id}
+              className='bg-background inline-flex h-9 items-center rounded-md border border-neutral-300 px-3 text-sm font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800'
+            >
+              Negotiate
+            </button>
+            {/* Edit button placeholder: implement when edit flow is integrated */}
+            {isOwner && (
+              <button
+                onClick={() => setConfirming(true)}
+                disabled={offer.status === 'accepted' || accepting}
+                className='bg-primary text-primary-foreground inline-flex h-9 items-center rounded-md px-4 text-sm font-medium hover:opacity-90 disabled:opacity-50'
+              >
+                {offer.status === 'accepted'
+                  ? 'Accepted'
+                  : accepting
+                    ? 'Accepting...'
+                    : 'Accept'}
+              </button>
+            )}
+            {/* Close button intentionally removed per request */}
+          </div>
+        </div>
+        {negOpen && offer.forwarder_id && (
+          <NegotiationDialog
+            open={negOpen}
+            onOpenChange={(v: boolean) => setNegOpen(v)}
+            offer={offer as any}
+            forwarderLabel={
+              actor?.company_name || actor?.username || 'Forwarder'
+            }
+          />
+        )}
+      </div>
+      {confirming && (
+        <div className='pointer-events-auto fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4'>
+          <div className='bg-background w-full max-w-sm rounded-xl border border-neutral-200 p-5 shadow-xl dark:border-neutral-800'>
+            <div className='mb-3 text-lg font-semibold'>Teklifi onayla</div>
+            <p className='mb-4 text-sm text-neutral-600 dark:text-neutral-400'>
+              Bu teklifi kabul etmek diğer tüm teklifleri reddedecek ve bir
+              shipment yaratacak. Emin misin?
+            </p>
+            <div className='flex justify-end gap-2'>
+              <button
+                onClick={() => setConfirming(false)}
+                className='bg-background inline-flex h-9 items-center rounded-md border border-neutral-300 px-4 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={async () => {
+                  if (accepting) return;
+                  setAccepting(true);
+                  try {
+                    const res = await fetch(`/api/offers/${offer.id}/accept`, {
+                      method: 'POST'
+                    });
+                    if (!res.ok) throw new Error('Accept failed');
+                    setConfirming(false);
+                    onAccepted?.();
+                    onClose();
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setAccepting(false);
+                  }
+                }}
+                disabled={accepting}
+                className='bg-primary text-primary-foreground inline-flex h-9 items-center rounded-md px-4 text-sm font-medium hover:opacity-90 disabled:opacity-50'
+              >
+                {accepting ? 'Onaylanıyor...' : 'Evet, kabul et'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Global animation for offer split view
+if (typeof window !== 'undefined') {
+  const id = 'nv-offer-split-anim';
+  if (!document.getElementById(id)) {
+    const style = document.createElement('style');
+    style.id = id;
+    style.innerHTML = `@keyframes offerSplitIn{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}@keyframes offerSplitOut{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(4px)}}.animate-offerSplitIn{animation:offerSplitIn .22s cubic-bezier(.4,0,.2,1)}.animate-offerSplitOut{animation:offerSplitOut .18s cubic-bezier(.4,0,.2,1) forwards}`;
+    document.head.appendChild(style);
+  }
+}

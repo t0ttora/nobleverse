@@ -165,6 +165,27 @@ export default function FloatingActionButton({ className }: FabProps) {
           open={calSide}
           onClose={() => setCalSide(false)}
           title={<span className='font-semibold'>Calendar</span>}
+          footer={
+            <>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => setCalSide(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant='default'
+                size='sm'
+                onClick={() => {
+                  // Example save action placeholder
+                  setCalSide(false);
+                }}
+              >
+                Save
+              </Button>
+            </>
+          }
         >
           <div className='max-w-full'>
             <div className='text-muted-foreground mb-2 text-sm'>

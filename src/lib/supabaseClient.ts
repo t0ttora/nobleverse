@@ -1,6 +1,10 @@
-import { createBrowserClient } from '@supabase/ssr';
+// Unified export: prefer using the single browser Supabase client defined in
+// `utils/supabase/client`. Having multiple independently created browser
+// clients causes each instance to try refreshing the session which can flood
+// the console with repeated "Invalid Refresh Token" errors when a token is
+// expired or revoked. Importing the shared instance ensures only one auto-
+// refresh loop runs in the app bundle.
+export { supabase } from '@/../utils/supabase/client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+// NOTE: If you previously imported from 'src/lib/supabaseClient', you can keep
+// doing so. This file now simply re-exports the canonical client.
