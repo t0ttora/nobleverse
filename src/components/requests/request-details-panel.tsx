@@ -86,6 +86,10 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   onClose,
   request
 }) => {
+  // Guard: if panel asked to open but no request data yet, don't render expensive UI/effects
+  if (open && !request) {
+    return null;
+  }
   const [tab, setTab] = useState('0');
   const exportRef = useRef<HTMLDivElement>(null);
   const { role } = useProfileRole();
@@ -160,10 +164,12 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
       const idStr = String(selectedOffer.id);
       if (current !== idStr) {
         params.set('offer', idStr);
+        // Only update URL; do NOT inject request param here (parent controls it)
+        const qs = params.toString();
         window.history.replaceState(
           null,
           '',
-          `${window.location.pathname}?${params.toString()}`
+          qs ? `${window.location.pathname}?${qs}` : window.location.pathname
         );
       }
     } else if (!detailsOpen && current) {

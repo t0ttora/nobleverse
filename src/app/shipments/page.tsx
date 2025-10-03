@@ -104,6 +104,58 @@ export default function ShipmentsPage() {
     })();
   }, [searchParams]);
 
+  // Ensure panel does NOT remain open with a stale selection or when switching away from Requests tab
+  React.useEffect(() => {
+    // If active tab is not requests, always close request panel (prevents lingering open sidepanel)
+    if (activeTab !== 'requests' && panelOpen) {
+      setPanelOpen(false);
+    }
+    // If there is no selected request but panel flag somehow true, force close
+    if (!selected && panelOpen) {
+      setPanelOpen(false);
+    }
+  }, [activeTab, selected, panelOpen]);
+
+  // When panel closes, strip request/offer params from URL to prevent auto re-opening (history replace only)
+  React.useEffect(() => {
+    if (!panelOpen) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        let mutated = false;
+        if (params.has('request')) {
+          params.delete('request');
+          mutated = true;
+        }
+        if (params.has('offer')) {
+          params.delete('offer');
+          mutated = true;
+        }
+        if (mutated) {
+          const qs = params.toString();
+          window.history.replaceState(
+            null,
+            '',
+            qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+          );
+        }
+      } catch {}
+    } else if (panelOpen && selected?.id) {
+      // When panel opens with a selected request, sync request param (idempotent)
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (String(params.get('request')) !== String(selected.id)) {
+          params.set('request', selected.id);
+          const qs = params.toString();
+          window.history.replaceState(
+            null,
+            '',
+            qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+          );
+        }
+      } catch {}
+    }
+  }, [panelOpen, selected?.id]);
+
   React.useEffect(() => {
     async function fetchData() {
       if (activeTab === 'offers') {
@@ -374,6 +426,10 @@ export default function ShipmentsPage() {
               router.push(`/shipments/${row.code}`);
               return;
             }
+            // Guard: if a forwarder offer dialog (selectedOffer) is open, close it first before switching request
+            if (offerDialogOpen) {
+              setOfferDialogOpen(false);
+            }
             setSelected(row);
             setPanelOpen(true);
           }}
@@ -438,10 +494,14 @@ export default function ShipmentsPage() {
         />
       )}
       {/* Only show request details panel for Requests tab */}
-      {activeTab === 'requests' && (
+      {activeTab === 'requests' && selected && (
         <RequestDetailsPanel
-          open={panelOpen}
-          onClose={() => setPanelOpen(false)}
+          open={panelOpen && !!selected}
+          onClose={() => {
+            setPanelOpen(false);
+            // also clear selection explicitly
+            setSelected(null);
+          }}
           request={selected}
         />
       )}

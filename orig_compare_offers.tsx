@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React from 'react';
 import {
   Dialog,
@@ -7,6 +7,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+// Removed inline OfferDetailsDialog usage to avoid double-modal stacking.
+// (ToggleGroup removed; custom buttons used instead of toggle group)
+import { createPortal } from 'react-dom'; // still used for potential future overlays (kept)
 import {
   LayoutGrid,
   Table as TableIcon,
@@ -59,7 +62,7 @@ export function CompareOffersPanel({
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<OfferLike | null>(null);
   const [colWidth, setColWidth] = React.useState<number | null>(null);
-  const [isMobile, setIsMobile] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState<boolean>(false);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const [showAllSecondary, setShowAllSecondary] = React.useState(false);
   const [hoveredField, setHoveredField] = React.useState<string | null>(null);
@@ -71,167 +74,141 @@ export function CompareOffersPanel({
   const lastTriggerButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [localOrder, setLocalOrder] = React.useState<string[]>([]);
   const compactWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  // derive local order from incoming order prop or parsed sequence
   React.useEffect(() => {
     const ids = parsed.map((p) => String(p.id));
     if (order && order.length) {
       const filtered = order.filter((id) => ids.includes(id));
-      setLocalOrder(filtered.length === ids.length ? filtered : ids);
-    } else setLocalOrder(ids);
+      if (filtered.length === ids.length) setLocalOrder(filtered);
+      else setLocalOrder(ids);
+    } else {
+      setLocalOrder(ids);
+    }
   }, [order, parsed]);
+
+  const moveOrder = (i: number, dir: number) => {
+    setLocalOrder((curr) => {
+      const next = [...curr];
+      const j = i + dir;
+      if (j < 0 || j >= next.length) return curr;
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
 
   async function exportComparisonPDF() {
     try {
-      const jsPDFModule = await import('jspdf').then(
-        (m) => (m as any).jsPDF || (m as any).default || (m as any)
-      );
+      if (typeof document !== 'undefined') {
+        document.body.dataset.exporting = 'true';
+      }
+      const [html2canvas, jsPDFModule] = await Promise.all([
+        import('html2canvas').then((m) => m.default || m),
+        import('jspdf').then(
+          (m) => (m as any).jsPDF || (m as any).default || (m as any)
+        )
+      ]);
+      const target =
+        viewMode === 'table'
+          ? tableWrapperRef.current
+          : compactWrapperRef.current;
+      if (!target) throw new Error('Export target not found');
+      const parentScrollable =
+        viewMode === 'table' ? target.parentElement : target;
+      const originalStyles: {
+        el: HTMLElement;
+        props: Record<string, string>;
+      }[] = [];
+      if (parentScrollable) {
+        originalStyles.push({
+          el: parentScrollable as HTMLElement,
+          props: {
+            maxHeight: (parentScrollable as HTMLElement).style.maxHeight || '',
+            height: (parentScrollable as HTMLElement).style.height || ''
+          }
+        });
+        (parentScrollable as HTMLElement).style.maxHeight = 'none';
+        (parentScrollable as HTMLElement).style.height = 'auto';
+      }
+      originalStyles.push({
+        el: target,
+        props: { overflow: (target as HTMLElement).style.overflow || '' }
+      });
+      (target as HTMLElement).style.overflow = 'visible';
+      await new Promise((r) => requestAnimationFrame(r));
+      const canvas = await html2canvas(target, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        windowWidth: Math.max(target.scrollWidth, target.clientWidth),
+        windowHeight: Math.max(target.scrollHeight, target.clientHeight)
+      });
+      for (const s of originalStyles) Object.assign(s.el.style, s.props);
+      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDFModule('l', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8;
-      let y = margin;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.text('Offer Comparison', margin, y);
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 70, y);
-      y += 6;
-      pdf.setDrawColor(180);
-      pdf.line(margin, y, pageWidth - margin, y);
-      y += 4;
-      const fieldDefs = [
-        { key: 'total_price', label: 'Total Price' },
-        { key: 'total_price_currency', label: 'Currency' },
-        { key: 'currency', label: 'Currency (alt)' },
-        { key: 'transit_time', label: 'Transit (d)' },
-        { key: 'transit_time_guarantee', label: 'Guaranteed' },
-        { key: 'payment_terms', label: 'Payment Terms' },
-        { key: 'offer_validity', label: 'Validity (d)' },
-        { key: 'service_scope', label: 'Scope' },
-        { key: 'price_includes', label: 'Includes' },
-        { key: 'taxes_duties', label: 'Taxes/Duties' },
-        { key: 'tracking_available', label: 'Tracking' },
-        { key: 'carrier_info', label: 'Carrier' },
-        { key: 'free_time', label: 'Free Time (d)' },
-        { key: 'value_added_services', label: 'Value Added' },
-        { key: 'company_name', label: 'Company' },
-        { key: 'contact_person', label: 'Contact' }
-      ];
-      const orderedIds = localOrder.length
-        ? localOrder
-        : parsed.map((p) => String(p.id));
-      const orderedOffers = orderedIds
-        .map((id) => parsed.find((p) => String(p.id) === id))
-        .filter(Boolean) as OfferLike[];
-      const usableWidth = pageWidth - margin * 2;
-      const firstColWidth = Math.min(40, Math.max(32, usableWidth * 0.13));
-      const offerColWidth =
-        (usableWidth - firstColWidth) / Math.max(1, orderedOffers.length);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8.5);
-      pdf.setFillColor(240, 240, 240);
-      pdf.rect(margin, y, firstColWidth, 6, 'F');
-      pdf.text('Field', margin + 2, y + 4);
-      orderedOffers.forEach((o, i) => {
-        const x = margin + firstColWidth + offerColWidth * i;
-        pdf.rect(x, y, offerColWidth, 6, 'F');
-        pdf.text(`Offer ${i + 1}`, x + 2, y + 4, {
-          maxWidth: offerColWidth - 4
-        });
-      });
-      y += 6;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      const lineHeight = 4.1;
-      const wrap = (text: string, maxWidth: number) => {
-        const words = text.split(/\s+/);
-        const lines: string[] = [];
-        let curr = '';
-        for (const w of words) {
-          const test = curr ? curr + ' ' + w : w;
-          const wWidth =
-            (pdf.getStringUnitWidth(test) * pdf.getFontSize()) /
-            pdf.internal.scaleFactor;
-          if (wWidth > maxWidth && curr) {
-            lines.push(curr);
-            curr = w;
-          } else curr = test;
-        }
-        if (curr) lines.push(curr);
-        return lines.slice(0, 6);
-      };
-      for (const f of fieldDefs) {
-        const vals = orderedOffers.map((o) => {
-          let raw: any = (o.details as any)[f.key];
-          if (Array.isArray(raw)) raw = raw.join(', ');
-          if (raw === null || raw === undefined || raw === '') raw = '—';
-          if (typeof raw === 'boolean') raw = raw ? 'Yes' : 'No';
-          return String(raw);
-        });
-        const fieldLines = wrap(f.label, firstColWidth - 4);
-        const valueLines = vals.map((v) => wrap(v, offerColWidth - 4));
-        const rowHeight =
-          Math.max(fieldLines.length, ...valueLines.map((a) => a.length)) *
-            lineHeight +
-          1.2;
-        if (y + rowHeight > pageHeight - margin) {
-          pdf.addPage();
-          y = margin;
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFillColor(240, 240, 240);
-          pdf.rect(margin, y, firstColWidth, 6, 'F');
-          pdf.text('Field', margin + 2, y + 4);
-          orderedOffers.forEach((o, i) => {
-            const x = margin + firstColWidth + offerColWidth * i;
-            pdf.rect(x, y, offerColWidth, 6, 'F');
-            pdf.text(`Offer ${i + 1}`, x + 2, y + 4, {
-              maxWidth: offerColWidth - 4
-            });
-          });
-          y += 6;
-          pdf.setFont('helvetica', 'normal');
-        }
-        pdf.setDrawColor(220);
-        pdf.rect(margin, y, firstColWidth, rowHeight);
-        fieldLines.forEach((ln, i) =>
-          pdf.text(ln, margin + 2, y + 3.5 + i * lineHeight, {
-            maxWidth: firstColWidth - 4
-          })
+      const ratio = canvas.width / canvas.height;
+      const targetWidth = pageWidth;
+      const targetHeight = targetWidth / ratio;
+      if (targetHeight <= pageHeight) {
+        pdf.addImage(
+          imgData,
+          'PNG',
+          0,
+          0,
+          targetWidth,
+          targetHeight,
+          undefined,
+          'FAST'
         );
-        orderedOffers.forEach((o, i) => {
-          const x = margin + firstColWidth + offerColWidth * i;
-          pdf.rect(x, y, offerColWidth, rowHeight);
-          valueLines[i].forEach((ln, li) =>
-            pdf.text(ln, x + 2, y + 3.5 + li * lineHeight, {
-              maxWidth: offerColWidth - 4
-            })
+      } else {
+        const fullHeightMM = targetHeight;
+        const pages = Math.ceil(fullHeightMM / pageHeight);
+        for (let i = 0; i < pages; i++) {
+          if (i > 0) pdf.addPage();
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          const sliceHeightPx = Math.min(
+            canvas.height - Math.floor((i * canvas.height) / pages),
+            Math.floor(canvas.height / pages)
           );
-        });
-        y += rowHeight;
+          sliceCanvas.height = sliceHeightPx;
+          const ctx = sliceCanvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(
+              canvas,
+              0,
+              Math.floor((i * canvas.height) / pages),
+              canvas.width,
+              sliceHeightPx,
+              0,
+              0,
+              canvas.width,
+              sliceHeightPx
+            );
+          }
+          const sliceData = sliceCanvas.toDataURL('image/png');
+          const sliceHeightMM = (sliceHeightPx / canvas.height) * fullHeightMM;
+          pdf.addImage(
+            sliceData,
+            'PNG',
+            0,
+            0,
+            targetWidth,
+            sliceHeightMM,
+            undefined,
+            'FAST'
+          );
+        }
       }
-      pdf.setFontSize(7);
-      pdf.setTextColor(120);
-      if (y + 6 > pageHeight - margin) {
-        pdf.addPage();
-        y = margin;
-      }
-      pdf.text(
-        `Offers: ${orderedOffers.length} • Fields: ${fieldDefs.length}`,
-        margin,
-        pageHeight - margin
-      );
-      const blob = pdf.output('blob');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `comparison-${new Date().toISOString().slice(0, 10)}.pdf`;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      pdf.save(`comparison-${new Date().toISOString().slice(0, 10)}.pdf`, {
+        returnPromise: false
+      });
     } catch (e: any) {
       toast.error(e?.message || 'Export failed');
+    } finally {
+      if (typeof document !== 'undefined')
+        delete (document.body.dataset as any).exporting;
     }
   }
 
@@ -302,7 +279,7 @@ export function CompareOffersPanel({
           onClick={cancel}
           className='h-6 px-2 text-[10px]'
         >
-          İptal
+          ─░ptal
         </Button>
         {error && <span className='text-destructive ml-1'>{error}</span>}
       </div>
@@ -337,7 +314,7 @@ export function CompareOffersPanel({
       for (const o of parsed) {
         let raw: any = (o.details as any)[f.key];
         if (Array.isArray(raw)) raw = raw.join(',');
-        if (raw === undefined || raw === null || raw === '') raw = '—';
+        if (raw === undefined || raw === null || raw === '') raw = 'ÔÇö';
         if (typeof raw === 'boolean') raw = raw ? 'Yes' : 'No';
         vals.add(String(raw));
         if (vals.size > 1) {
@@ -433,7 +410,7 @@ export function CompareOffersPanel({
     const raw = (o.details as any)[key];
     if (Array.isArray(raw)) return raw.join(', ');
     if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
-    if (raw === undefined || raw === null || raw === '') return '—';
+    if (raw === undefined || raw === null || raw === '') return 'ÔÇö';
     return String(raw);
   };
   // Inject once: custom truncation utility for compact card values (2 lines clamp)
@@ -594,7 +571,7 @@ export function CompareOffersPanel({
             {primaryFieldKeys.map((k) => {
               const f = fields.find((f) => f.key === k);
               if (!f) return null;
-              const val = selected ? renderValue(selected, k) : '—';
+              const val = selected ? renderValue(selected, k) : 'ÔÇö';
               const diff = diffKeys.has(k) && !suppressHighlights;
               return (
                 <div
@@ -661,7 +638,7 @@ export function CompareOffersPanel({
         </div>
         <div className='mt-1 flex items-center justify-between border-t pt-2'>
           <span className='text-muted-foreground text-[10px]'>
-            ESC · ← → switch
+            ESC ┬À ÔåÉ ÔåÆ switch
           </span>
           <div className='flex items-center gap-1'>
             {parsed.map((p, i) => {
@@ -1073,7 +1050,7 @@ export function CompareOffersPanel({
                               key={o.id + '-nodiff'}
                               className='border-border text-muted-foreground border-b p-2 text-xs'
                             >
-                              —
+                              ÔÇö
                             </td>
                           ))}
                         </tr>
