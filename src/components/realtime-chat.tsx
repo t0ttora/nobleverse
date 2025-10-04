@@ -925,7 +925,7 @@ export const RealtimeChat = ({
       {/* Messages (scrollable area) */}
       <div
         ref={containerRef}
-        className='absolute inset-x-0 top-0 bottom-0 space-y-3 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-36 md:space-y-4 md:px-4 md:pt-4'
+        className='nv-scroll-hide absolute inset-x-0 top-0 bottom-0 space-y-3 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-36 md:space-y-4 md:px-4 md:pt-4'
       >
         {/* Debug guide: enable with ?debugChat=1 to verify right edge */}
         {typeof window !== 'undefined' &&
@@ -1045,7 +1045,7 @@ export const RealtimeChat = ({
       {/* Composer */}
       <form
         onSubmit={handleSendMessage}
-        className='border-border bg-card absolute inset-x-0 bottom-0 space-y-1.5 border-t px-2 py-2'
+        className='border-border bg-background/60 supports-[backdrop-filter]:bg-background/50 absolute inset-x-0 bottom-0 space-y-1.5 border-t px-2 py-2 backdrop-blur'
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -1343,14 +1343,14 @@ export const RealtimeChat = ({
 
         <div
           className={cn(
-            'bg-background flex items-end gap-1.5 rounded-lg px-2 py-1.5',
-            dragging ? 'ring-primary/60 ring-2' : 'border-border/60 border'
+            'bg-background/80 flex items-end gap-1.5 rounded-lg px-2 py-1.5 shadow-sm',
+            dragging ? 'ring-primary/60 ring-2' : 'border-border border'
           )}
         >
           <Textarea
             ref={textareaRef}
             className={cn(
-              'resize-none bg-transparent text-[12px] leading-5 md:text-xs',
+              'nv-scroll-hide resize-none bg-transparent text-[12px] leading-5 md:text-xs',
               'max-h-36 min-h-8'
             )}
             value={newMessage}

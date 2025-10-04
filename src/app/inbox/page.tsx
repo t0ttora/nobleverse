@@ -4,8 +4,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 // Card extraction helpers from chat-message
-import { extractMeta, extractAttachments } from '@/components/chat-message';
-import { extractCardsFromBody } from '@/components/chat-message';
+import {
+  extractMeta,
+  extractAttachments,
+  extractCardsFromBody
+} from '@/components/chat-message';
 import { useSearchParams } from 'next/navigation';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +17,12 @@ import {
   HoverCardContent,
   HoverCardTrigger
 } from '@/components/ui/hover-card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,7 +34,20 @@ import {
   StarOff,
   X,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  PanelRight,
+  PanelRightOpen,
+  MoreHorizontal,
+  Pencil,
+  Check
+} from 'lucide-react';
+// Extra icons for Details panel visuals
+import {
+  Users as UsersIcon,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  File as FileIcon,
+  Tag as TagIcon
 } from 'lucide-react';
 import { NewMessageDialog } from '../../components/new-message-dialog';
 import { supabase } from '@/lib/supabaseClient';
@@ -38,6 +60,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +86,44 @@ type RoomListItem = {
   }[];
   isAdmin?: boolean;
 };
+
+// Helper to map RPC rows into RoomListItem[] consistently
+function mapRpcRooms(rows: any[] | null | undefined): RoomListItem[] {
+  const arr = Array.isArray(rows) ? rows : [];
+  return arr.map((r: any) => ({
+    id: r.room_id as string,
+    type: r.type as any,
+    title: r.title as string | null,
+    isAdmin: !!r.is_admin,
+    lastMessage: r.last_content
+      ? {
+          content: r.last_content as string,
+          created_at: r.last_created_at as string
+        }
+      : undefined,
+    members: (r.members as any[]).map((p: any) => ({
+      id: p.id as string,
+      username: p.username as string | null,
+      display_name: p.display_name as string | null,
+      email: null,
+      avatar_url: p.avatar_url as string | null
+    }))
+  }));
+}
+
+// Helper to build userId -> display name map for a room
+function makeNameMap(room: RoomListItem | undefined) {
+  const map = new Map<string, string>();
+  room?.members.forEach((m) => {
+    const n = (m.display_name || m.username || 'User') as string;
+    if (m.id) map.set(m.id, n);
+  });
+  return map;
+}
+
+// Favorites (starred rooms) key used in localStorage
+const STAR_KEY = 'nv_starred_rooms';
+const MUTE_KEY = 'nv_muted_rooms';
 
 // Tiny relative time formatter for the list view
 function formatListTime(iso?: string) {
@@ -169,6 +230,46 @@ function ProfileHoverDetails({
   );
 }
 
+function GroupBanner({ ids }: { ids: string[] }) {
+  const [banner, setBanner] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        if (!ids || ids.length === 0) return;
+        const { data } = await supabase
+          .from('profiles')
+          .select('id,banner_url')
+          .in('id', ids)
+          .not('banner_url', 'is', null)
+          .limit(1);
+        if (!alive) return;
+        setBanner((data && data[0]?.banner_url) || null);
+      } catch {
+        /* ignore */
+      }
+    }
+    void load();
+    return () => {
+      alive = false;
+    };
+  }, [ids]);
+  return (
+    <div
+      className='bg-muted h-16 w-full'
+      style={
+        banner
+          ? {
+              backgroundImage: `url(${banner})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }
+          : undefined
+      }
+    />
+  );
+}
+
 export default function InboxPage() {
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -180,6 +281,7 @@ export default function InboxPage() {
     import('@/hooks/use-realtime-chat').ChatMessage[]
   >([]);
   const [sideOpen, setSideOpen] = useState(false);
+  const [chatMount, setChatMount] = useState(0);
   const [detailsQuery, setDetailsQuery] = useState('');
   const [detailsPage, setDetailsPage] = useState(0);
   const pageSize = 100;
@@ -198,13 +300,15 @@ export default function InboxPage() {
   // Collapsible states for sections
   const [dmsOpen, setDmsOpen] = useState(true);
   const [groupsOpen, setGroupsOpen] = useState(true);
+  // Inline edit: group title
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [savingTitle, setSavingTitle] = useState(false);
 
   const search = useSearchParams();
   const [query, setQuery] = useState('');
 
-  // Favorites (starred rooms) persisted locally
-  const STAR_KEY = 'nv_starred_rooms';
   const [starred, setStarred] = useState<Set<string>>(new Set());
+  const [muted, setMuted] = useState<Set<string>>(new Set());
 
   // Load details for sidebar with paging
   useEffect(() => {
@@ -238,26 +342,7 @@ export default function InboxPage() {
       if (!uid) return;
 
       const { data: rpc } = await supabase.rpc('get_inbox_rooms');
-      const arr: RoomListItem[] = (rpc || []).map((r: any) => ({
-        id: r.room_id as string,
-        // extend type: include 'shipment'
-        type: r.type as any,
-        title: r.title as string | null,
-        isAdmin: !!r.is_admin,
-        lastMessage: r.last_content
-          ? {
-              content: r.last_content as string,
-              created_at: r.last_created_at as string
-            }
-          : undefined,
-        members: (r.members as any[]).map((p: any) => ({
-          id: p.id as string,
-          username: p.username as string | null,
-          display_name: p.display_name as string | null,
-          email: null,
-          avatar_url: p.avatar_url as string | null
-        }))
-      }));
+      const arr: RoomListItem[] = mapRpcRooms(rpc);
       if (!stop) setRooms(arr);
 
       const qRoom = search.get('room');
@@ -285,6 +370,16 @@ export default function InboxPage() {
     }
   }, []);
 
+  // Load muted list once
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MUTE_KEY);
+      if (raw) setMuted(new Set(JSON.parse(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   function toggleStar(id: string) {
     setStarred((prev) => {
       const next = new Set(prev);
@@ -294,6 +389,20 @@ export default function InboxPage() {
         localStorage.setItem(STAR_KEY, JSON.stringify(Array.from(next)));
       } catch {
         void 0; // ignore localStorage write errors
+      }
+      return next;
+    });
+  }
+
+  function toggleMute(id: string) {
+    setMuted((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(MUTE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        void 0;
       }
       return next;
     });
@@ -370,31 +479,38 @@ export default function InboxPage() {
     return other?.display_name || other?.username || '';
   }, [active, me?.id]);
 
+  const roomMeta = useMemo(() => {
+    if (!active) return '';
+    if (active.type === 'group') return `${active.members.length} members`;
+    if (active.type === 'shipment') return 'Shipment';
+    return 'Direct message';
+  }, [active]);
+
+  async function saveGroupTitle(rid: string, title: string | null) {
+    setSavingTitle(true);
+    try {
+      const { error } = await supabase
+        .from('chat_rooms')
+        .update({ title })
+        .eq('id', rid);
+      if (error) throw error;
+      setRooms((prev) => prev.map((r) => (r.id === rid ? { ...r, title } : r)));
+      setEditingTitle(null);
+      toast.success('Title updated');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update title');
+    } finally {
+      setSavingTitle(false);
+    }
+  }
+
   // Refresh + focus
   async function refreshRoomsAndFocus(roomId?: string) {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id ?? null;
     if (!uid) return;
     const { data: rpc } = await supabase.rpc('get_inbox_rooms');
-    const arr: RoomListItem[] = (rpc || []).map((r: any) => ({
-      id: r.room_id as string,
-      type: r.type as any,
-      title: r.title as string | null,
-      isAdmin: !!r.is_admin,
-      lastMessage: r.last_content
-        ? {
-            content: r.last_content as string,
-            created_at: r.last_created_at as string
-          }
-        : undefined,
-      members: (r.members as any[]).map((p: any) => ({
-        id: p.id as string,
-        username: p.username as string | null,
-        display_name: p.display_name as string | null,
-        email: null,
-        avatar_url: p.avatar_url as string | null
-      }))
-    }));
+    const arr: RoomListItem[] = mapRpcRooms(rpc);
     setRooms(arr);
     if (roomId) setActiveId(roomId);
   }
@@ -504,11 +620,7 @@ export default function InboxPage() {
     let ignore = false;
     async function loadMessages(rid: string, type: RoomListItem['type']) {
       const rm = rooms.find((r) => r.id === rid);
-      const nameMap = new Map<string, string>();
-      rm?.members.forEach((m) => {
-        const n = (m.display_name || m.username || 'User') as string;
-        if (m.id) nameMap.set(m.id, n);
-      });
+      const nameMap = makeNameMap(rm);
 
       // Try RPC first
       let list: any[] | null = null;
@@ -579,12 +691,7 @@ export default function InboxPage() {
         (payload: any) => {
           setInitialMessages((cur) => {
             if (cur.some((m) => m.id === payload.new.id)) return cur;
-            const rm = rooms.find((r) => r.id === activeId);
-            const nameMap = new Map<string, string>();
-            rm?.members.forEach((m) => {
-              const n = (m.display_name || m.username || 'User') as string;
-              if (m.id) nameMap.set(m.id, n);
-            });
+            const nameMap = makeNameMap(rooms.find((r) => r.id === activeId));
             const uid =
               (payload?.new?.user_id as string) ||
               (payload?.new?.sender_id as string) ||
@@ -619,8 +726,8 @@ export default function InboxPage() {
       <li key={r.id}>
         <div
           className={clsx(
-            'group hover:bg-accent/40 flex w-full items-start gap-3 p-3 transition-colors',
-            isActive && 'bg-accent/40'
+            'group hover:bg-accent/50 hover:ring-accent/30 relative flex w-full items-start gap-3 rounded-lg p-3 ring-1 ring-transparent transition-colors before:absolute before:top-0 before:left-0 before:h-full before:w-[3px] before:rounded-r before:bg-transparent',
+            isActive && 'bg-accent/40 ring-accent/40 before:bg-primary'
           )}
         >
           {isShipment ? (
@@ -686,6 +793,12 @@ export default function InboxPage() {
                       r.members.find((m) => m.id !== me?.id)?.display_name ||
                       'Direct message'}
               </div>
+              {starred.has(r.id) && (
+                <Star
+                  className='size-3 fill-yellow-500 text-yellow-500'
+                  aria-hidden='true'
+                />
+              )}
               <time className='text-muted-foreground ml-auto shrink-0 text-[10px]'>
                 {formatListTime(r.lastMessage?.created_at)}
               </time>
@@ -817,66 +930,67 @@ export default function InboxPage() {
   };
 
   return (
-    <div className='bg-background flex h-[calc(100vh-4rem)] w-full overflow-hidden rounded-xl border'>
-      {/* Left list */}
-      <div
-        className={clsx(
-          'bg-card/30 w-full flex-col border-r md:max-w-[320px]',
-          mobileView === 'chat' ? 'hidden md:flex' : 'flex md:flex'
-        )}
-      >
-        <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex items-center gap-2 border-b p-3 backdrop-blur'>
-          <div className='relative flex-1'>
-            <Search className='text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2' />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder='Search'
-              className='rounded-lg pl-8'
-            />
-          </div>
-          <Button
-            size='icon'
-            className='rounded-lg'
-            onClick={() => setDialogOpen(true)}
-            aria-label='New message'
-          >
-            <Plus className='size-4' />
-          </Button>
-        </div>
-        <div className='flex-1 overflow-y-auto'>
-          {rooms.length === 0 ? (
-            <div className='text-muted-foreground p-6 text-sm'>
-              No conversations. Click + to start one.
+    <>
+      {/* Shell container */}
+      <div className='bg-background flex h-full min-h-0 w-full overflow-hidden'>
+        {/* Left list */}
+        <div
+          className={clsx(
+            'bg-card/30 w-full flex-col border-r md:max-w-[320px]',
+            mobileView === 'chat' ? 'hidden md:flex' : 'flex md:flex'
+          )}
+        >
+          <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex items-center gap-2 border-b p-3 backdrop-blur'>
+            <div className='relative flex-1'>
+              <Search className='text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2' />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder='Search'
+                className='rounded-lg pl-8'
+              />
             </div>
-          ) : (
-            <div>
-              {sections.fav.length > 0 && (
-                <div>
-                  <div className='text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
-                    FAVORITES
-                  </div>
-                  <ul className='divide-border/60 divide-y'>
-                    {sections.fav.map(LeftItem)}
-                  </ul>
-                </div>
-              )}
+            <Button
+              size='icon'
+              className='rounded-lg'
+              onClick={() => setDialogOpen(true)}
+              aria-label='New message'
+            >
+              <Plus className='size-4' />
+            </Button>
+          </div>
+          <div className='nv-scroll-hide flex-1 overflow-y-auto'>
+            {rooms.length === 0 ? (
+              <div className='text-muted-foreground p-4 text-sm'>
+                No conversations. Click + to start one.
+              </div>
+            ) : (
               <div>
-                <div className='text-muted-foreground flex items-center gap-2 px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
-                  <span className='bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]'>
-                    {sections.dms.length}
-                  </span>
+                {sections.fav.length > 0 && (
+                  <div>
+                    <div className='text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
+                      FAVORITES
+                    </div>
+                    <ul className='divide-border/60 divide-y'>
+                      {sections.fav.map(LeftItem)}
+                    </ul>
+                  </div>
+                )}
+                <div className='px-3 pt-3'>
                   <button
-                    className='hover:text-foreground flex items-center gap-1'
+                    className='text-muted-foreground hover:text-foreground flex items-center gap-2 text-[11px] font-medium tracking-wide'
                     onClick={() => setDmsOpen((v) => !v)}
-                    aria-label='Toggle direct messages'
+                    aria-label='Toggle DMs'
                   >
                     {dmsOpen ? (
                       <ChevronDown className='size-3' />
                     ) : (
                       <ChevronRight className='size-3' />
                     )}
-                    <span>DIRECT MESSAGES</span>
+                    <span>DMS</span>
+                    <span className='bg-muted text-muted-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px]'>
+                      {sections.dms.length}
+                    </span>
                   </button>
                 </div>
                 {dmsOpen && (
@@ -885,19 +999,14 @@ export default function InboxPage() {
                       sections.dms.map(LeftItem)
                     ) : (
                       <li className='text-muted-foreground px-3 py-6 text-xs'>
-                        No direct messages.
+                        No direct messages yet.
                       </li>
                     )}
                   </ul>
                 )}
-              </div>
-              <div>
-                <div className='text-muted-foreground flex items-center gap-2 px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
-                  <span className='bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]'>
-                    {sections.groups.length}
-                  </span>
+                <div className='px-3 pt-3'>
                   <button
-                    className='hover:text-foreground flex items-center gap-1'
+                    className='text-muted-foreground hover:text-foreground flex items-center gap-2 text-[11px] font-medium tracking-wide'
                     onClick={() => setGroupsOpen((v) => !v)}
                     aria-label='Toggle groups'
                   >
@@ -907,6 +1016,9 @@ export default function InboxPage() {
                       <ChevronRight className='size-3' />
                     )}
                     <span>GROUPS</span>
+                    <span className='bg-muted text-muted-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px]'>
+                      {sections.groups.length}
+                    </span>
                   </button>
                 </div>
                 {groupsOpen && (
@@ -920,8 +1032,6 @@ export default function InboxPage() {
                     )}
                   </ul>
                 )}
-              </div>
-              <div>
                 <div className='text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
                   SHIPMENTS
                 </div>
@@ -935,53 +1045,64 @@ export default function InboxPage() {
                   )}
                 </ul>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Right chat */}
-      <div
-        className={clsx(
-          'bg-background min-w-0 flex-1 flex-col',
-          mobileView === 'chat' ? 'flex md:flex' : 'hidden md:flex'
-        )}
-      >
-        {active ? (
-          <>
-            {/* Header */}
-            <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex h-12 shrink-0 items-center justify-between border-b px-4 backdrop-blur'>
-              <div className='flex min-w-0 items-center gap-2'>
+        {/* Main area */}
+        <div
+          className={clsx(
+            'min-h-0 flex-1 flex-col',
+            // On mobile, hide main area when listing; show when chatting
+            mobileView === 'list' ? 'hidden md:flex' : 'flex'
+          )}
+        >
+          {active ? (
+            <>
+              {/* Chat header */}
+              <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex h-14 items-center gap-3 border-b px-3 shadow-sm backdrop-blur'>
                 <Button
                   variant='ghost'
                   size='icon'
-                  className='mr-1 md:hidden'
+                  className='md:hidden'
                   onClick={() => setMobileView('list')}
-                  aria-label='Back to conversations'
+                  aria-label='Back'
                 >
                   <ArrowLeft className='size-4' />
                 </Button>
-                {active.type === 'shipment' ? (
-                  <div className='flex h-8 w-8 items-center justify-center rounded-md border bg-gradient-to-br from-orange-500/20 to-orange-600/10 text-[10px] font-semibold text-orange-600'>
-                    SHP
-                  </div>
+                {/* Chat avatar(s) */}
+                {active.type === 'dm' ? (
+                  (() => {
+                    const other =
+                      active.members.find((m) => m.id !== me?.id) ||
+                      active.members[0];
+                    return (
+                      <div className='relative shrink-0'>
+                        <Avatar className='size-8 md:size-9'>
+                          <AvatarImage src={other?.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {(other?.display_name || other?.username || 'U')
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className='border-background absolute -right-0.5 -bottom-0.5 inline-block size-2.5 rounded-full border-2 bg-emerald-500' />
+                      </div>
+                    );
+                  })()
                 ) : active.type === 'group' ? (
-                  <div className='relative h-8 w-8'>
-                    {active.members.slice(0, 3).map((m, i) => (
+                  <div className='relative h-8 w-10 shrink-0'>
+                    {active.members.slice(0, 2).map((m, i) => (
                       <Avatar
                         key={m.id}
                         className={clsx(
-                          'border-background absolute size-5 border',
-                          i === 0
-                            ? 'top-0 left-0'
-                            : i === 1
-                              ? 'top-1 left-2'
-                              : 'top-2 left-4'
+                          'border-background absolute size-7 border',
+                          i === 0 ? 'top-0 left-0 z-10' : 'top-1 left-3'
                         )}
                       >
                         <AvatarImage src={m.avatar_url || undefined} />
                         <AvatarFallback>
-                          {(m.username || m.display_name || 'U')
+                          {(m.display_name || m.username || 'U')
                             .slice(0, 2)
                             .toUpperCase()}
                         </AvatarFallback>
@@ -989,339 +1110,697 @@ export default function InboxPage() {
                     ))}
                   </div>
                 ) : (
-                  <Avatar className='size-8'>
-                    {(() => {
-                      const other =
-                        active.members.find((m) => m.id !== me?.id) ||
-                        active.members[0];
-                      return (
-                        <>
-                          <AvatarImage src={other?.avatar_url || undefined} />
-                          <AvatarFallback>
-                            {(other?.username || other?.display_name || 'U')
-                              .slice(0, 2)
-                              .toUpperCase()}
-                          </AvatarFallback>
-                        </>
-                      );
-                    })()}
-                  </Avatar>
+                  <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-gradient-to-br from-orange-500/20 to-orange-600/10 text-[10px] font-semibold text-orange-600'>
+                    S
+                  </div>
                 )}
-                <div className='min-w-0'>
-                  {active.type === 'shipment' ? (
-                    <div className='truncate font-medium'>
-                      {active.title || 'Shipment'}
-                    </div>
-                  ) : active.type === 'group' ? (
-                    <div className='truncate font-medium'>
-                      {active.title ||
-                        active.members
-                          .map((m) => m.username || m.display_name || 'user')
-                          .slice(0, 3)
-                          .join(', ') +
-                          (active.members.length > 3 ? ' and more' : '')}
-                    </div>
-                  ) : (
-                    (() => {
-                      const other = active.members.find((m) => m.id !== me?.id);
-                      const label =
-                        other?.username ||
-                        other?.display_name ||
-                        'Direct message';
-                      return (
-                        <HoverCard>
-                          <HoverCardTrigger asChild>
-                            <div className='cursor-default truncate font-medium'>
-                              {label}
-                            </div>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            className='w-96 overflow-hidden p-0'
-                            align='start'
-                          >
-                            <ProfileHoverDetails
-                              id={other?.id || ''}
-                              fallbackName={label}
-                              initialAvatar={other?.avatar_url || undefined}
-                            />
-                          </HoverCardContent>
-                        </HoverCard>
-                      );
-                    })()
-                  )}
-                </div>
-              </div>
-              <div className='flex items-center gap-1'>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  onClick={() => activeId && toggleStar(activeId)}
-                  aria-label='Star'
-                >
-                  {activeId && starred.has(activeId) ? (
-                    <Star className='size-4 fill-current' />
-                  ) : (
-                    <StarOff className='size-4' />
-                  )}
-                </Button>
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  onClick={() => setSideOpen((v) => !v)}
-                  aria-label='Toggle details'
-                >
-                  <Info className='size-4' />
-                </Button>
-                <Button variant='ghost' size='icon' aria-label='More'>
-                  ⋯
-                </Button>
-              </div>
-            </div>
 
-            {/* Chat + details */}
-            <div className='flex min-h-0 flex-1'>
-              <div className='min-w-0 flex-1'>
-                <RealtimeChat
-                  roomName={active.id}
-                  nobleId={nobleId}
-                  userId={me?.id}
-                  messages={initialMessages}
-                  roomTitle={roomDisplayName || undefined}
-                  initialToSend={
-                    pendingInitial?.roomId === active.id
-                      ? pendingInitial.text
-                      : undefined
-                  }
-                  onInitialConsumed={() => setPendingInitial(null)}
-                  mode={'chat'}
-                />
-              </div>
-              {/* Right sidebar */}
-              <div
-                className={clsx(
-                  'bg-card/30 hidden w-[340px] shrink-0 flex-col border-l md:flex',
-                  sideOpen ? 'md:flex' : 'md:hidden'
-                )}
-              >
-                <div className='flex h-12 items-center justify-between border-b px-3'>
-                  <div className='font-medium'>Group info</div>
-                  <Button
-                    variant='ghost'
-                    size='icon'
-                    onClick={() => setSideOpen(false)}
-                    aria-label='Close'
-                  >
-                    <X className='size-4' />
-                  </Button>
+                {/* Title */}
+                <div className='min-w-0 flex-1'>
+                  <div className='truncate text-[15px] font-semibold md:text-base'>
+                    {roomDisplayName || 'Conversation'}
+                  </div>
+                  {active.type === 'group' ? (
+                    <div className='text-muted-foreground hidden truncate text-[11px] md:block'>
+                      {active.members
+                        .map((m) => m.display_name || m.username || 'User')
+                        .slice(0, 5)
+                        .join(', ')}
+                      {active.members.length > 5
+                        ? `, +${active.members.length - 5} more`
+                        : ''}
+                    </div>
+                  ) : roomMeta ? (
+                    <div className='text-muted-foreground hidden truncate text-[11px] md:block'>
+                      {roomMeta}
+                    </div>
+                  ) : null}
                 </div>
-                <div className='flex-1 overflow-y-auto'>
-                  {active?.type === 'dm' &&
-                    (() => {
-                      const other =
-                        active.members.find((m) => m.id !== me?.id) ||
-                        active.members[0];
-                      if (!other) return null;
-                      return (
-                        <div className='border-b'>
-                          <ProfileHoverDetails
-                            id={other.id}
-                            fallbackName={
-                              other.display_name || other.username || 'User'
+
+                {/* Actions */}
+                <TooltipProvider delayDuration={250}>
+                  <div className='flex items-center gap-1'>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => activeId && toggleStar(activeId)}
+                          aria-label='Star'
+                        >
+                          {activeId && starred.has(activeId) ? (
+                            <Star className='size-4 fill-current' />
+                          ) : (
+                            <Star className='size-4' />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Star</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={() => setSideOpen((v) => !v)}
+                          aria-label='Toggle details'
+                        >
+                          {sideOpen ? (
+                            <PanelRightOpen className='size-4' />
+                          ) : (
+                            <PanelRight className='size-4' />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Toggle details</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              aria-label='More'
+                            >
+                              <MoreHorizontal className='size-4' />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>More</TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent align='end'>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (!active?.id) return;
+                            toggleMute(active.id);
+                            toast.success(
+                              muted.has(active.id) ? 'Unmuted' : 'Muted'
+                            );
+                          }}
+                        >
+                          {active && muted.has(active.id) ? 'Unmute' : 'Mute'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (!active?.id) return;
+                            try {
+                              localStorage.setItem(
+                                `nv_last_seen_${active.id}`,
+                                '0'
+                              );
+                            } catch {
+                              /* ignore */
                             }
-                            initialAvatar={other.avatar_url || undefined}
-                          />
-                        </div>
+                            setChatMount((k) => k + 1);
+                            toast.success('Marked as unread');
+                          }}
+                        >
+                          Mark as unread
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (!active?.id) return;
+                            setConfirm({ rid: active.id, type: 'leave' });
+                          }}
+                        >
+                          Leave conversation
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </TooltipProvider>
+              </div>
+
+              {/* Chat + details */}
+              <div className='flex min-h-0 flex-1'>
+                <div className='min-w-0 flex-1'>
+                  <RealtimeChat
+                    key={active.id + ':' + chatMount}
+                    roomName={active.id}
+                    nobleId={nobleId}
+                    userId={me?.id}
+                    messages={initialMessages}
+                    roomTitle={roomDisplayName || undefined}
+                    initialToSend={
+                      pendingInitial?.roomId === active.id
+                        ? pendingInitial.text
+                        : undefined
+                    }
+                    onInitialConsumed={() => setPendingInitial(null)}
+                    mode={'chat'}
+                  />
+                </div>
+                {/* Right sidebar */}
+                <div
+                  className={clsx(
+                    'bg-card/30 hidden w-[360px] shrink-0 flex-col border-l md:flex',
+                    sideOpen ? 'md:flex' : 'md:hidden'
+                  )}
+                >
+                  <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex h-12 items-center justify-between border-b px-3 backdrop-blur'>
+                    <div className='font-medium'>Details</div>
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      onClick={() => setSideOpen(false)}
+                      aria-label='Close'
+                    >
+                      <X className='size-4' />
+                    </Button>
+                  </div>
+                  <div className='flex min-h-0 flex-1 flex-col overflow-hidden p-0'>
+                    {(() => {
+                      if (!active) return null;
+                      const act = active as RoomListItem;
+                      const msgs = detailsRows.length
+                        ? detailsRows.map((r) => ({ content: r.content }))
+                        : initialMessages || [];
+                      const links = msgs.flatMap((m: any) =>
+                        Array.from(
+                          ((m.content || '') as string).matchAll(
+                            /https?:\/\/\S+/g
+                          )
+                        ).map((x) => x[0])
+                      );
+                      const files = msgs.flatMap((m: any) =>
+                        Array.from(
+                          ((m.content || '') as string).matchAll(
+                            /\[([^\]]+)]\(([^)]+)\)/g
+                          )
+                        ).map((x) => ({ name: x[1], url: x[2] }))
+                      );
+                      const mentions = msgs.flatMap((m: any) =>
+                        Array.from(
+                          ((m.content || '') as string).matchAll(
+                            /@([\w._-]{2,32})/g
+                          )
+                        ).map((x) => x[1])
+                      );
+                      const q = detailsQuery.trim().toLowerCase();
+                      const filter = (s: string) =>
+                        !q || s.toLowerCase().includes(q);
+                      const linksF = links.filter(filter);
+                      const filesF = files.filter(
+                        (f) => filter(f.name) || filter(f.url)
+                      );
+                      const mentionsF = mentions.filter(filter);
+
+                      const mediaCount = linksF.length + filesF.length;
+                      return (
+                        <Tabs
+                          defaultValue='members'
+                          className='flex min-h-0 flex-1 flex-col'
+                        >
+                          {/* Pinned Info at the very top */}
+                          <div className='p-3 pb-2'>
+                            {act.type === 'dm' ? (
+                              (() => {
+                                const other =
+                                  act.members.find((m) => m.id !== me?.id) ||
+                                  act.members[0];
+                                if (!other) return null;
+                                return (
+                                  <div className='overflow-hidden rounded-md border shadow-sm'>
+                                    <ProfileHoverDetails
+                                      id={other.id}
+                                      fallbackName={
+                                        other.display_name ||
+                                        other.username ||
+                                        'User'
+                                      }
+                                      initialAvatar={
+                                        other.avatar_url || undefined
+                                      }
+                                    />
+                                  </div>
+                                );
+                              })()
+                            ) : (
+                              <div className='space-y-3'>
+                                <div className='overflow-hidden rounded-md border shadow-sm'>
+                                  <GroupBanner
+                                    ids={act.members.map((m) => m.id)}
+                                  />
+                                  <div className='p-3'>
+                                    {/* Title editor */}
+                                    <div className='mb-2 flex items-center gap-2'>
+                                      {editingTitle !== null ? (
+                                        <div className='flex w-full items-center gap-2'>
+                                          <Input
+                                            autoFocus
+                                            value={editingTitle}
+                                            onChange={(e) =>
+                                              setEditingTitle(e.target.value)
+                                            }
+                                            placeholder='Group title'
+                                            className='h-8'
+                                          />
+                                          <Button
+                                            size='icon'
+                                            variant='ghost'
+                                            disabled={savingTitle}
+                                            onClick={() =>
+                                              saveGroupTitle(
+                                                act.id,
+                                                editingTitle?.trim()
+                                                  ? editingTitle.trim()
+                                                  : null
+                                              )
+                                            }
+                                            aria-label='Save title'
+                                          >
+                                            <Check className='size-4' />
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <div className='flex min-w-0 items-center gap-2'>
+                                          <div className='truncate font-medium'>
+                                            {act.title || 'Untitled group'}
+                                          </div>
+                                          <Button
+                                            size='icon'
+                                            variant='ghost'
+                                            onClick={() =>
+                                              setEditingTitle(act.title || '')
+                                            }
+                                            aria-label='Edit title'
+                                          >
+                                            <Pencil className='size-4' />
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {/* Large avatar stack */}
+                                    <div className='mb-2 flex -space-x-3'>
+                                      {act.members.slice(0, 6).map((m) => (
+                                        <Avatar
+                                          key={m.id}
+                                          className='ring-background size-10 ring-2'
+                                        >
+                                          <AvatarImage
+                                            src={m.avatar_url || undefined}
+                                          />
+                                          <AvatarFallback className='text-xs'>
+                                            {(
+                                              m.display_name ||
+                                              m.username ||
+                                              'U'
+                                            )
+                                              .slice(0, 2)
+                                              .toUpperCase()}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      ))}
+                                      {act.members.length > 6 && (
+                                        <div className='bg-muted text-muted-foreground ring-background flex size-10 items-center justify-center rounded-full text-xs ring-2'>
+                                          +{act.members.length - 6}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Sticky Tabs header with filter */}
+                          <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 sticky top-0 z-10 flex items-center gap-2 border-b p-3 pt-2 backdrop-blur'>
+                            <TabsList>
+                              <TabsTrigger value='members'>
+                                Members
+                                <span className='bg-muted text-muted-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px]'>
+                                  {act.members.length}
+                                </span>
+                              </TabsTrigger>
+                              <TabsTrigger value='media'>
+                                Media
+                                <span className='bg-muted text-muted-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px]'>
+                                  {mediaCount}
+                                </span>
+                              </TabsTrigger>
+                              <TabsTrigger value='mentions'>
+                                Mentions
+                                <span className='bg-muted text-muted-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px]'>
+                                  {mentionsF.length}
+                                </span>
+                              </TabsTrigger>
+                            </TabsList>
+                            <div className='ml-auto w-40 md:w-48'>
+                              <Input
+                                placeholder='Filter…'
+                                value={detailsQuery}
+                                onChange={(e) =>
+                                  setDetailsQuery(e.target.value)
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          <TabsContent
+                            value='members'
+                            className='nv-scroll-hide min-h-0 overflow-y-auto p-3 pr-1'
+                          >
+                            <ul className='space-y-2'>
+                              {act.members
+                                .filter((m) => {
+                                  const t = (
+                                    m.display_name ||
+                                    m.username ||
+                                    ''
+                                  ).toLowerCase();
+                                  return filter(t);
+                                })
+                                .map((m) => (
+                                  <li
+                                    key={m.id}
+                                    className='flex items-center gap-2 rounded-md border p-2'
+                                  >
+                                    <Avatar className='size-7'>
+                                      <AvatarImage
+                                        src={m.avatar_url || undefined}
+                                      />
+                                      <AvatarFallback className='text-[10px]'>
+                                        {(m.display_name || m.username || 'U')
+                                          .slice(0, 2)
+                                          .toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className='min-w-0'>
+                                      <div className='truncate text-sm font-medium'>
+                                        {m.display_name || m.username || 'User'}
+                                      </div>
+                                      {m.username && (
+                                        <div className='text-muted-foreground truncate text-[11px]'>
+                                          @{m.username}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                            </ul>
+                          </TabsContent>
+
+                          <TabsContent
+                            value='media'
+                            className='nv-scroll-hide min-h-0 overflow-y-auto p-3 pr-1'
+                          >
+                            <div className='space-y-4'>
+                              {(() => {
+                                const isImg = (u: string) =>
+                                  /\.(png|jpg|jpeg|gif|webp|bmp|svg)(\?|#|$)/i.test(
+                                    u
+                                  );
+                                const imageLinks = [
+                                  ...linksF.filter((l) => isImg(l)),
+                                  ...filesF
+                                    .filter((f) => f.url && isImg(f.url))
+                                    .map((f) => f.url as string)
+                                ];
+                                if (!imageLinks.length) return null;
+                                const [showCount, more] = [
+                                  48,
+                                  Math.max(0, imageLinks.length - 48)
+                                ];
+                                return (
+                                  <div className='rounded-md border p-3 shadow-sm'>
+                                    <div className='mb-2 flex items-center gap-2'>
+                                      <ChevronRight className='text-muted-foreground size-4' />
+                                      <div className='font-medium'>Images</div>
+                                      <span className='text-muted-foreground ml-auto text-xs'>
+                                        {imageLinks.length}
+                                      </span>
+                                    </div>
+                                    <div
+                                      className='grid gap-2'
+                                      style={{
+                                        gridTemplateColumns:
+                                          'repeat(auto-fit, minmax(84px, 1fr))'
+                                      }}
+                                    >
+                                      {imageLinks
+                                        .slice(0, showCount)
+                                        .map((src, i) => (
+                                          <a
+                                            key={i}
+                                            href={src}
+                                            target='_blank'
+                                            rel='noreferrer noopener'
+                                            className='group block'
+                                          >
+                                            <img
+                                              src={src}
+                                              alt=''
+                                              loading='lazy'
+                                              className='aspect-square w-full rounded-md border object-cover transition-transform group-hover:scale-[1.01]'
+                                            />
+                                          </a>
+                                        ))}
+                                    </div>
+                                    {more > 0 && (
+                                      <div className='mt-2 text-right'>
+                                        <Button
+                                          variant='outline'
+                                          size='sm'
+                                          onClick={() =>
+                                            setDetailsPage((p) => p + 1)
+                                          }
+                                        >
+                                          Show more ({more})
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              <div className='rounded-md border p-3 shadow-sm'>
+                                <div className='mb-2 flex items-center gap-2'>
+                                  <ChevronRight className='text-muted-foreground size-4' />
+                                  <div className='font-medium'>
+                                    Shared links
+                                  </div>
+                                  <span className='text-muted-foreground ml-auto text-xs'>
+                                    {linksF.length}
+                                  </span>
+                                </div>
+                                {linksF.length ? (
+                                  <ul className='space-y-1 text-sm'>
+                                    {linksF.slice(0, 400).map((l, i) => (
+                                      <li key={i} className='truncate'>
+                                        <a
+                                          className='text-primary hover:underline'
+                                          href={l}
+                                          target='_blank'
+                                          rel='noreferrer noopener'
+                                        >
+                                          {l}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <div className='text-muted-foreground text-xs'>
+                                    No links
+                                  </div>
+                                )}
+                              </div>
+                              <div className='rounded-md border p-3 shadow-sm'>
+                                <div className='mb-2 flex items-center gap-2'>
+                                  <ChevronRight className='text-muted-foreground size-4' />
+                                  <div className='font-medium'>
+                                    Shared files
+                                  </div>
+                                  <span className='text-muted-foreground ml-auto text-xs'>
+                                    {filesF.length}
+                                  </span>
+                                </div>
+                                {filesF.length ? (
+                                  <ul className='space-y-2 text-sm'>
+                                    {filesF.slice(0, 400).map((f, i) => (
+                                      <li key={i} className='truncate'>
+                                        <a
+                                          className='text-primary hover:underline'
+                                          href={f.url}
+                                          target='_blank'
+                                          rel='noreferrer noopener'
+                                        >
+                                          {f.name}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <div className='text-muted-foreground text-xs'>
+                                    No files
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent
+                            value='mentions'
+                            className='nv-scroll-hide min-h-0 overflow-y-auto p-3 pr-1'
+                          >
+                            {(() => {
+                              const list = (
+                                detailsRows.length
+                                  ? detailsRows
+                                  : initialMessages
+                              )
+                                .slice()
+                                .map((m: any) => ({
+                                  id: m.id || undefined,
+                                  content: m.content,
+                                  created_at: m.created_at || m.createdAt,
+                                  user_id:
+                                    m.user_id || m.sender_id || m.user?.id
+                                }));
+                              const items: Array<{
+                                id?: string;
+                                content: string;
+                                createdAt?: string;
+                                user?: string;
+                              }> = [];
+                              for (const m of list) {
+                                const c = String(m.content || '');
+                                const matches = Array.from(
+                                  c.matchAll(/@([\w._-]{2,32})/g)
+                                );
+                                if (!matches.length) continue;
+                                items.push({
+                                  id: m.id,
+                                  content: c,
+                                  createdAt: m.created_at,
+                                  user: m.user_id
+                                });
+                              }
+                              const fmt = (iso?: string) => {
+                                if (!iso) return '';
+                                const d = new Date(iso);
+                                if (!isFinite(d.getTime())) return '';
+                                return new Intl.DateTimeFormat(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }).format(d);
+                              };
+                              if (!items.length)
+                                return (
+                                  <div className='text-muted-foreground text-xs'>
+                                    No mentions
+                                  </div>
+                                );
+                              const nameMap = makeNameMap(act);
+                              return (
+                                <ul className='space-y-2'>
+                                  {items.slice(0, 400).map((it, i) => {
+                                    const label =
+                                      nameMap.get(String(it.user)) || 'User';
+                                    const preview = (it.content || '').slice(
+                                      0,
+                                      160
+                                    );
+                                    // Find avatar
+                                    const member = act.members.find(
+                                      (m) => m.id === it.user
+                                    );
+                                    return (
+                                      <li key={it.id || i}>
+                                        <button
+                                          className='hover:bg-accent/50 w-full rounded-md border p-2 text-left shadow-sm transition-colors'
+                                          onClick={() => {
+                                            if (!it.id) return;
+                                            const el = document.getElementById(
+                                              `mid-${it.id}`
+                                            );
+                                            if (el)
+                                              el.scrollIntoView({
+                                                behavior: 'smooth',
+                                                block: 'center'
+                                              });
+                                          }}
+                                        >
+                                          <div className='flex items-start gap-2'>
+                                            <Avatar className='mt-0.5 size-7'>
+                                              <AvatarImage
+                                                src={
+                                                  member?.avatar_url ||
+                                                  undefined
+                                                }
+                                              />
+                                              <AvatarFallback className='text-[10px]'>
+                                                {(label || 'U')
+                                                  .slice(0, 2)
+                                                  .toUpperCase()}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                            <div className='min-w-0 flex-1'>
+                                              <div className='flex items-center gap-2'>
+                                                <div className='truncate text-sm font-medium'>
+                                                  {label}
+                                                </div>
+                                                <span className='text-muted-foreground text-[11px]'>
+                                                  ·
+                                                </span>
+                                                <time className='text-muted-foreground text-[11px]'>
+                                                  {fmt(it.createdAt)}
+                                                </time>
+                                              </div>
+                                              <div className='text-muted-foreground mt-0.5 truncate text-[12px]'>
+                                                {preview}
+                                                {preview.length >= 160
+                                                  ? '…'
+                                                  : ''}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </button>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              );
+                            })()}
+                          </TabsContent>
+
+                          <div className='mt-2 flex items-center gap-2 border-t pt-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() => setDetailsPage((p) => p + 1)}
+                            >
+                              Load more
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() => {
+                                setDetailsPage(0);
+                                setDetailsRows([]);
+                              }}
+                            >
+                              Refresh
+                            </Button>
+                          </div>
+                        </Tabs>
                       );
                     })()}
-
-                  <div className='border-b p-3'>
-                    <div className='mb-2 flex items-center gap-2'>
-                      <ChevronRight className='text-muted-foreground size-4' />
-                      <div className='font-medium'>Members</div>
-                      <span className='text-muted-foreground ml-auto text-xs'>
-                        {active.members.length}
-                      </span>
-                    </div>
-                    <ul className='space-y-2'>
-                      {active.members.map((m) => (
-                        <li key={m.id} className='flex items-center gap-2'>
-                          <Avatar className='size-6'>
-                            <AvatarImage src={m.avatar_url || undefined} />
-                            <AvatarFallback className='text-[10px]'>
-                              {(m.display_name || m.username || 'U')
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className='min-w-0'>
-                            <div className='truncate text-sm'>
-                              {m.display_name || m.username || 'User'}
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-
-                  <div className='border-b p-3'>
-                    <Input
-                      placeholder='Search in details…'
-                      value={detailsQuery}
-                      onChange={(e) => setDetailsQuery(e.target.value)}
-                    />
-                  </div>
-
-                  {(() => {
-                    const msgs = detailsRows.length
-                      ? detailsRows.map((r) => ({ content: r.content }))
-                      : initialMessages || [];
-                    const links = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /https?:\/\/\S+/g
-                        )
-                      ).map((x) => x[0])
-                    );
-                    const files = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /\[([^\]]+)]\(([^)]+)\)/g
-                        )
-                      ).map((x) => ({ name: x[1], url: x[2] }))
-                    );
-                    const mentions = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /@([\w._-]{2,32})/g
-                        )
-                      ).map((x) => x[1])
-                    );
-                    const q = detailsQuery.trim().toLowerCase();
-                    const filter = (s: string) =>
-                      !q || s.toLowerCase().includes(q);
-                    const linksF = links.filter(filter);
-                    const filesF = files.filter(
-                      (f) => filter(f.name) || filter(f.url)
-                    );
-                    const mentionsF = mentions.filter(filter);
-                    return (
-                      <div className='space-y-4 p-3'>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Shared links</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {linksF.length}
-                            </span>
-                          </div>
-                          {linksF.length ? (
-                            <ul className='list-disc space-y-1 pl-5 text-sm'>
-                              {linksF.slice(0, 400).map((l, i) => (
-                                <li key={i} className='truncate'>
-                                  <a
-                                    className='text-primary hover:underline'
-                                    href={l}
-                                    target='_blank'
-                                    rel='noreferrer noopener'
-                                  >
-                                    {l}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No links
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Shared files</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {filesF.length}
-                            </span>
-                          </div>
-                          {filesF.length ? (
-                            <ul className='space-y-2 text-sm'>
-                              {filesF.slice(0, 400).map((f, i) => (
-                                <li key={i} className='truncate'>
-                                  <a
-                                    className='text-primary hover:underline'
-                                    href={f.url}
-                                    target='_blank'
-                                    rel='noreferrer noopener'
-                                  >
-                                    {f.name}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No files
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Mentions</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {mentionsF.length}
-                            </span>
-                          </div>
-                          {mentionsF.length ? (
-                            <div className='flex flex-wrap gap-1'>
-                              {mentionsF.slice(0, 400).map((u, i) => (
-                                <span
-                                  key={i}
-                                  className='bg-muted rounded px-2 py-0.5 text-xs'
-                                >
-                                  @{u}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No mentions
-                            </div>
-                          )}
-                        </div>
-                        <div className='flex items-center gap-2 pt-2'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() => setDetailsPage((p) => p + 1)}
-                          >
-                            Load more
-                          </Button>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => {
-                              setDetailsPage(0);
-                              setDetailsRows([]);
-                            }}
-                          >
-                            Refresh
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
+            </>
+          ) : (
+            <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
+              Select a conversation to start chatting.
             </div>
-          </>
-        ) : (
-          <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
-            Select a conversation to start chatting.
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
+      {/* Modals and dialogs */}
       <NewMessageDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -1431,6 +1910,6 @@ export default function InboxPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

@@ -292,7 +292,7 @@ export const ChatMessageItem = ({
   const balloonPadding = 'px-3.5 py-2.5'; // Buradan ayar çekebilirsiniz
 
   // Mesajlar arası mesafe için değişken
-  const messageSpacing = 'mb-0.5 md:mb-0.5'; // Buradan ayar çekebilirsiniz
+  const messageSpacing = 'mb-1 md:mb-1.5'; // Daha ferah boşluk
 
   return (
     <div
@@ -486,8 +486,8 @@ export const ChatMessageItem = ({
               <div
                 className={cn(
                   balloonPadding,
-                  'w-fit rounded-2xl border text-sm break-words whitespace-pre-wrap shadow-sm',
-                  'bg-card text-foreground border-border/50'
+                  'ring-accent/30 w-fit rounded-2xl border text-sm break-words whitespace-pre-wrap shadow-sm transition-colors hover:ring-1',
+                  'bg-card border-border/50'
                 )}
               >
                 {/* reply preview moved outside bubble */}
@@ -668,7 +668,7 @@ export const ChatMessageItem = ({
           {showTimestamp && (
             <div
               className={cn(
-                'text-muted-foreground mt-1 text-[10px]',
+                'text-muted-foreground mt-1 text-[10px] opacity-80',
                 isOwnMessage ? 'text-right' : 'text-left'
               )}
             >
