@@ -109,50 +109,63 @@ export const MultiStepFreightForm: React.FC<MultiStepFreightFormProps> = ({
     else if (!isFirstStep) setStep((s) => s - 1);
   }, [preview, isFirstStep]);
 
-  const handleSubmit = async (asDraft = false) => {
-    setStatus('submitting');
-    setError(null);
-    try {
-      // details alanı: formData + masChecked + additionalNotes + draft
-      const details = {
-        ...formData,
-        mas: masChecked,
-        additionalNotes,
-        draft: asDraft
-      };
-      // Create Request or Shipment depending on mode
-      if (mode === 'booking') {
-        if (!currentType)
-          throw new Error('Freight type is required to create a booking');
-        const shipment = await createShipment({
-          supabase,
-          ownerId: userId,
-          forwarderId: null,
-          freightType: currentType,
-          details
-        });
-        setStatus('success');
-        toast.success('Booking created as shipment!');
-        onSuccess?.(shipment);
-      } else {
-        if (!currentType)
-          throw new Error('Freight type is required to create a request');
-        const request = await createRequest({
-          supabase,
-          freightType: currentType,
-          details,
-          userId
-        });
-        setStatus('success');
-        toast.success('Request submitted successfully!');
-        onSuccess?.(request);
+  const handleSubmit = React.useCallback(
+    async (asDraft = false) => {
+      setStatus('submitting');
+      setError(null);
+      try {
+        // details alanı: formData + masChecked + additionalNotes + draft
+        const details = {
+          ...formData,
+          mas: masChecked,
+          additionalNotes,
+          draft: asDraft
+        };
+        // Create Request or Shipment depending on mode
+        if (mode === 'booking') {
+          if (!currentType)
+            throw new Error('Freight type is required to create a booking');
+          const shipment = await createShipment({
+            supabase,
+            ownerId: userId,
+            forwarderId: null,
+            freightType: currentType,
+            details
+          });
+          setStatus('success');
+          toast.success('Booking created as shipment!');
+          onSuccess?.(shipment);
+        } else {
+          if (!currentType)
+            throw new Error('Freight type is required to create a request');
+          const request = await createRequest({
+            supabase,
+            freightType: currentType,
+            details,
+            userId
+          });
+          setStatus('success');
+          toast.success('Request submitted successfully!');
+          onSuccess?.(request);
+        }
+      } catch (e: any) {
+        setStatus('error');
+        setError(e?.message || 'An error occurred.');
+        toast.error(
+          `Failed to submit request: ${e?.message || 'Unknown error'}`
+        );
       }
-    } catch (e: any) {
-      setStatus('error');
-      setError(e?.message || 'An error occurred.');
-      toast.error(`Failed to submit request: ${e?.message || 'Unknown error'}`);
-    }
-  };
+    },
+    [
+      formData,
+      masChecked,
+      additionalNotes,
+      mode,
+      currentType,
+      userId,
+      onSuccess
+    ]
+  );
 
   const masFields = sections.flatMap((section) =>
     section.fields.filter((f) => f.mas)

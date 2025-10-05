@@ -602,7 +602,7 @@ export default function InboxPage() {
   // Load initial messages for the selected room
   useEffect(() => {
     let ignore = false;
-    async function loadMessages(rid: string, type: RoomListItem['type']) {
+    async function loadMessages(rid: string, _type: RoomListItem['type']) {
       const rm = rooms.find((r) => r.id === rid);
       const nameMap = makeNameMap(rm);
 

@@ -47,7 +47,7 @@ interface ChatMessageItemProps {
   message: ChatMessage & { room_id?: string };
   isOwnMessage: boolean;
   showHeader: boolean;
-  showBottomAvatar?: boolean;
+  showBottomAvatar?: boolean; // unused (layout shows side actions)
   showTimestamp?: boolean;
   onReply?: (m: ChatMessage) => void;
   onEdit?: (m: ChatMessage) => void;
@@ -61,7 +61,7 @@ export const ChatMessageItem = ({
   message,
   isOwnMessage,
   showHeader,
-  showBottomAvatar = true,
+  showBottomAvatar = true, // eslint-disable-line @typescript-eslint/no-unused-vars
   showTimestamp = true,
   onReply,
   onEdit,
@@ -109,7 +109,7 @@ export const ChatMessageItem = ({
     }>
   >([]);
   const [replyPreview, setReplyPreview] = useState<string | null>(null);
-  const [replyAuthor, setReplyAuthor] = useState<string | null>(null);
+  const [replyAuthor, setReplyAuthor] = useState<string | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   useEffect(() => {
     let active = true;
@@ -854,18 +854,7 @@ export const ChatMessageItem = ({
   );
 };
 
-function relativeTime(iso: string | Date) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const sec = Math.max(0, (Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return 'just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} ${min === 1 ? 'minute' : 'minutes'} ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} ${hr === 1 ? 'hour' : 'hours'} ago`;
-  const day = Math.floor(hr / 24);
-  return `${day} ${day === 1 ? 'day' : 'days'} ago`;
-}
+// relativeTime helper removed (unused)
 
 // Attachment rendering
 type Attachment = {
@@ -1707,7 +1696,7 @@ function linkifyMentions(
 }
 
 function MentionHover({ id, label }: { id: string; label: string }) {
-  const [avatar, setAvatar] = useState<string | undefined>(undefined);
+  const [_avatar, setAvatar] = useState<string | undefined>(undefined);
   const [name, setName] = useState<string>(label);
   const [role, setRole] = useState<string | null>(null);
   useEffect(() => {

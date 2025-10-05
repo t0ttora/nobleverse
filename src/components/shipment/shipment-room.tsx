@@ -434,7 +434,7 @@ function OverviewTab({
   );
 }
 
-function TrackingTab({ shipment }: { shipment: any }) {
+function TrackingTab({ shipment: _shipment }: { shipment: any }) {
   return (
     <div className='space-y-4'>
       <Card>

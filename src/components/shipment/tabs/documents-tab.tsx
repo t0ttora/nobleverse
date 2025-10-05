@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 
@@ -7,12 +7,12 @@ export default function DocumentsTab({ shipmentId }: { shipmentId: string }) {
   const [files, setFiles] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const { data } = await supabase.storage
       .from('shipments')
       .list(shipmentId, { limit: 100 });
     setFiles(data || []);
-  }
+  }, [shipmentId]);
   useEffect(() => {
     refresh();
   }, [shipmentId, refresh]);

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 
 export default function EscrowPanel({ shipment }: { shipment: any }) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal } from '@/components/ui/modal';
 import { supabase } from '@/lib/supabaseClient';
@@ -221,24 +221,23 @@ export default function OnboardingModal({
       .replace(/-{2,}/g, '-')
       .replace(/^-|-$|\.$/g, '');
 
-  const checkUsername = useMemo(() => {
-    return async (u: string) => {
+  const profileUsername = (profile as Profile | Partial<Profile> | undefined)
+    ?.username;
+  const checkUsername = useCallback(
+    async (u: string) => {
       try {
         const res = await fetch(
           `/api/profile/check-username?u=${encodeURIComponent(u)}`
         );
         if (!res.ok) return false;
         const data = (await res.json()) as { available?: boolean };
-        return (
-          Boolean(data?.available) ||
-          u === (profile as Profile | Partial<Profile> | undefined)?.username
-        );
+        return Boolean(data?.available) || u === profileUsername;
       } catch {
         return false;
       }
-    };
-    // safe to depend only on profile.username for equality check
-  }, [typeof profile === 'object' ? (profile as any)?.username : undefined]);
+    },
+    [profileUsername]
+  );
 
   // Live username probe with debounce
   useEffect(() => {

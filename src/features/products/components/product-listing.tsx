@@ -1,11 +1,8 @@
-import type { Product } from '@/constants/mock-api';
 import type React from 'react';
 import { fakeProducts } from '@/constants/mock-api';
 import { searchParamsCache } from '@/lib/searchparams';
 import { ProductTable } from './product-tables';
 import { columns } from './product-tables/columns';
-
-type ProductListingPageProps = {};
 
 export default async function ProductListingPage(): Promise<React.ReactElement> {
   // Showcasing the use of search params cache in nested RSCs

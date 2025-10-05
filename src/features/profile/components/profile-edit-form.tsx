@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -66,7 +66,7 @@ export default function ProfileEditForm({
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Unknown');
       toast.success('Profil güncellendi');
-    } catch (e) {
+    } catch (_e) {
       toast.error('Profil güncellenemedi');
     }
   };

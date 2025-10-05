@@ -143,7 +143,7 @@ export const ForwarderOfferForm = forwardRef<
     return false;
   }
 
-  function isCurrentStepValidInternal(): boolean {
+  const isCurrentStepValidInternal = React.useCallback((): boolean => {
     if (!current) return true;
     // required field checks
     for (const f of current.fields as OfferField[]) {
@@ -169,7 +169,7 @@ export const ForwarderOfferForm = forwardRef<
     if (!isNaN(price) && price < 0) return false;
     if (!isNaN(budget) && !isNaN(price) && price > budget) return false;
     return true;
-  }
+  }, [current, formData, requestDetails]);
 
   const notifyState = React.useCallback(() => {
     onStateChange?.({
@@ -185,8 +185,7 @@ export const ForwarderOfferForm = forwardRef<
     isLast,
     submitting,
     step,
-    formData,
-    requestDetails
+    isCurrentStepValidInternal
   ]);
 
   React.useEffect(() => {
@@ -394,9 +393,8 @@ export const ForwarderOfferForm = forwardRef<
       submitting,
       step,
       sections.length,
-      formData,
-      requestDetails,
-      handleSubmit
+      handleSubmit,
+      isCurrentStepValidInternal
     ]
   );
 
@@ -440,7 +438,8 @@ export const ForwarderOfferForm = forwardRef<
     submitting,
     onCancel,
     onClose,
-    isCurrentStepValidInternal
+    isCurrentStepValidInternal,
+    handleSubmit
   ]);
 
   React.useEffect(() => {

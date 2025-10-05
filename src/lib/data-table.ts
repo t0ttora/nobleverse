@@ -5,11 +5,11 @@ import type { Column } from '@tanstack/react-table';
 import { dataTableConfig } from '@/config/data-table';
 import type { FilterItemSchema } from '@/lib/parsers';
 
-export function getCommonPinningStyles<TData>({
+export function getCommonPinningStyles({
   column,
   withBorder = false
 }: {
-  column: Column<TData>;
+  column: Column<any>;
   withBorder?: boolean;
 }): React.CSSProperties {
   const isPinned = column.getIsPinned();
@@ -60,7 +60,7 @@ export function getDefaultFilterOperator(filterVariant: FilterVariant) {
   return operators[0]?.value ?? (filterVariant === 'text' ? 'iLike' : 'eq');
 }
 
-export function getValidFilters<TData>(
+export function getValidFilters(
   filters: FilterItemSchema[]
 ): FilterItemSchema[] {
   return filters.filter(

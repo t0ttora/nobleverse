@@ -46,15 +46,8 @@ import {
   type ForwarderOfferFormHandle
 } from '@/components/offers/forwarder-offer-form';
 import { CompareOffersPanel } from '@/components/offers/compare-offers';
-import { OfferDetailsDialog } from '@/components/offers/offer-details-dialog';
 import { getOfferConfig as buildOfferConfig } from '@/lib/forwarder-offer-schema';
-// Temporary alias to satisfy stale type reference (remove if not needed after cleanup)
-// Removed stale placeholder that previously shadowed buildOfferConfig / getOfferConfig to avoid TS confusion.
-// Renamed alias to force TS program refresh (previous stale diagnostics referenced getOfferConfig)
-
-const _offerSchemaConfigBuilder = buildOfferConfig;
 import NegotiationDialog from '@/components/offers/negotiation-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 
 interface RequestDetailsPanelProps {
   open: boolean;
@@ -115,7 +108,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   // Maintain explicit ordering array for selected offers to support drag & reorder
   const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
   const [showEmbeddedOffer, setShowEmbeddedOffer] = useState(false);
-  const [negotiationOpen, setNegotiationOpen] = useState(false);
+  const [_negotiationOpen, setNegotiationOpen] = useState(false);
   // Inject animation styles once
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -269,7 +262,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
   const abbr = request?.freight_type;
   const formKey = getFreightFormKey(abbr);
   const formSchema = formKey ? (freightFormSchema.forms as any)[formKey] : null;
-  const details = request?.details || {};
+  const details = useMemo(() => request?.details || {}, [request?.details]);
 
   // Find which sections have at least one field present in details
   const availableSections = useMemo(() => {
@@ -429,7 +422,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
         setMyOffer(null);
       }
     })();
-  }, [request?.id, open]);
+  }, [request?.id, open, me]);
 
   // Load request owner profile for header hover preview
   useEffect(() => {
@@ -456,7 +449,9 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           .eq('id', request.user_id)
           .maybeSingle();
         if (!error && data) setOwnerProfile(data);
-      } catch {}
+      } catch {
+        // no-op
+      }
     })();
   }, [request]);
 
@@ -483,7 +478,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
           ? (() => {
               try {
                 return JSON.parse(o.details);
-              } catch {
+              } catch (_e) {
                 return {};
               }
             })()
@@ -571,7 +566,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
       else changed = true;
     });
     if (changed) setCompareSelection(next);
-  }, [parsedOffers]);
+  }, [parsedOffers, compareSelection]);
 
   const toggleCompare = (id: string) => {
     setCompareSelection((prev) => {
@@ -707,7 +702,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
         .map((img) =>
           img.complete && img.naturalWidth > 0
             ? Promise.resolve()
-            : new Promise<void>((res, rej) => {
+            : new Promise<void>((res, _rej) => {
                 img.onload = () => res();
                 img.onerror = () => res();
               })
@@ -796,7 +791,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
         const ctx = tmpCanvas.getContext('2d');
         if (ctx) ctx.drawImage(tmp, 0, 0);
         canvas = tmpCanvas;
-      } catch (e) {
+      } catch (_e) {
         // proceed with whatever we have (will likely produce an empty pdf, but avoids crash)
       }
     }
@@ -2339,8 +2334,8 @@ function OfferDetailsSplitView({
                       setConfirming(false);
                       onAccepted?.();
                       onClose();
-                    } catch (e) {
-                      console.error(e);
+                    } catch (_e) {
+                      /* accept failed */
                     } finally {
                       setAccepting(false);
                     }
@@ -2531,8 +2526,8 @@ function OfferDetailsSplitView({
                     setConfirming(false);
                     onAccepted?.();
                     onClose();
-                  } catch (e) {
-                    console.error(e);
+                  } catch (_e) {
+                    /* accept failed */
                   } finally {
                     setAccepting(false);
                   }

@@ -17,7 +17,7 @@ export function EditableText({
   placeholder,
   className,
   onSave,
-  as = 'input',
+  as: _as = 'input',
   type = 'text'
 }: EditableTextProps) {
   const [editing, setEditing] = useState(false);

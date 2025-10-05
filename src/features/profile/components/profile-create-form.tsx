@@ -37,10 +37,10 @@ interface ProfileFormType {
 }
 
 const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
-  const params = useParams();
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
+  const _params = useParams();
+  const _router = useRouter();
+  const [loading] = useState(false);
+  const [_open, setOpen] = useState(false);
   const title = initialData ? 'Edit product' : 'Create Your Profile';
   const description = initialData
     ? 'Edit a product.'
@@ -71,8 +71,9 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
   });
 
   // Set default NobleID from email prefix when email changes
+  const watchedEmail = form.watch('email');
   useEffect(() => {
-    const email = form.watch('email');
+    const email = watchedEmail;
     if (email && typeof email === 'string') {
       const prefix = email.split('@')[0];
       setEmailPrefix(prefix);
@@ -80,7 +81,7 @@ const ProfileCreateForm: React.FC<ProfileFormType> = ({ initialData }) => {
         form.setValue('nobleid', prefix);
       }
     }
-  }, [form.watch('email')]);
+  }, [watchedEmail]);
 
   const {
     control,

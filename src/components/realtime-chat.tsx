@@ -47,7 +47,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CardBuilderDialog from '@/components/chat-cards/card-builder-dialog';
 import { useProfileRole } from '@/hooks/use-profile-role';
 import type { NobleCard } from '@/components/chat-cards/card-renderer';
-import { useTheme } from 'next-themes';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 
@@ -258,16 +257,14 @@ export const RealtimeChat = ({
   const [seenReady, setSeenReady] = useState(false);
 
   // Emoji theme + recents
-  // Theme available if needed for emoji picker styling
-  const { resolvedTheme } = useTheme();
   const RECENT_KEY = 'nv_recent_emojis';
-  const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+  const recentEmojisRef = useRef<string[]>([]);
 
   // Mentions/Tags suggest
   type SuggestType = '@' | '#' | '/';
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestType, setSuggestType] = useState<SuggestType>('@');
-  const [suggestQuery, setSuggestQuery] = useState('');
+  // Internal suggest query; kept local inside detectSuggest without extra state
   const [suggestItems, setSuggestItems] = useState<
     Array<{ key: string; label: string; meta?: string; avatarUrl?: string }>
   >([]);
@@ -400,7 +397,7 @@ export const RealtimeChat = ({
     // Sadece kullanıcı zaten en alttaysa otomatik kaydır
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
     if (nearBottom) scrollToBottom();
-  }, [allMessages, scrollToBottom, roomName]);
+  }, [allMessages, scrollToBottom, roomName, containerRef]);
 
   // Auto mark-as-read when scrolled to bottom
   useEffect(() => {
@@ -446,22 +443,23 @@ export const RealtimeChat = ({
   useEffect(() => {
     try {
       const raw = localStorage.getItem(RECENT_KEY);
-      if (raw) setRecentEmojis(JSON.parse(raw));
+      if (raw) recentEmojisRef.current = JSON.parse(raw);
     } catch {
       void 0;
     }
   }, []);
 
   function pushRecentEmoji(e: string) {
-    setRecentEmojis((prev) => {
-      const arr = [e, ...prev.filter((x) => x !== e)].slice(0, 16);
-      try {
-        localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
-      } catch {
-        void 0;
-      }
-      return arr;
-    });
+    const prev = Array.isArray(recentEmojisRef.current)
+      ? recentEmojisRef.current
+      : [];
+    const arr = [e, ...prev.filter((x: string) => x !== e)].slice(0, 16);
+    recentEmojisRef.current = arr;
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+    } catch {
+      void 0;
+    }
   }
 
   function onFilesAdd(fileList?: FileList | File[] | null) {
@@ -825,7 +823,6 @@ export const RealtimeChat = ({
       return;
     }
     setSuggestType(trigger.type);
-    setSuggestQuery(trigger.query);
 
     if (trigger.type === '@') {
       // Filter current room members by display name or username
@@ -1627,7 +1624,7 @@ function getTrigger(
 ): null | { type: '@' | '#' | '/'; start: number; query: string } {
   const slice = text.slice(0, caret);
   // Allow trigger at start or after any non-word char (prevents emails like test@example.com)
-  const m = slice.match(/(^|[^\w])([@#\/])([A-Za-z0-9._-]{0,32})$/);
+  const m = slice.match(/(^|[^\w])([@#/])([A-Za-z0-9._-]{0,32})$/);
   if (!m) return null;
   const type = m[2] as '@' | '#' | '/';
   const query = m[3] || '';

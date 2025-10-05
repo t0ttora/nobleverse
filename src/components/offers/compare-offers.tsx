@@ -21,6 +21,25 @@ import { cn } from '@/lib/utils';
 
 type OfferLike = { id: string; status?: string; details: any };
 
+const FIELDS: { key: string; label: string }[] = [
+  { key: 'total_price', label: 'Total Price' },
+  { key: 'total_price_currency', label: 'Currency' },
+  { key: 'currency', label: 'Currency (alt)' },
+  { key: 'transit_time', label: 'Transit Time (days)' },
+  { key: 'transit_time_guarantee', label: 'Transit Time Guaranteed' },
+  { key: 'price_includes', label: 'Price Includes' },
+  { key: 'service_scope', label: 'Scope of Service' },
+  { key: 'payment_terms', label: 'Payment Terms' },
+  { key: 'offer_validity', label: 'Offer Validity (days)' },
+  { key: 'taxes_duties', label: 'Taxes/Duties Included' },
+  { key: 'tracking_available', label: 'Tracking Available' },
+  { key: 'carrier_info', label: 'Carrier / Line' },
+  { key: 'free_time', label: 'Free Time (days)' },
+  { key: 'value_added_services', label: 'Value-Added Services' },
+  { key: 'company_name', label: 'Company' },
+  { key: 'contact_person', label: 'Contact' }
+];
+
 function readDetails(d: any) {
   const obj =
     typeof d === 'string'
@@ -276,30 +295,13 @@ export function CompareOffersPanel({
     );
   }
 
-  const fields: { key: string; label: string }[] = [
-    { key: 'total_price', label: 'Total Price' },
-    { key: 'total_price_currency', label: 'Currency' },
-    { key: 'currency', label: 'Currency (alt)' },
-    { key: 'transit_time', label: 'Transit Time (days)' },
-    { key: 'transit_time_guarantee', label: 'Transit Time Guaranteed' },
-    { key: 'price_includes', label: 'Price Includes' },
-    { key: 'service_scope', label: 'Scope of Service' },
-    { key: 'payment_terms', label: 'Payment Terms' },
-    { key: 'offer_validity', label: 'Offer Validity (days)' },
-    { key: 'taxes_duties', label: 'Taxes/Duties Included' },
-    { key: 'tracking_available', label: 'Tracking Available' },
-    { key: 'carrier_info', label: 'Carrier / Line' },
-    { key: 'free_time', label: 'Free Time (days)' },
-    { key: 'value_added_services', label: 'Value-Added Services' },
-    { key: 'company_name', label: 'Company' },
-    { key: 'contact_person', label: 'Contact' }
-  ];
+  const fields = FIELDS;
 
   // Diff detection
   // Track diff keys (kept internally for inline/details highlighting) but do not show toggle.
   const diffKeys = React.useMemo(() => {
     const diffs = new Set<string>();
-    for (const f of fields) {
+    for (const f of FIELDS) {
       const vals = new Set<string>();
       for (const o of parsed) {
         let raw: any = (o.details as any)[f.key];
@@ -314,7 +316,7 @@ export function CompareOffersPanel({
       }
     }
     return diffs;
-  }, [parsed, fields]);
+  }, [parsed]);
   const effectiveFields = fields; // always show all now
 
   // Load persisted view mode

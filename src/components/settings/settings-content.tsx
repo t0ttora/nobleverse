@@ -9,8 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
   ChevronRight,
-  Bell,
-  Globe,
   Pencil,
   XCircle,
   User,
@@ -142,6 +140,39 @@ export default function SettingsContent({
   >('MM/DD/YYYY');
 
   const is = (s: LeftSection) => left === s;
+
+  // Map theme color key to a hex to drive CSS var --primary (stable)
+  const themeColorHex: Record<string, string> = React.useMemo(
+    () => ({
+      orange: '#f97316',
+      blue: '#3b82f6',
+      red: '#ef4444',
+      green: '#22c55e',
+      yellow: '#eab308',
+      indigo: '#6366f1',
+      cyan: '#06b6d4',
+      pink: '#ec4899',
+      teal: '#14b8a6'
+    }),
+    []
+  );
+
+  const applyPrimaryFromKey = React.useCallback(
+    (key: string) => {
+      try {
+        const hex = themeColorHex[key] || key;
+        document.documentElement.style.setProperty('--primary', hex);
+      } catch {}
+    },
+    [themeColorHex]
+  );
+
+  const applyUiScale = React.useCallback((percent: number) => {
+    try {
+      const clamped = Math.max(75, Math.min(150, Math.round(percent)));
+      document.documentElement.style.setProperty('font-size', `${clamped}%`);
+    } catch {}
+  }, []);
 
   React.useEffect(() => {
     if (initialSection === 'notifications') {
@@ -361,7 +392,7 @@ export default function SettingsContent({
         } as any;
       }
     })();
-  }, [userId]);
+  }, [userId, applyTheme, applyPrimaryFromKey, applyUiScale]);
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const saveProfile = async () => {
@@ -487,32 +518,6 @@ export default function SettingsContent({
     React.useState<string>('Recent Changes');
   const [uiScale, setUiScale] = React.useState<number>(100);
 
-  // Map theme color key to a hex to drive CSS var --primary
-  const themeColorHex: Record<string, string> = {
-    orange: '#f97316',
-    blue: '#3b82f6',
-    red: '#ef4444',
-    green: '#22c55e',
-    yellow: '#eab308',
-    indigo: '#6366f1',
-    cyan: '#06b6d4',
-    pink: '#ec4899',
-    teal: '#14b8a6'
-  };
-
-  function applyPrimaryFromKey(key: string) {
-    try {
-      const hex = themeColorHex[key] || key;
-      document.documentElement.style.setProperty('--primary', hex);
-    } catch {}
-  }
-
-  function applyUiScale(percent: number) {
-    try {
-      const clamped = Math.max(75, Math.min(150, Math.round(percent)));
-      document.documentElement.style.setProperty('font-size', `${clamped}%`);
-    } catch {}
-  }
   const saveAppearance = async () => {
     if (!userId) return;
     await supabase.from('settings').upsert({
@@ -896,6 +901,9 @@ export default function SettingsContent({
     intOneDrive,
     appearanceTheme,
     density,
+    brandColor,
+    sidebarFeature,
+    uiScale,
     companyName,
     companyWebsite,
     currency,

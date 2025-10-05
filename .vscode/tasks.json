@@ -1,30 +1,58 @@
 {
-  "$schema": "vscode://schemas/tasks",
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Typecheck (tsc)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-Command",
-  "pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false"
-      ],
-      "problemMatcher": ["$tsc"],
-      "group": "build"
-    },
-    {
-      "label": "ESLint (lint full)",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-Command",
-        "pnpm run -s lint"
-      ],
-      "problemMatcher": ["$eslint-stylish"],
-      "group": "build"
-    }
-  ]
+	"$schema": "vscode://schemas/tasks",
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false"
+			],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "ESLint (lint full)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"pnpm run -s lint"
+			],
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
+			]
+		},
+		{
+			"label": "ESLint - quick check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"if (Test-Path node_modules/.bin/eslint) { pnpm exec eslint . --max-warnings=0 } else { if (Test-Path package.json) { pnpm exec eslint . } else { Write-Output \"eslint not configured\" } }"
+			],
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		}
+	]
 }

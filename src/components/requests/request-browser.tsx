@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Filter, Grid, List, ArrowUpDown, X } from 'lucide-react';
+import { Filter, Grid, List, ArrowUpDown, X } from 'lucide-react';
 import { Icons } from '@/components/icons';
 
 type ViewMode = 'grid' | 'list';

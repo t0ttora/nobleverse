@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { EditableText, EditableTextarea } from './editable';
+import { EditableText } from './editable';
 import { Role } from '@/types/profile';
-import { ArrowRight, Pencil, Settings as SettingsIcon } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import Link from 'next/link';
 import { openSettingsDialog } from '@/lib/settings-dialog-events';
 
@@ -112,7 +112,7 @@ export default function ProfileHeaderInline({
             className='gap-2'
             onClick={() => openSettingsDialog('profile')}
           >
-            <SettingsIcon className='h-4 w-4' /> Settings
+            <Settings className='h-4 w-4' /> Settings
           </Button>
         </div>
       </div>

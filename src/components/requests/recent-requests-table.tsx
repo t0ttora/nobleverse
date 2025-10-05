@@ -160,15 +160,6 @@ export function RecentRequestsCard({ userId }: RecentRequestsCardProps) {
                   const budget = details?.budget
                     ? `$${(details as { budget?: number }).budget}`
                     : '';
-                  const rawEtd = (details as { etd?: string | number | Date })
-                    .etd;
-                  const etd = rawEtd ? new Date(rawEtd) : null;
-                  const etdStr = etd
-                    ? etd.toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric'
-                      })
-                    : '';
                   const weight = (details as { weight?: number }).weight
                     ? `${(details as { weight?: number }).weight}kg`
                     : '';
@@ -198,23 +189,7 @@ export function RecentRequestsCard({ userId }: RecentRequestsCardProps) {
                   else if (req.status === 'approved') statusVariant = 'default';
                   else if (req.status === 'delivered')
                     statusVariant = 'secondary';
-                  // Icon for ARF (plane), else generic box
-                  const icon =
-                    abbr === 'ARF' ? (
-                      <span className='i-lucide-plane text-primary text-xl' />
-                    ) : abbr === 'SEF' ? (
-                      <span className='i-lucide-ship text-primary text-xl' />
-                    ) : abbr === 'RAF' ? (
-                      <span className='i-lucide-train text-primary text-xl' />
-                    ) : abbr === 'MMF' ? (
-                      <span className='i-lucide-shuffle text-primary text-xl' />
-                    ) : abbr === 'CRX' ? (
-                      <span className='i-lucide-truck text-primary text-xl' />
-                    ) : abbr === 'RDF' ? (
-                      <span className='i-lucide-truck text-primary text-xl' />
-                    ) : (
-                      <span className='i-lucide-package text-primary text-xl' />
-                    );
+                  // Icon previously defined but not used; removed to avoid unused variable warning
                   return (
                     <Card
                       key={req.id}
