@@ -11,7 +11,11 @@ import {
 import Confetti from '@/components/onboarding/Confetti';
 import { motion, AnimatePresence } from 'motion/react';
 import { Icons } from '@/components/icons';
-import PixelBlast from '@/components/PixelBlast';
+import dynamic from 'next/dynamic';
+const PixelBlast = dynamic(() => import('@/components/PixelBlast'), {
+  ssr: false,
+  loading: () => <div className='bg-muted/30 h-full w-full animate-pulse' />
+});
 import type { Profile } from '@/types/profile';
 
 type TeamSize = 'solo' | 'small' | 'medium' | 'large' | 'enterprise';
@@ -217,21 +221,24 @@ export default function OnboardingModal({
       .replace(/-{2,}/g, '-')
       .replace(/^-|-$|\.$/g, '');
 
-  const checkUsername = async (u: string) => {
-    try {
-      const res = await fetch(
-        `/api/profile/check-username?u=${encodeURIComponent(u)}`
-      );
-      if (!res.ok) return false;
-      const data = (await res.json()) as { available?: boolean };
-      return (
-        Boolean(data?.available) ||
-        u === (profile as Profile | Partial<Profile> | undefined)?.username
-      );
-    } catch {
-      return false;
-    }
-  };
+  const checkUsername = useMemo(() => {
+    return async (u: string) => {
+      try {
+        const res = await fetch(
+          `/api/profile/check-username?u=${encodeURIComponent(u)}`
+        );
+        if (!res.ok) return false;
+        const data = (await res.json()) as { available?: boolean };
+        return (
+          Boolean(data?.available) ||
+          u === (profile as Profile | Partial<Profile> | undefined)?.username
+        );
+      } catch {
+        return false;
+      }
+    };
+    // safe to depend only on profile.username for equality check
+  }, [typeof profile === 'object' ? (profile as any)?.username : undefined]);
 
   // Live username probe with debounce
   useEffect(() => {
@@ -250,7 +257,7 @@ export default function OnboardingModal({
     return () => {
       if (usernameTimer.current) clearTimeout(usernameTimer.current);
     };
-  }, [form.username, emailLocal, step]);
+  }, [form.username, emailLocal, step, checkUsername]);
 
   const handleNext = async () => {
     setError(null);

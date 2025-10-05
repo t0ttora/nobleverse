@@ -81,7 +81,7 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
     return () => {
       active = false;
     };
-  }, [participantIds.join('|')]);
+  }, [participantIds]);
   const shown = profiles.slice(0, 4);
   const extra = participantIds.length - shown.length;
   return (
@@ -176,9 +176,6 @@ export default function ShipmentHeader({
   const [exporting, setExporting] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
   const labelRef = useRef<HTMLDivElement | null>(null);
-  const created = shipment.created_at
-    ? format(new Date(shipment.created_at), 'MMM d, yyyy')
-    : '—';
   const participants: string[] = Array.isArray(shipment.participants)
     ? shipment.participants
     : [];
@@ -350,11 +347,7 @@ export default function ShipmentHeader({
     }
   };
 
-  // Static inline milestone preview placeholder until real timeline condenses
-  const milestonePreview = (shipment.milestone_codes ||
-    shipment.milestones ||
-    []) as any[];
-  const inlineMilestones = milestonePreview.slice(0, 4);
+  // Static inline milestone preview placeholder until real timeline condenses (removed for now)
 
   const pct = Math.min(
     100,

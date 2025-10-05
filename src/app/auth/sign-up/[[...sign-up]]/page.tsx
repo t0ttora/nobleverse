@@ -1,9 +1,7 @@
+// touch: ensure tsc reads latest source
 import { Metadata } from 'next';
 import SignUpViewPage from '@/features/auth/components/sign-up-view';
-import {
-  getUserSession,
-  createClient
-} from '../../../../../utils/supabase/server';
+import { getUserSession } from '../../../../../utils/supabase/server';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
@@ -16,5 +14,6 @@ export default async function Page(_props: any) {
   if (user) {
     redirect('/dashboard');
   }
-  return <SignUpViewPage stars={0} />;
+  // Pass the internal demo prop with underscore to satisfy typing (ts refresh)
+  return <SignUpViewPage _stars={0} />;
 }

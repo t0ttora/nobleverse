@@ -14,7 +14,7 @@ export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
 // and force a clean sign-out then reload, clearing stale localStorage/cookies.
 try {
   // onAuthStateChange fires for TOKEN_REFRESHED, SIGNED_OUT, etc.
-  supabase.auth.onAuthStateChange((event, session) => {
+  supabase.auth.onAuthStateChange((event, _session) => {
     if (event === 'TOKEN_REFRESHED') return; // normal path
     // If session is null while we previously had one, allow UI redirect logic.
   });
@@ -25,7 +25,7 @@ try {
   // We keep it lightweight: schedule after hydration.
   if (typeof window !== 'undefined') {
     queueMicrotask(async () => {
-      const { data, error } = await supabase.auth.getSession();
+      const { error } = await supabase.auth.getSession();
       if (error && (error as any).code === 'refresh_token_not_found') {
         // Clear auth locally and reload to send user to sign-in gate.
         await supabase.auth.signOut();

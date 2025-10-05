@@ -43,7 +43,7 @@ export async function listEvents(month: Date): Promise<CalendarEvent[]> {
     .lte('starts_at', end.toISOString())
     .order('starts_at', { ascending: true });
   if (error) {
-    console.warn('listEvents error', error);
+    // listEvents error: return empty list in UI; consider routing through a logger
     return [];
   }
   return (data ?? []) as unknown as CalendarEvent[];

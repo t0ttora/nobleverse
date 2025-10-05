@@ -32,19 +32,11 @@ import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
 import Link from 'next/link';
 import { Notifications } from './notifications';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem
-} from '@/components/ui/select';
+// Removed unused Input and Select imports
 import type { FreightFormType } from '@/lib/freight-form-schema';
 
 function HeaderContent() {
-  const [search, setSearch] = React.useState('');
-  const [viewMode, setViewMode] = React.useState<'table' | 'grid'>('grid');
+  // Local view/search controls removed (unused state)
   const [currentUserId, setCurrentUserId] = React.useState<string>('');
 
   const { role } = useProfileRole();

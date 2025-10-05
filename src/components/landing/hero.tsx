@@ -2,7 +2,6 @@ import { MoveRight, PhoneCall } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Component as HeroBackground } from '@/components/landing/hero_bg';
-import Image from 'next/image';
 
 export const Hero3 = () => (
   <div

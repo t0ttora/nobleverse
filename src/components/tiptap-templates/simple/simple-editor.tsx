@@ -48,7 +48,6 @@ import {
   IconSearch,
   IconIndentIncrease,
   IconIndentDecrease,
-  IconChevronDown,
   IconDots
 } from '@tabler/icons-react';
 import {
@@ -319,7 +318,7 @@ export function SimpleEditor({
       wrap.removeEventListener('mousemove', onMove);
       wrap.removeEventListener('mouseleave', onLeave);
     };
-  }, [editor, tableMenu?.visible]);
+  }, [editor, tableMenu?.visible, tableMenuOpen]);
 
   // format painter behavior
   useEffect(() => {

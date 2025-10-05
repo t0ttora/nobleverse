@@ -1,18 +1,30 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Typecheck (tsc)",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
-			],
-			"problemMatcher": [
-				"$tsc"
-			]
-		}
-	]
+  "$schema": "vscode://schemas/tasks",
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Typecheck (tsc)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+  "pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false"
+      ],
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    },
+    {
+      "label": "ESLint (lint full)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "pnpm run -s lint"
+      ],
+      "problemMatcher": ["$eslint-stylish"],
+      "group": "build"
+    }
+  ]
 }

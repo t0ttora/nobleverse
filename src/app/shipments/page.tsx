@@ -312,7 +312,7 @@ export default function ShipmentsPage() {
       setLoading(false);
     }
     fetchData();
-  }, [activeTab, search, me]);
+  }, [activeTab, search, me, role]);
 
   return (
     <div className='p-6'>

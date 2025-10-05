@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
     const available = !data || (userId && data.id === userId);
     return NextResponse.json({ available });
-  } catch (e) {
+  } catch (_e) {
     return NextResponse.json(
       { available: false, reason: 'exception' },
       { status: 500 }

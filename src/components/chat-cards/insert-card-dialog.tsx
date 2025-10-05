@@ -39,7 +39,8 @@ export function InsertCardDialog({
 }) {
   const [type, setType] = React.useState<CardType>('shipment_card');
   const [id, setId] = React.useState('');
-  const [title, setTitle] = React.useState('');
+  // Title is computed from status or left empty in templates; avoid unused state warnings
+  const [title] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [json, setJson] = React.useState('{');
 

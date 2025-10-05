@@ -1,18 +1,5 @@
 'use client';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+// Collapsible and Dropdown imports removed (unused)
 import {
   Sidebar,
   SidebarContent,
@@ -26,19 +13,12 @@ import {
   SidebarRail
 } from '@/components/ui/sidebar';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../navigation/org-switcher';
 import { SettingsDialogRoot } from '@/components/settings/settings-dialog';
 import { openSettingsDialog } from '@/lib/settings-dialog-events';
-import {
-  Drawer,
-  DrawerTrigger,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle
-} from '@/components/ui/drawer';
-import { ThemeSelector } from '../navigation/theme-selector';
+// Drawer and ThemeSelector imports removed (unused)
 import * as React from 'react';
 import {
   SidebarMenuSub,
@@ -49,7 +29,7 @@ import { useProfileRole } from '@/hooks/use-profile-role';
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  // const router = useRouter(); // Unused variable removed
   const { role } = useProfileRole();
 
   return (

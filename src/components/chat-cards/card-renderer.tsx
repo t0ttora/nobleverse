@@ -1,7 +1,6 @@
 'use client';
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -338,7 +337,7 @@ export function CardRenderer({
         </BaseCard>
       );
     // exhaustive check
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     default: {
       const _exhaustive: never = card;
       return null;

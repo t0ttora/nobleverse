@@ -25,7 +25,7 @@ type UserFormValue = z.infer<typeof formSchema>;
 
 export default function UserAuthForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
+  const _callbackUrl = searchParams.get('callbackUrl');
   const [loading, startTransition] = useTransition();
   const defaultValues = {
     email: 'demo@gmail.com'
@@ -35,9 +35,9 @@ export default function UserAuthForm() {
     defaultValues
   });
 
-  const onSubmit = async (data: UserFormValue) => {
+  const onSubmit = async (_data: UserFormValue) => {
     startTransition(() => {
-      console.log('continue with email clicked');
+      // continue with email clicked
       toast.success('Signed In Successfully!');
     });
   };

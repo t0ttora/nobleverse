@@ -3,7 +3,7 @@ import type { SortingState } from '@tanstack/react-table';
 import type { DataTableConfig } from '@/config/data-table';
 
 // Minimal parser for sorting state via query string like: id.asc,id2.desc
-export function getSortingStateParser<T>(columnIds: Set<string>) {
+export function getSortingStateParser(columnIds: Set<string>) {
   return createParser<SortingState>({
     parse(value) {
       if (!value) return [];

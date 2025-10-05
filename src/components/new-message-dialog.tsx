@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// Input component not used in this dialog
+// import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -37,9 +38,11 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
+import dynamic from 'next/dynamic';
+const MarkdownPreview = dynamic(() => import('./markdown-preview'), {
+  ssr: false,
+  loading: () => <span className='text-muted-foreground'>Loading preview…</span>
+});
 import EmojiPicker from '@/components/ui/emoji-picker';
 
 type Profile = {
@@ -288,95 +291,7 @@ export function NewMessageDialog({
             </TabsContent>
             <TabsContent value='preview'>
               <div className='min-h-[160px] rounded-md border p-3 text-sm'>
-                {text.trim() ? (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
-                    components={{
-                      a: (
-                        props: React.AnchorHTMLAttributes<HTMLAnchorElement>
-                      ) => (
-                        <a
-                          className='text-primary underline underline-offset-2 hover:opacity-90'
-                          target='_blank'
-                          rel='noreferrer'
-                          {...props}
-                        />
-                      ),
-                      p: (
-                        props: React.HTMLAttributes<HTMLParagraphElement>
-                      ) => (
-                        <p
-                          className='mb-2 leading-relaxed whitespace-pre-wrap'
-                          {...props}
-                        />
-                      ),
-                      ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
-                        <ul
-                          className='mb-2 list-disc space-y-1 pl-5'
-                          {...props}
-                        />
-                      ),
-                      ol: (props: React.HTMLAttributes<HTMLOListElement>) => (
-                        <ol
-                          className='mb-2 list-decimal space-y-1 pl-5'
-                          {...props}
-                        />
-                      ),
-                      li: (props: React.LiHTMLAttributes<HTMLLIElement>) => (
-                        <li className='leading-relaxed' {...props} />
-                      ),
-                      blockquote: (
-                        props: React.BlockquoteHTMLAttributes<HTMLElement>
-                      ) => (
-                        <blockquote
-                          className='border-foreground/20 text-muted-foreground mb-2 border-l-2 pl-3 italic'
-                          {...props}
-                        />
-                      ),
-                      code: ({
-                        inline,
-                        className,
-                        children,
-                        ...props
-                      }: {
-                        inline?: boolean;
-                        className?: string;
-                        children?: React.ReactNode;
-                      }) => {
-                        const content = String(children || '');
-                        if (inline) {
-                          return (
-                            <code
-                              className={`bg-foreground/10 rounded px-1 py-0.5 text-xs ${className || ''}`}
-                              {...props}
-                            >
-                              {content}
-                            </code>
-                          );
-                        }
-                        return (
-                          <pre className='bg-muted/60 mb-2 overflow-auto rounded-md p-3'>
-                            <code
-                              className='text-xs leading-relaxed'
-                              {...props}
-                            >
-                              {content}
-                            </code>
-                          </pre>
-                        );
-                      },
-                      hr: (props: React.HTMLAttributes<HTMLHRElement>) => (
-                        <hr className='border-border my-3' {...props} />
-                      )
-                    }}
-                  >
-                    {text}
-                  </ReactMarkdown>
-                ) : (
-                  <span className='text-muted-foreground'>
-                    Nothing to preview
-                  </span>
-                )}
+                <MarkdownPreview text={text} />
               </div>
             </TabsContent>
           </Tabs>
@@ -490,7 +405,6 @@ export function NewMessageDialog({
     if (!ta) return;
     const pos = (ta as HTMLTextAreaElement).selectionStart || 0;
     const before = text.slice(0, pos);
-    const after = text.slice(pos);
     const lineStart = before.lastIndexOf('\n') + 1;
     const next = `${text.slice(0, lineStart)}${prefix}${text.slice(lineStart)}`;
     setText(next);

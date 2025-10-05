@@ -426,7 +426,7 @@ export default function ExpandedCalendar({ onClose }: { onClose: () => void }) {
                   ) : (
                     <ul className='space-y-2'>
                       {dayEvents.map((e) => {
-                        const { bg, fg } = colorFor(e);
+                        const { fg } = colorFor(e);
                         return (
                           <li
                             key={e.id}
@@ -458,11 +458,7 @@ export default function ExpandedCalendar({ onClose }: { onClose: () => void }) {
           ) : (
             <div className='grid h-full min-h-0 grid-cols-12 gap-4 p-4'>
               <div className='col-span-8 min-h-0 overflow-auto rounded-md border p-2'>
-                <WeekGrid
-                  events={events}
-                  selected={selected}
-                  onSelect={setSelected}
-                />
+                <WeekGrid events={events} selected={selected} />
               </div>
               <div className='col-span-4 flex min-h-0 flex-col rounded-md border p-3'>
                 <div className='mb-2 text-sm font-medium'>
@@ -517,15 +513,7 @@ export default function ExpandedCalendar({ onClose }: { onClose: () => void }) {
   );
 }
 
-function WeekGrid({
-  events,
-  selected,
-  onSelect
-}: {
-  events: any[];
-  selected?: Date;
-  onSelect: (d: Date | undefined) => void;
-}) {
+function WeekGrid({ events, selected }: { events: any[]; selected?: Date }) {
   // Simple week view renderer inspired by the user mock; not full drag-drop
   const start = selected ? startOfWeek(selected) : startOfWeek(new Date());
   const days = [...Array(7)].map((_, i) => addDays(start, i));
@@ -753,70 +741,4 @@ function PeopleList({
   );
 }
 
-function MultiSelectChips({
-  options,
-  selected,
-  onChange
-}: {
-  options: Array<{ id: string; name: string }>;
-  selected: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const [query, setQuery] = React.useState('');
-  const filtered = options.filter((o) =>
-    o.name.toLowerCase().includes(query.toLowerCase())
-  );
-  return (
-    <div className='rounded-md border p-2'>
-      <Input
-        placeholder='Search people'
-        className='mb-2 h-8'
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <div className='mb-2 flex flex-wrap gap-1'>
-        {selected.map((id) => {
-          const opt = options.find((o) => o.id === id);
-          if (!opt) return null;
-          return (
-            <span
-              key={id}
-              className='bg-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs'
-            >
-              {opt.name}
-              <button
-                className='text-muted-foreground'
-                onClick={() => onChange(selected.filter((x) => x !== id))}
-              >
-                ×
-              </button>
-            </span>
-          );
-        })}
-      </div>
-      <ul className='max-h-40 space-y-1 overflow-auto text-sm'>
-        {filtered.map((o) => {
-          const checked = selected.includes(o.id);
-          return (
-            <li key={o.id}>
-              <label className='inline-flex cursor-pointer items-center gap-2'>
-                <input
-                  type='checkbox'
-                  checked={checked}
-                  onChange={(e) =>
-                    onChange(
-                      e.target.checked
-                        ? [...selected, o.id]
-                        : selected.filter((x) => x !== o.id)
-                    )
-                  }
-                />
-                <span>{o.name}</span>
-              </label>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
+// MultiSelectChips removed (unused)

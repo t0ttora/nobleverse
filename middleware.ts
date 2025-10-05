@@ -1,18 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// Only these routes are considered public. Everything else requires auth.
-const PUBLIC_PATHS = [
-  '/',
-  '/auth/sign-in',
-  '/auth/sign-up',
-  '/auth/callback',
-  '/favicon.ico',
-  '/assets',
-  '/_next',
-  '/public'
-];
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   let res = NextResponse.next({ request });
@@ -48,6 +36,17 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getSession();
   const user = session?.user ?? null;
 
+  // Logged-in users visiting root should land on the dashboard directly
+  if (user && pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    const redirectRes = NextResponse.redirect(url);
+    for (const c of res.cookies.getAll()) {
+      redirectRes.cookies.set(c.name, c.value);
+    }
+    return redirectRes;
+  }
+
   // Eğer kullanıcı giriş yapmamışsa ve korumalı sayfaya erişiyorsa login'e yönlendir
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -80,5 +79,10 @@ export async function middleware(request: NextRequest) {
   return res;
 }
 
-// Apply middleware to all routes; we filter assets in code above
-export const config = { matcher: ['/:path*'] };
+// Run middleware only on non-static, non-API routes to reduce overhead
+export const config = {
+  matcher: [
+    // Exclude _next, assets, common static files, any file with an extension, and API routes
+    '/((?!api|_next/static|_next/image|assets|favicon.ico|favico.ico|favico.svg|robots.txt|sitemap.xml|.*\\..*).*)'
+  ]
+};

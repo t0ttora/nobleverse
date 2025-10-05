@@ -7,7 +7,6 @@ import { useProfileRole } from '@/hooks/use-profile-role';
 import {
   ShipperDashboard,
   ForwarderDashboard,
-  CustomsOfficerDashboard,
   ReceiverDashboard
 } from '@/components/dashboard/role-dashboards';
 

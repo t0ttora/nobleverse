@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 // import { NewMessageDialog } from '@/components/new-message-dialog';
 import NegotiationDialog from '@/components/offers/negotiation-dialog';
 import { toast } from 'sonner';
-import { updateOfferStatus } from '../../../utils/supabase/offers';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -81,7 +80,7 @@ export function OfferDetailsDialog({
   } | null>(actor || null);
   const d = React.useMemo(() => readDetails(offer?.details), [offer?.details]);
   const [negOpen, setNegOpen] = React.useState(false);
-  const [meEmail, setMeEmail] = React.useState<string | null>(null);
+  // const [meEmail, setMeEmail] = React.useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [accepting, setAccepting] = React.useState(false);
   const forwarderId = offer?.forwarder_id || null;
@@ -103,10 +102,11 @@ export function OfferDetailsDialog({
       } else {
         setProfile(actor || null);
       }
-      try {
-        const { data: auth } = await supabase.auth.getUser();
-        if (!cancelled) setMeEmail(auth?.user?.email ?? null);
-      } catch {}
+      // Optionally load email if needed in future
+      // try {
+      //   const { data: auth } = await supabase.auth.getUser();
+      //   if (!cancelled) setMeEmail(auth?.user?.email ?? null);
+      // } catch {}
     })();
     return () => {
       cancelled = true;

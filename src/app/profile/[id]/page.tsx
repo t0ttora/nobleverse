@@ -3,17 +3,8 @@ import TouchLastActive from '@/features/profile/components/touch-last-active';
 import { cookies } from 'next/headers';
 import { createClient as createSupabaseServerClient } from '@/../utils/supabase/server';
 // import Link from 'next/link';
-import ProfileHeaderInline from '@/features/profile/components/profile-header-inline';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Mail, MapPin, Phone, Globe } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -89,14 +80,7 @@ export default async function ProfilePage({
     profile.username;
 
   // skills-like chips
-  const chips: string[] =
-    (
-      details.skills ||
-      details.services ||
-      details.certs ||
-      details.corridors ||
-      []
-    )?.filter?.(Boolean) || [];
+  // Potential chips for future UI: skills/services/certs/corridors (unused)
 
   // simple completion score
   const completionKeys = [
@@ -108,11 +92,11 @@ export default async function ProfilePage({
     'avatar_url',
     'banner_url'
   ];
-  const completed = completionKeys.reduce(
+  const _completed = completionKeys.reduce(
     (acc, key) => acc + (profile?.[key as keyof typeof profile] ? 1 : 0),
     0
   );
-  const completionPct = Math.round((completed / completionKeys.length) * 100);
+  // const completionPct = Math.round((completed / completionKeys.length) * 100);
 
   // activities & connections fallbacks
   // initials based on firstName + lastName like user-nav

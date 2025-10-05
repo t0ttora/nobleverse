@@ -36,7 +36,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -259,6 +258,7 @@ export const RealtimeChat = ({
   const [seenReady, setSeenReady] = useState(false);
 
   // Emoji theme + recents
+  // Theme available if needed for emoji picker styling
   const { resolvedTheme } = useTheme();
   const RECENT_KEY = 'nv_recent_emojis';
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
@@ -352,7 +352,7 @@ export const RealtimeChat = ({
     };
   }, [allMessages, lastSeen]);
 
-  function markAsRead() {
+  const markAsRead = useCallback(() => {
     const latest = allMessages[allMessages.length - 1]?.createdAt;
     const ts = latest ? new Date(latest).getTime() : Date.now();
     try {
@@ -361,7 +361,7 @@ export const RealtimeChat = ({
       void 0;
     }
     setLastSeen(ts);
-  }
+  }, [allMessages, LAST_SEEN_KEY]);
 
   useEffect(() => {
     onMessage?.(allMessages);
@@ -419,7 +419,7 @@ export const RealtimeChat = ({
     return () => {
       el.removeEventListener('scroll', onScroll);
     };
-  }, [containerRef, allMessages, lastSeen]);
+  }, [containerRef, allMessages, lastSeen, markAsRead]);
 
   // Also handle the case where new messages arrive and we are already at bottom
   useEffect(() => {
@@ -432,7 +432,7 @@ export const RealtimeChat = ({
     const latestTs = new Date(latest).getTime();
     if (lastSeen && lastSeen >= latestTs) return;
     markAsRead();
-  }, [allMessages, lastSeen, containerRef]);
+  }, [allMessages, lastSeen, containerRef, markAsRead]);
 
   // Autogrow
   useEffect(() => {
@@ -748,7 +748,11 @@ export const RealtimeChat = ({
       mentions,
       pendingCards,
       roomMembers,
-      roomName
+      roomName,
+      mode,
+      shipmentId,
+      userId,
+      effectiveNobleId
     ]
   );
 
@@ -1521,10 +1525,6 @@ function formatBannerTime(iso: string) {
     minute: '2-digit'
   };
   return new Intl.DateTimeFormat('en-US', opts).format(d);
-  const time = new Intl.DateTimeFormat(undefined, opts).format(d);
-  const month = new Intl.DateTimeFormat(undefined, { month: 'long' }).format(d);
-  const year = d.getFullYear();
-  return `${time} on ${month}, ${year}`;
 }
 
 function formatDayBanner(iso: string | Date) {

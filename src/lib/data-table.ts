@@ -1,11 +1,9 @@
-import type {
-  ExtendedColumnFilter,
-  FilterOperator,
-  FilterVariant
-} from '@/types/data-table';
+// touch: invalidate stale diagnostics
+import type { FilterOperator, FilterVariant } from '@/types/data-table';
 import type { Column } from '@tanstack/react-table';
 
 import { dataTableConfig } from '@/config/data-table';
+import type { FilterItemSchema } from '@/lib/parsers';
 
 export function getCommonPinningStyles<TData>({
   column,
@@ -63,8 +61,8 @@ export function getDefaultFilterOperator(filterVariant: FilterVariant) {
 }
 
 export function getValidFilters<TData>(
-  filters: ExtendedColumnFilter<TData>[]
-): ExtendedColumnFilter<TData>[] {
+  filters: FilterItemSchema[]
+): FilterItemSchema[] {
   return filters.filter(
     (filter) =>
       filter.operator === 'isEmpty' ||

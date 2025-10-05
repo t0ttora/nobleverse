@@ -130,7 +130,7 @@ export const ForwarderOfferForm = forwardRef<
           d.total_price_currency || prev.total_price_currency || 'USD'
       }));
     }
-  }, [embedded, open, existingOffer?.id]);
+  }, [embedded, open, existingOffer?.id, existingOffer?.details]);
 
   const current = sections[step];
   const isLast = step === sections.length - 1;
@@ -171,7 +171,7 @@ export const ForwarderOfferForm = forwardRef<
     return true;
   }
 
-  function notifyState() {
+  const notifyState = React.useCallback(() => {
     onStateChange?.({
       isFirst,
       isLast,
@@ -179,14 +179,19 @@ export const ForwarderOfferForm = forwardRef<
       step,
       currentValid: isCurrentStepValidInternal()
     });
-  }
+  }, [
+    onStateChange,
+    isFirst,
+    isLast,
+    submitting,
+    step,
+    formData,
+    requestDetails
+  ]);
 
   React.useEffect(() => {
     notifyState();
-  }, [step, submitting]);
-  React.useEffect(() => {
-    notifyState();
-  }, [JSON.stringify(formData)]);
+  }, [notifyState]);
 
   // ---
   // Render field by type (like MultiStepFreightForm)
@@ -390,7 +395,8 @@ export const ForwarderOfferForm = forwardRef<
       step,
       sections.length,
       formData,
-      requestDetails
+      requestDetails,
+      handleSubmit
     ]
   );
 
@@ -427,7 +433,15 @@ export const ForwarderOfferForm = forwardRef<
         )}
       </>
     );
-  }, [step, isLast, embedded, submitting, onCancel, onClose, formData]);
+  }, [
+    step,
+    isLast,
+    embedded,
+    submitting,
+    onCancel,
+    onClose,
+    isCurrentStepValidInternal
+  ]);
 
   React.useEffect(() => {
     onFooterChange?.(buildFooter());

@@ -63,7 +63,11 @@ module.exports = [
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
       ],
       'no-console': 'warn',
       // Allow empty catch blocks (we intentionally swallow errors in UI flows)

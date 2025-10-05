@@ -6,13 +6,7 @@ import {
   PopoverTrigger
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import {
-  CalendarRange,
-  Maximize2,
-  PanelRightOpen,
-  Plus,
-  Share2
-} from 'lucide-react';
+import { CalendarRange, Maximize2, PanelRightOpen, Plus } from 'lucide-react';
 import { Calendar as DayCalendar } from '@/components/ui/calendar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -23,7 +17,7 @@ import {
 import { createEvent, listEvents, safeFormat } from '@/lib/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils';
 // Use same browser Supabase client import path as Contacts page to avoid multiple client instances
 // Share functionality removed temporarily
 
@@ -54,7 +48,7 @@ export default function MiniCalendarPopover({
   const [selected, setSelected] = React.useState<Date | undefined>(new Date());
   const [title, setTitle] = React.useState('');
   const [time, setTime] = React.useState('09:00');
-  const [sending, setSending] = React.useState(false);
+  // const [sending, setSending] = React.useState(false);
   const [events, setEvents] = React.useState<
     Array<{ id: string; title: string; starts_at: string }>
   >([]);
@@ -76,13 +70,11 @@ export default function MiniCalendarPopover({
   }, [load]);
 
   // Load team and contacts for Share dropdown
-  React.useEffect(() => {
-    // Share removed: effect stripped
-  }, []);
+  // Share removed: effect stripped
 
   async function addQuickEvent() {
     if (!selected || !title.trim()) return;
-    setSending(true);
+    // setSending(true);
     try {
       const [hh, mm] = time.split(':').map((x) => parseInt(x, 10));
       const starts = new Date(selected);
@@ -97,7 +89,7 @@ export default function MiniCalendarPopover({
         // Share removed: no notifications
       }
     } finally {
-      setSending(false);
+      // setSending(false);
     }
   }
 
@@ -333,7 +325,7 @@ function MonthlyEventsList({
           </div>
           <div className='space-y-1'>
             {items.map((e) => {
-              const { fg, bg } = colorFor(e);
+              const { fg } = colorFor(e);
               const title = e.title || 'Event';
               const when = safeFormat(e.starts_at);
               return (

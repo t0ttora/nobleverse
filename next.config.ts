@@ -1,5 +1,13 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
+// Defer requiring the analyzer to runtime so dev does not crash if missing
+const getBundleAnalyzer = () => {
+  try {
+    return require('@next/bundle-analyzer');
+  } catch {
+    return null;
+  }
+};
 
 // Define the base Next.js configuration
 // Extend the type locally to allow the `turbopack` field until types catch up
@@ -25,6 +33,15 @@ const baseConfig: NextConfig & { turbopack?: { root?: string } } = {
 };
 
 let configWithPlugins = baseConfig;
+
+// Enable bundle analyzer only when requested and available
+if (process.env.ANALYZE === 'true') {
+  const analyzer = getBundleAnalyzer();
+  if (analyzer) {
+    const withBundleAnalyzer = analyzer({ enabled: true, openAnalyzer: false });
+    configWithPlugins = withBundleAnalyzer(configWithPlugins);
+  }
+}
 
 // Conditionally enable Sentry configuration only in CI with required envs
 const enableSentry =

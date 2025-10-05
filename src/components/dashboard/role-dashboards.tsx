@@ -7,16 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabaseClient';
 import { RecentOffersCard } from '@/components/offers/recent-offers-card';
 import { RequestDetailsPanel } from '@/components/requests/request-details-panel';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem
-} from '@/components/ui/dropdown-menu';
-import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ForwarderOfferForm } from '@/components/offers/forwarder-offer-form';
 import { SidePanel } from '@/components/ui/side-panel';
 // import { ShipmentsTable } from '@/components/ui/shipments-table';
 import { RequestBrowser } from '@/components/requests/request-browser';
@@ -74,15 +65,9 @@ export function ForwarderDashboard() {
   const [me, setMe] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const [req, setReq] = React.useState<any | null>(null);
-  // Restore state for requests modal (for incoming requests section)
-  const [offerModalOpen, setOfferModalOpen] = React.useState(false);
   // const [requests, setRequests] = React.useState<any[]>([]);
   // const [search, setSearch] = React.useState('');
   // const [loadingRequests, setLoadingRequests] = React.useState(false);
-  const [selectedRequest, setSelectedRequest] = React.useState<any | null>(
-    null
-  );
-  const [offerFormOpen, setOfferFormOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
 
   React.useEffect(() => {

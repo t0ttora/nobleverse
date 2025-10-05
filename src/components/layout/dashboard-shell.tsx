@@ -16,7 +16,6 @@ export default function DashboardShell({
   children: React.ReactNode;
 }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [checked, setChecked] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -40,10 +39,7 @@ export default function DashboardShell({
           .eq('id', user.id)
           .maybeSingle();
         if (cancelled) return;
-        if (error) {
-          console.warn('profile fetch error', error);
-          return;
-        }
+        if (error) return;
         if (!profile) {
           const safeEmail = user.email ?? '';
           const safeUsername = safeEmail
@@ -63,7 +59,7 @@ export default function DashboardShell({
           setShowOnboarding(true);
         }
       } finally {
-        if (!cancelled) setChecked(true);
+        // finished check
       }
     };
 

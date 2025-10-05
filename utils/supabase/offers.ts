@@ -109,7 +109,7 @@ export async function getRecentOffersForForwarder(
 // Incoming requests list for a forwarder: naive example
 export async function getIncomingRequestsForForwarder(
   supabase: SupabaseClient,
-  forwarderId: string
+  _forwarderId: string
 ) {
   // Placeholder: pull latest requests; in real usage, filter by route/eligibility or invitations
   const { data, error } = await supabase

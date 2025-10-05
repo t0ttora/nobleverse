@@ -11,7 +11,6 @@ const THEMES: Record<'light' | 'dark', string> = {
   dark: '.dark'
 } as const;
 
-// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 export interface ChartConfig {
   [key: string]: {
     label?: React.ReactNode;
@@ -140,7 +139,10 @@ function ChartTooltipContent({
     color?: string;
     payload?: Record<string, unknown>;
   }
-  const payloadSafe = (payload ?? []) as TooltipItem[];
+  const payloadSafe = React.useMemo(
+    () => (payload ?? []) as TooltipItem[],
+    [payload]
+  );
 
   const tooltipLabel = React.useMemo(() => {
     if (hideLabel || payloadSafe.length === 0) {
@@ -211,7 +213,6 @@ function ChartTooltipContent({
               )}
             >
               {formatter && item?.value !== undefined && item.name ? (
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 formatter(
                   item.value as never,
                   item.name,

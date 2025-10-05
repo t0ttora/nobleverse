@@ -186,16 +186,14 @@ export async function POST(request: Request, context: any) {
 
     step = 'NOTIFICATION';
     try {
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: offer.forwarder_id,
-          actor_id: uid,
-          type: 'offer_accepted',
-          title: 'Offer accepted',
-          body: shipment.code || shipment.id,
-          data: { shipment_id: shipment.id, request_id: offer.request_id }
-        });
+      await supabase.from('notifications').insert({
+        user_id: offer.forwarder_id,
+        actor_id: uid,
+        type: 'offer_accepted',
+        title: 'Offer accepted',
+        body: shipment.code || shipment.id,
+        data: { shipment_id: shipment.id, request_id: offer.request_id }
+      });
     } catch {}
 
     step = 'CHAT_ROOM';
@@ -210,13 +208,11 @@ export async function POST(request: Request, context: any) {
         .select('id')
         .single();
       if (room?.id)
-        await supabase
-          .from('chat_messages')
-          .insert({
-            room_id: room.id,
-            user_id: uid,
-            content: 'Shipment room created.'
-          });
+        await supabase.from('chat_messages').insert({
+          room_id: room.id,
+          user_id: uid,
+          content: 'Shipment room created.'
+        });
     } catch {}
 
     step = 'DONE';

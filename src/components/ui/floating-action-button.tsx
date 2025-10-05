@@ -4,16 +4,7 @@ import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Sparkles } from 'lucide-react';
-import {
-  CalendarRange,
-  ClipboardList,
-  ShoppingBag,
-  Wand2,
-  Bot,
-  Rocket,
-  Target
-} from 'lucide-react';
+import { ShoppingBag, Bot, Rocket, Target } from 'lucide-react';
 import MiniCalendarPopover from '@/components/calendar/mini-calendar-popover';
 import ExpandedCalendar from '@/components/calendar/expanded-calendar';
 import { SidePanel } from '@/components/ui/side-panel';
@@ -66,7 +57,7 @@ export default function FloatingActionButton({ className }: FabProps) {
       if (calExpanded) setCalExpanded(false);
       if (calSide) setCalSide(false);
     }
-  }, [isMobile]);
+  }, [isMobile, calExpanded, calSide]);
 
   return (
     <>

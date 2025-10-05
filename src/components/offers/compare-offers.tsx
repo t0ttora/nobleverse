@@ -9,12 +9,10 @@ import {
 import { Button } from '@/components/ui/button';
 // Removed inline OfferDetailsDialog usage to avoid double-modal stacking.
 // (ToggleGroup removed; custom buttons used instead of toggle group)
-import { createPortal } from 'react-dom'; // still used for potential future overlays (kept)
+// import { createPortal } from 'react-dom';
 import {
   LayoutGrid,
   Table as TableIcon,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   FileDown
 } from 'lucide-react';
@@ -86,15 +84,7 @@ export function CompareOffersPanel({
     }
   }, [order, parsed]);
 
-  const moveOrder = (i: number, dir: number) => {
-    setLocalOrder((curr) => {
-      const next = [...curr];
-      const j = i + dir;
-      if (j < 0 || j >= next.length) return curr;
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
-  };
+  // Reordering currently unused; can be re-enabled later if needed
 
   async function exportComparisonPDF() {
     try {
@@ -324,7 +314,7 @@ export function CompareOffersPanel({
       }
     }
     return diffs;
-  }, [parsed]);
+  }, [parsed, fields]);
   const effectiveFields = fields; // always show all now
 
   // Load persisted view mode
@@ -346,7 +336,7 @@ export function CompareOffersPanel({
     const width = typeof window !== 'undefined' ? window.innerWidth : 0;
     if ((offers.length > 6 || width < 640) && viewMode === 'table')
       setViewMode('compact');
-  }, [offers.length, open]);
+  }, [offers.length, open, viewMode]);
 
   // Listen to resize for responsive auto-compact (do not override if user already on compact)
   React.useEffect(() => {
@@ -462,7 +452,7 @@ export function CompareOffersPanel({
   const secondaryFieldKeys = fields
     .map((f) => f.key)
     .filter((k) => !primaryFieldKeys.includes(k));
-  const [showMoreInline, setShowMoreInline] = React.useState(false);
+  // Inline 'show more' state removed; details panel replaces inline expansion
   const suppressHighlights =
     typeof document !== 'undefined' &&
     document.body.dataset.exporting === 'true';

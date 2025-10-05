@@ -116,12 +116,12 @@ export function ContactsClient() {
     email: string | null;
   } | null>(null);
 
-  async function load() {
+  const load = React.useCallback(async () => {
     setLoading(true);
     const res = await fetchData(tab, filters);
     setPeople(res);
     setLoading(false);
-  }
+  }, [tab, filters]);
 
   React.useEffect(() => {
     let alive = true;
@@ -145,7 +145,7 @@ export function ContactsClient() {
   React.useEffect(() => {
     void load();
     // We intentionally depend on rolesKey string to avoid deep compare
-  }, [tab, filters.search, rolesKey]);
+  }, [tab, filters.search, rolesKey, load]);
 
   const EmptyState = ({ title, desc }: { title: string; desc: string }) => (
     <div className='text-muted-foreground rounded-xl border p-8 text-center text-sm'>

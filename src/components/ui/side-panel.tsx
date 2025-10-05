@@ -35,7 +35,7 @@ export const SidePanel: React.FC<SidePanelProps> = ({
       <div
         className='fixed inset-0 bg-black/40 transition-opacity duration-300 dark:bg-neutral-900/70'
         style={{ zIndex: zIndexBase }}
-        onClick={(e) => {
+        onClick={(_e) => {
           // Emit custom event to allow intermediate UIs (offer details) to intercept
           const ev = new CustomEvent('noble:sidepanel:overlay-click', {
             cancelable: true

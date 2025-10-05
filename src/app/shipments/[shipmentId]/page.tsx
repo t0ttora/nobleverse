@@ -2,11 +2,6 @@ import { createClient } from '@/lib/server';
 import { notFound } from 'next/navigation';
 import { ShipmentRoom } from '@/components/shipment';
 
-// NOTE: Next.js 15 warns if you synchronously access params. We allow for params possibly being a Promise.
-type ParamsMaybeAsync =
-  | { shipmentId: string }
-  | Promise<{ shipmentId: string }>;
-
 export default async function ShipmentPage(props: any) {
   // Allow any prop shape; resolve params if promise-like
   const rawParams: any = props?.params;
@@ -22,7 +17,7 @@ export default async function ShipmentPage(props: any) {
   if (!uid) return notFound();
 
   // Helper to surface real error details in environments where Error props are non-enumerable
-  const serializeError = (e: unknown) => {
+  const _serializeError = (e: unknown) => {
     if (e instanceof Error) {
       return {
         name: e.name,
@@ -62,26 +57,16 @@ export default async function ShipmentPage(props: any) {
     }
 
     if (error) {
-      console.error('SHIPMENT_PAGE_DB_ERROR', {
-        codeOrId,
-        error: serializeError(error)
-      });
+      // SHIPMENT_PAGE_DB_ERROR
       return notFound();
     }
     if (!shipment) {
       // Distinguish true not-found vs possible RLS filtered scenario (no error, no row)
-      console.warn('SHIPMENT_PAGE_NOT_FOUND', {
-        codeOrId,
-        lookedUpBy: looksLikeUuid ? 'code_then_uuid' : 'code_only'
-      });
       return notFound();
     }
     return <ShipmentRoom shipment={shipment} currentUserId={uid} />;
-  } catch (err) {
-    console.error('SHIPMENT_PAGE_UNEXPECTED', {
-      codeOrId,
-      error: serializeError(err)
-    });
+  } catch (_err) {
+    // SHIPMENT_PAGE_UNEXPECTED
     return notFound();
   }
 }

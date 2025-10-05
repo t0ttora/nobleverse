@@ -17,22 +17,24 @@ const outIcoAlt = path.join(publicDir, 'favico.ico');
 const SIZES = [16, 32, 48, 64];
 
 async function main() {
-    const svg = await fs.readFile(srcSvg);
-    const pngBuffers = await Promise.all(
-        SIZES.map((size) => sharp(svg).resize(size, size, { fit: 'contain' }).png().toBuffer())
-    );
+  const svg = await fs.readFile(srcSvg);
+  const pngBuffers = await Promise.all(
+    SIZES.map((size) =>
+      sharp(svg).resize(size, size, { fit: 'contain' }).png().toBuffer()
+    )
+  );
 
-    const ico = await toIco(pngBuffers, { resize: false });
-    await fs.writeFile(outIco, ico);
-    await fs.writeFile(outIcoAlt, ico);
+  const ico = await toIco(pngBuffers, { resize: false });
+  await fs.writeFile(outIco, ico);
+  await fs.writeFile(outIcoAlt, ico);
 }
 
 main().catch((err) => {
-    // Silent fail for lint cleanliness; process exit non-zero for CI
-    try {
-        console.error(String(err?.message || err));
-    } catch {
-        void 0; // noop
-    }
-    process.exit(1);
+  // Silent fail for lint cleanliness; process exit non-zero for CI
+  try {
+    console.error(String(err?.message || err));
+  } catch {
+    void 0; // noop
+  }
+  process.exit(1);
 });

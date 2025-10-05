@@ -51,7 +51,7 @@ import { getOfferConfig as buildOfferConfig } from '@/lib/forwarder-offer-schema
 // Temporary alias to satisfy stale type reference (remove if not needed after cleanup)
 // Removed stale placeholder that previously shadowed buildOfferConfig / getOfferConfig to avoid TS confusion.
 // Renamed alias to force TS program refresh (previous stale diagnostics referenced getOfferConfig)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 const _offerSchemaConfigBuilder = buildOfferConfig;
 import NegotiationDialog from '@/components/offers/negotiation-dialog';
 import { Checkbox } from '@/components/ui/checkbox';

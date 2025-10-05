@@ -10,7 +10,7 @@ interface PrivacySettingsProps {
 }
 
 export default function PrivacySettings({
-  userId,
+  userId: _userId,
   initialVisibility
 }: PrivacySettingsProps) {
   const [visibility, setVisibility] =

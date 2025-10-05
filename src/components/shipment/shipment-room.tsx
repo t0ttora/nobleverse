@@ -1,5 +1,5 @@
 'use client';
-import { ShipmentHeader, MilestonesPanel, EscrowPanel } from './';
+import { ShipmentHeader, EscrowPanel } from './';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -13,12 +13,9 @@ import {
   HoverCardTrigger
 } from '@/components/ui/hover-card';
 import {
-  IconFile,
   IconMap,
   IconCash,
-  IconFolder,
   IconBarcode,
-  IconShieldLock,
   IconSettings,
   IconAdjustments
 } from '@tabler/icons-react';
@@ -462,7 +459,7 @@ function TrackingTab({ shipment }: { shipment: any }) {
   );
 }
 
-function DocumentsTab({ shipment }: { shipment: any }) {
+function DocumentsTab({ shipment: _shipment }: { shipment: any }) {
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between'>
@@ -964,18 +961,7 @@ function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
   );
 }
 
-function DocumentsMini({ shipmentId }: { shipmentId: string }) {
-  return (
-    <div>
-      <h4 className='text-muted-foreground mb-2 text-xs font-semibold tracking-wide'>
-        DOCS (0)
-      </h4>
-      <div className='text-muted-foreground text-xs'>
-        No documents uploaded.
-      </div>
-    </div>
-  );
-}
+// Removed unused DocumentsMini
 
 function MilestoneSummary({ shipmentId }: { shipmentId: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -1060,11 +1046,4 @@ function KpiCard({
   );
 }
 
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className='bg-card/30 flex h-40 flex-col justify-between rounded-lg border p-4'>
-      <div className='mb-2 text-sm font-medium'>{title}</div>
-      <div className='text-muted-foreground text-xs'>Coming soon…</div>
-    </div>
-  );
-}
+// Placeholder component removed (unused)

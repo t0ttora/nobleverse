@@ -1,9 +1,9 @@
 import type { DataTableConfig } from '@/config/data-table';
-import type { FilterItemSchema } from '@/lib/parsers';
-import type { ColumnSort, Row, RowData } from '@tanstack/react-table';
+import type { Row, RowData } from '@tanstack/react-table';
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 declare module '@tanstack/react-table' {
-  // biome-ignore lint/correctness/noUnusedVariables: Interface type parameters required by @tanstack/react-table
+  // Type parameters are required by @tanstack/react-table but may not be referenced directly
   interface ColumnMeta<TData extends RowData, TValue> {
     label?: string;
     placeholder?: string;
@@ -26,15 +26,10 @@ export type FilterOperator = DataTableConfig['operators'][number];
 export type FilterVariant = DataTableConfig['filterVariants'][number];
 export type JoinOperator = DataTableConfig['joinOperators'][number];
 
-export interface ExtendedColumnSort<TData> extends Omit<ColumnSort, 'id'> {
-  id: Extract<keyof TData, string>;
-}
+// Removed unused ExtendedColumnSort/ExtendedColumnFilter generics to satisfy lint
 
-export interface ExtendedColumnFilter<TData> extends FilterItemSchema {
-  id: Extract<keyof TData, string>;
-}
-
-export interface DataTableRowAction<TData> {
+export interface DataTableRowAction<TData extends RowData> {
   row: Row<TData>;
   variant: 'update' | 'delete';
 }
+/* eslint-enable @typescript-eslint/no-unused-vars */

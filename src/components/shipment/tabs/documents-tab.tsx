@@ -15,7 +15,7 @@ export default function DocumentsTab({ shipmentId }: { shipmentId: string }) {
   }
   useEffect(() => {
     refresh();
-  }, [shipmentId]);
+  }, [shipmentId, refresh]);
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];

@@ -10,7 +10,7 @@ import {
   Star,
   Pin,
   Smile,
-  Paperclip,
+  // Paperclip,
   Download,
   File,
   FileText,

@@ -9,9 +9,28 @@ import {
   CardAction
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AreaGraph } from './area-graph';
-import { BarGraph } from './bar-graph';
-import { PieGraph } from './pie-graph';
+import dynamic from 'next/dynamic';
+const BarGraph = dynamic(() => import('./bar-graph').then((m) => m.BarGraph), {
+  ssr: false,
+  loading: () => (
+    <div className='bg-muted/30 h-[300px] animate-pulse rounded-md' />
+  )
+});
+const AreaGraph = dynamic(
+  () => import('./area-graph').then((m) => m.AreaGraph),
+  {
+    ssr: false,
+    loading: () => (
+      <div className='bg-muted/30 h-[300px] animate-pulse rounded-md' />
+    )
+  }
+);
+const PieGraph = dynamic(() => import('./pie-graph').then((m) => m.PieGraph), {
+  ssr: false,
+  loading: () => (
+    <div className='bg-muted/30 h-[300px] animate-pulse rounded-md' />
+  )
+});
 import { RecentSales } from './recent-sales';
 import { IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
 import { Badge } from '@/components/ui/badge';

@@ -5,14 +5,19 @@ import { cn } from '@/lib/utils';
 import SupabaseSignUpForm from './supabase-signup-form';
 import { Metadata } from 'next';
 import Link from 'next/link';
-import DarkVeil from './darkveil';
+import dynamic from 'next/dynamic';
+const DarkVeil = dynamic(() => import('./darkveil'), {
+  ssr: false,
+  // Render nothing until client mounts to avoid layout thrash
+  loading: () => null
+});
 
 export const metadata: Metadata = {
   title: 'Authentication',
   description: 'Authentication forms built using the components.'
 };
 
-export default function SignUpViewPage({ stars }: { stars: number }) {
+export default function SignUpViewPage({ _stars }: { _stars: number }) {
   return (
     <div className='relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0'>
       <Link

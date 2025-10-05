@@ -122,14 +122,12 @@ export async function sendMessage(roomId: string, content: string) {
   }
   // Create receipt for sender
   if (messageId) {
-    await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: messageId,
-        actor_id: uid,
-        event_type: 'receipt'
-      });
+    await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: messageId,
+      actor_id: uid,
+      event_type: 'receipt'
+    });
   }
   // Create notification for other members (simple fanout to notifications table if exists)
   try {
@@ -167,15 +165,13 @@ export async function addReaction(
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return { ok: false as const, error: 'Not authenticated' };
-  const { error } = await supabase
-    .from('chat_events')
-    .insert({
-      room_id: roomId,
-      message_id: messageId,
-      actor_id: uid,
-      event_type: 'emoji',
-      payload: { emoji }
-    });
+  const { error } = await supabase.from('chat_events').insert({
+    room_id: roomId,
+    message_id: messageId,
+    actor_id: uid,
+    event_type: 'emoji',
+    payload: { emoji }
+  });
   if (error) return { ok: false as const, error: error.message };
   return { ok: true as const };
 }
@@ -191,25 +187,20 @@ export async function togglePin(
   const uid = auth.user?.id;
   if (!uid) return { ok: false as const, error: 'Not authenticated' };
   if (pin) {
-    const { error } = await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: messageId,
-        actor_id: uid,
-        event_type: 'pin'
-      });
+    const { error } = await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: messageId,
+      actor_id: uid,
+      event_type: 'pin'
+    });
     if (error) return { ok: false as const, error: error.message };
   } else {
-    await supabase
-      .from('chat_events')
-      .delete()
-      .match({
-        room_id: roomId,
-        message_id: messageId,
-        actor_id: uid,
-        event_type: 'pin'
-      });
+    await supabase.from('chat_events').delete().match({
+      room_id: roomId,
+      message_id: messageId,
+      actor_id: uid,
+      event_type: 'pin'
+    });
   }
   return { ok: true as const };
 }
@@ -225,25 +216,20 @@ export async function toggleStar(
   const uid = auth.user?.id;
   if (!uid) return { ok: false as const, error: 'Not authenticated' };
   if (star) {
-    const { error } = await supabase
-      .from('chat_events')
-      .insert({
-        room_id: roomId,
-        message_id: messageId,
-        actor_id: uid,
-        event_type: 'star'
-      });
+    const { error } = await supabase.from('chat_events').insert({
+      room_id: roomId,
+      message_id: messageId,
+      actor_id: uid,
+      event_type: 'star'
+    });
     if (error) return { ok: false as const, error: error.message };
   } else {
-    await supabase
-      .from('chat_events')
-      .delete()
-      .match({
-        room_id: roomId,
-        message_id: messageId,
-        actor_id: uid,
-        event_type: 'star'
-      });
+    await supabase.from('chat_events').delete().match({
+      room_id: roomId,
+      message_id: messageId,
+      actor_id: uid,
+      event_type: 'star'
+    });
   }
   return { ok: true as const };
 }
@@ -254,13 +240,11 @@ export async function markRead(roomId: string, messageId: string) {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return { ok: false as const, error: 'Not authenticated' };
-  await supabase
-    .from('chat_events')
-    .insert({
-      room_id: roomId,
-      message_id: messageId,
-      actor_id: uid,
-      event_type: 'receipt'
-    });
+  await supabase.from('chat_events').insert({
+    room_id: roomId,
+    message_id: messageId,
+    actor_id: uid,
+    event_type: 'receipt'
+  });
   return { ok: true as const };
 }
