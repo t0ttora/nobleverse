@@ -7,8 +7,8 @@ const FILES_BUCKET = process.env.NEXT_PUBLIC_FILES_BUCKET || 'files';
 type RouteContext = { params: { id: string } };
 
 // PATCH: rename or move
-export async function PATCH(req: Request, context: RouteContext) {
-  const { id } = context.params;
+export async function PATCH(req: Request, { params }: any) {
+  const { id } = params || {};
   const body = await req.json().catch(() => ({}));
   const { name, parentId } = body;
   if (!name && !('parentId' in body)) {
@@ -58,8 +58,8 @@ export async function PATCH(req: Request, context: RouteContext) {
 }
 
 // DELETE: soft delete (also deletes storage object)
-export async function DELETE(_req: Request, context: RouteContext) {
-  const { id } = context.params;
+export async function DELETE(_req: Request, { params }: any) {
+  const { id } = params || {};
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data: auth } = await supabase.auth.getUser();
