@@ -226,41 +226,29 @@ export default function AppSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                tooltip='NobleSuite'
+                isActive={pathname.startsWith('/noblesuite')}
+              >
+                <Link href='/noblesuite'>
+                  <Icons.grid />
+                  <span>NobleSuite</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
+        {/* NobleAutomate restored as separate feature (legacy placement) */}
         <SidebarGroup>
-          <SidebarGroupLabel>NobleSuite™</SidebarGroupLabel>
+          <SidebarGroupLabel>Automation</SidebarGroupLabel>
           <SidebarMenu>
-            {/* NobleDocs removed */}
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip='NobleCells'
-                isActive={pathname === '/noblecells'}
-              >
-                <Link href='/noblecells'>
-                  <Icons.grid />
-                  <span>NobleCells</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip='NobleFiles'
-                isActive={pathname === '/noblefiles'}
-              >
-                <Link href='/noblefiles'>
-                  <Icons.file />
-                  <span>NobleFiles</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
                 tooltip='NobleAutomate'
-                isActive={pathname === '/nobleautomate'}
+                isActive={pathname.startsWith('/nobleautomate')}
               >
                 <Link href='/nobleautomate'>
                   <Icons.robot />

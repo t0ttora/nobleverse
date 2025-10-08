@@ -43,7 +43,8 @@ import {
   IconTruck,
   IconPlane,
   IconTrain,
-  IconBox
+  IconBox,
+  IconFolder
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -95,5 +96,6 @@ export const Icons = {
   air: IconPlane,
   rail: IconTrain,
   multimodal: IconGridDots,
-  courier: IconBox
+  courier: IconBox,
+  folder: IconFolder
 };

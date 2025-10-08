@@ -1,1 +1,13 @@
-pnpm run build
+#!/usr/bin/env bash
+# Husky pre-push: ensure build passes before pushing.
+# Uses pnpm if available (project is configured for pnpm); falls back to npm.
+
+if command -v pnpm >/dev/null 2>&1; then
+	echo "[pre-push] Using pnpm"
+	pnpm run build || exit 1
+else
+	echo "[pre-push] pnpm not found – falling back to npm (install pnpm for faster consistent installs)"
+	npm run build || exit 1
+fi
+
+echo "[pre-push] Build OK"
