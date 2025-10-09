@@ -13,12 +13,14 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { LineChart as RLineChart, Line, XAxis, YAxis } from 'recharts';
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent
-} from '@/components/ui/chart';
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 import {
   Table,
   TableHeader,
@@ -27,19 +29,8 @@ import {
   TableBody,
   TableCell
 } from '@/components/ui/table';
+// Icons intentionally omitted to avoid transient typecheck issues with library exports; using text labels instead
 import { supabase } from '@/lib/supabaseClient';
-// Safe lucide icons (verified exports in current version)
-import {
-  Maximize2,
-  Minimize2,
-  Share2,
-  Filter,
-  X as Close,
-  Download,
-  FileDown,
-  GitCompare,
-  LineChart
-} from 'lucide-react';
 
 type Period = '7d' | '30d' | '90d' | 'custom';
 
@@ -109,34 +100,34 @@ export function KpiDetailsPanel({
     if (!w) return toast.error('Popup blocked');
     const { rows, columns } = buildDetailsData();
     const tableHtml = `
-			<table style="width:100%;border-collapse:collapse;font-family:system-ui,Segoe UI,Arial">
-				<thead><tr>${columns
-          .map(
-            (c) =>
-              `<th style="border:1px solid #ddd;padding:6px;text-align:left">${c}</th>`
-          )
-          .join('')}</tr></thead>
-				<tbody>
-					${rows
-            .map(
-              (r) =>
-                `<tr>${columns
-                  .map(
-                    (c) =>
-                      `<td style=\"border:1px solid #ddd;padding:6px\">${r[c] ?? ''}</td>`
-                  )
-                  .join('')}</tr>`
-            )
-            .join('')}
-				</tbody>
-			</table>`;
+          <table style="width:100%;border-collapse:collapse;font-family:system-ui,Segoe UI,Arial">
+            <thead><tr>${columns
+              .map(
+                (c) =>
+                  `<th style="border:1px solid #ddd;padding:6px;text-align:left">${c}</th>`
+              )
+              .join('')}</tr></thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) =>
+                    `<tr>${columns
+                      .map(
+                        (c) =>
+                          `<td style=\"border:1px solid #ddd;padding:6px\">${r[c] ?? ''}</td>`
+                      )
+                      .join('')}</tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>`;
     w.document.write(`
-			<html><head><title>${title} — Export</title></head>
-			<body>
-				<h3>${title} (${kpi?.key})</h3>
-				${tableHtml}
-				<script>window.onload = () => { window.print(); setTimeout(() => window.close(), 300); }<\/script>
-			</body></html>`);
+          <html><head><title>${title} — Export</title></head>
+          <body>
+            <h3>${title} (${kpi?.key})</h3>
+            ${tableHtml}
+            <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 300); }<\/script>
+          </body></html>`);
     w.document.close();
   }
 
@@ -383,10 +374,10 @@ export function KpiDetailsPanel({
       onClose={onClose}
       title={
         <div className='flex w-full items-center gap-3'>
-          {/* Icon + title */}
+          {/* Minimal icon placeholder */}
           <div className='flex min-w-0 items-center gap-3'>
-            <div className='bg-muted text-muted-foreground flex h-9 w-9 items-center justify-center rounded-md border'>
-              <LineChart className='h-4 w-4' />
+            <div className='flex h-9 w-9 items-center justify-center rounded-md border text-xs font-bold'>
+              {kpi?.key?.slice(0, 1).toUpperCase() || 'KPI'}
             </div>
             <div className='min-w-0'>
               <div className='truncate text-sm font-semibold'>{title}</div>
@@ -408,19 +399,16 @@ export function KpiDetailsPanel({
                 <SelectItem value='custom'>Custom range</SelectItem>
               </SelectContent>
             </Select>
+            {/* Icons replaced with text glyphs to avoid lucide-react named export issues */}
             <div className='flex items-center gap-1'>
               <Button
                 variant='outline'
                 size='sm'
                 onClick={() => setExpanded((v) => !v)}
-                title={expanded ? 'Minimize' : 'Maximize'}
-                aria-label={expanded ? 'Minimize' : 'Maximize'}
+                title='Expand View'
+                aria-label='Expand View'
               >
-                {expanded ? (
-                  <Minimize2 className='h-4 w-4' />
-                ) : (
-                  <Maximize2 className='h-4 w-4' />
-                )}
+                [ ]
               </Button>
               <Button
                 variant='outline'
@@ -429,7 +417,7 @@ export function KpiDetailsPanel({
                 title='Share'
                 aria-label='Share'
               >
-                <Share2 className='h-4 w-4' />
+                ⇪
               </Button>
               <Button
                 variant='outline'
@@ -438,7 +426,7 @@ export function KpiDetailsPanel({
                 title='Filter'
                 aria-label='Filter'
               >
-                <Filter className='h-4 w-4' />
+                ≡
               </Button>
               <Button
                 variant='outline'
@@ -447,57 +435,10 @@ export function KpiDetailsPanel({
                 title='Close'
                 aria-label='Close'
               >
-                <Close className='h-4 w-4' />
+                ×
               </Button>
             </div>
           </div>
-        </div>
-      }
-      footer={
-        <div className='flex w-full items-center justify-end gap-2'>
-          {role === 'receiver' && kpi?.key === 'unread_notifications' && (
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={markAllNotificationsRead}
-              aria-label='Mark all as read'
-            >
-              Mark all as read
-            </Button>
-          )}
-          {role === 'shipper' && kpi?.key === 'open_requests' && (
-            <Button
-              size='sm'
-              variant='default'
-              onClick={() => (window.location.href = '/shipments/requests')}
-              aria-label='New Request'
-            >
-              New Request
-            </Button>
-          )}
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={() => toast.info('Compare view coming soon')}
-            aria-label='Compare periods'
-          >
-            <GitCompare className='mr-1 h-4 w-4' /> Compare
-          </Button>
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={() => doExport('csv')}
-            aria-label='Export CSV'
-          >
-            <Download className='mr-1 h-4 w-4' /> Export CSV
-          </Button>
-          <Button
-            size='sm'
-            onClick={() => doExport('pdf')}
-            aria-label='Export PDF'
-          >
-            <FileDown className='mr-1 h-4 w-4' /> Export PDF
-          </Button>
         </div>
       }
     >
@@ -531,18 +472,11 @@ export function KpiDetailsPanel({
             <TabsContent value='overview'>
               <div className='grid grid-cols-1 gap-4 lg:grid-cols-3'>
                 <div className='col-span-2 rounded-lg border p-2'>
-                  <div className='mb-2 flex items-center gap-2 text-sm font-semibold'>
-                    <LineChart className='h-4 w-4' /> Trend
-                  </div>
+                  <div className='mb-2 text-sm font-semibold'>Trend</div>
                   <div className='h-56 w-full'>
-                    <ChartContainer
-                      config={{
-                        value: { label: title, color: 'var(--primary)' }
-                      }}
-                      className='h-full w-full'
-                    >
-                      <RLineChart
-                        data={series}
+                    <ResponsiveContainer width='100%' height='100%'>
+                      <LineChart
+                        data={buildSeries()}
                         margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
                       >
                         <XAxis
@@ -551,7 +485,12 @@ export function KpiDetailsPanel({
                           tickFormatter={(d: string) => (d || '').slice(5, 10)}
                         />
                         <YAxis width={32} tick={{ fontSize: 10 }} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Tooltip
+                          formatter={(v: any) => String(v)}
+                          labelFormatter={(d: string) =>
+                            new Date(d).toLocaleDateString()
+                          }
+                        />
                         <Line
                           type='monotone'
                           dataKey='value'
@@ -559,8 +498,8 @@ export function KpiDetailsPanel({
                           strokeWidth={2}
                           dot={false}
                         />
-                      </RLineChart>
-                    </ChartContainer>
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
                 <div className='rounded-lg border p-2'>
@@ -616,32 +555,13 @@ export function KpiDetailsPanel({
                   )}
                 </div>
               </div>
-              <div className='my-2 flex items-center gap-2'>
+              <div className='my-2'>
                 <Input
                   placeholder='Search...'
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className='h-8 max-w-sm'
                 />
-                <div className='ml-auto flex items-center gap-2'>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    onClick={() => doExport('csv')}
-                  >
-                    <Download className='mr-1 h-4 w-4' /> Export CSV
-                  </Button>
-                  <Button size='sm' onClick={() => doExport('pdf')}>
-                    <FileDown className='mr-1 h-4 w-4' /> Export PDF
-                  </Button>
-                  <Button
-                    size='sm'
-                    variant='outline'
-                    onClick={() => toast.info('Compare view coming soon')}
-                  >
-                    <GitCompare className='mr-1 h-4 w-4' /> Compare
-                  </Button>
-                </div>
               </div>
               {(() => {
                 const { rows, columns } = buildDetailsData();
@@ -689,6 +609,31 @@ export function KpiDetailsPanel({
                   </div>
                 );
               })()}
+              <div className='mt-2 flex items-center gap-2'>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => doExport('csv')}
+                >
+                  Export CSV
+                </Button>
+                <Button size='sm' onClick={() => doExport('pdf')}>
+                  Export PDF
+                </Button>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => toast.info('Compare view coming soon')}
+                >
+                  Compare Periods
+                </Button>
+                <Button
+                  size='sm'
+                  onClick={() => toast.info('Navigating to analytics...')}
+                >
+                  Go to Analytics
+                </Button>
+              </div>
             </TabsContent>
             <TabsContent value='insights'>
               <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
@@ -709,21 +654,10 @@ export function KpiDetailsPanel({
                 <div className='rounded-lg border p-3'>
                   <div className='mb-2 text-sm font-semibold'>Forecast</div>
                   <div className='h-40 w-full'>
-                    <ChartContainer
-                      config={{
-                        value: { label: 'Forecast', color: 'var(--primary)' }
-                      }}
-                      className='h-full w-full'
-                    >
-                      <RLineChart
-                        data={series}
-                        margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
-                      >
+                    <ResponsiveContainer width='100%' height='100%'>
+                      <LineChart data={buildSeries()}>
                         <XAxis dataKey='date' hide />
                         <YAxis hide />
-                        <ChartTooltip
-                          content={<ChartTooltipContent indicator='dot' />}
-                        />
                         <Line
                           type='monotone'
                           dataKey='value'
@@ -731,8 +665,8 @@ export function KpiDetailsPanel({
                           strokeWidth={2}
                           dot={false}
                         />
-                      </RLineChart>
-                    </ChartContainer>
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>

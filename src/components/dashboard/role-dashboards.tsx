@@ -43,7 +43,7 @@ function Section({
 }
 
 export function ShipperDashboard({ userId }: { userId: string }) {
-  const { kpis, loading } = useShipperDashboard(userId);
+  const { kpis, loading, shipments, requests } = useShipperDashboard(userId);
   const [kpiOpen, setKpiOpen] = React.useState(false);
   const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
   return (
@@ -56,6 +56,7 @@ export function ShipperDashboard({ userId }: { userId: string }) {
           trend: k.trend,
           note: k.note,
           deltaPct: k.deltaPct,
+          headline: k.headline,
           onClick: () => {
             setActiveKpi(k);
             setKpiOpen(true);
@@ -81,6 +82,10 @@ export function ShipperDashboard({ userId }: { userId: string }) {
         open={kpiOpen}
         onClose={() => setKpiOpen(false)}
         kpi={activeKpi}
+        role='shipper'
+        userId={userId}
+        shipments={shipments}
+        requests={requests}
       />
     </>
   );
@@ -88,7 +93,7 @@ export function ShipperDashboard({ userId }: { userId: string }) {
 
 export function ForwarderDashboard() {
   const [me, setMe] = React.useState('');
-  const { kpis, loading } = useForwarderDashboard(me);
+  const { kpis, loading, shipments, offers } = useForwarderDashboard(me);
   const [kpiOpen, setKpiOpen] = React.useState(false);
   const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
   const [open, setOpen] = React.useState(false);
@@ -119,6 +124,7 @@ export function ForwarderDashboard() {
           trend: k.trend,
           note: k.note,
           deltaPct: k.deltaPct,
+          headline: k.headline,
           onClick: () => {
             setActiveKpi(k);
             setKpiOpen(true);
@@ -185,6 +191,10 @@ export function ForwarderDashboard() {
         open={kpiOpen}
         onClose={() => setKpiOpen(false)}
         kpi={activeKpi}
+        role='forwarder'
+        userId={me}
+        shipments={shipments}
+        offers={offers}
       />
       {/* Restore modal logic for incoming requests if needed */}
       {/* ...existing code for modal and offer form, if any, can be restored here... */}
@@ -222,7 +232,8 @@ export function CustomsOfficerDashboard() {
 
 export function ReceiverDashboard() {
   const [me, setMe] = React.useState('');
-  const { kpis, loading } = useReceiverDashboard(me);
+  const { kpis, loading, shipments, notifications, unread } =
+    useReceiverDashboard(me);
   const [kpiOpen, setKpiOpen] = React.useState(false);
   const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
   React.useEffect(() => {
@@ -238,6 +249,7 @@ export function ReceiverDashboard() {
           trend: k.trend,
           note: k.note,
           deltaPct: k.deltaPct,
+          headline: k.headline,
           onClick: () => {
             setActiveKpi(k);
             setKpiOpen(true);
@@ -261,6 +273,10 @@ export function ReceiverDashboard() {
         open={kpiOpen}
         onClose={() => setKpiOpen(false)}
         kpi={activeKpi}
+        role='receiver'
+        userId={me}
+        shipments={shipments}
+        notifications={notifications}
       />
     </>
   );

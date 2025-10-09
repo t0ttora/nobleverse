@@ -10,6 +10,15 @@ import {
 
 type Status<T> = { data: T; loading: boolean; error?: string | null };
 
+type NotificationRow = {
+  id: string;
+  user_id: string;
+  type?: string | null;
+  message?: string | null;
+  created_at?: string;
+  read_at?: string | null;
+};
+
 function useRealtimeInvalidate(tables: string[], onInvalidate: () => void) {
   useEffect(() => {
     const channel = (supabase as any).channel(`dashboard-${tables.join('-')}`, {
@@ -126,6 +135,7 @@ export function useForwarderDashboard(userId: string) {
 export function useReceiverDashboard(userId: string) {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [unread, setUnread] = useState(0);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,10 +155,14 @@ export function useReceiverDashboard(userId: string) {
       setShipments((s2.data || []) as Shipment[]);
       const notif = await (supabase as any)
         .from('notifications')
-        .select('id')
+        .select('id, user_id, type, message, created_at, read_at')
         .eq('user_id', userId)
-        .is('read_at', null);
-      if (!notif.error) setUnread((notif.data || []).length);
+        .order('created_at', { ascending: false });
+      if (!notif.error) {
+        const rows = (notif.data || []) as any[];
+        setNotifications(rows as any);
+        setUnread(rows.filter((r) => !r.read_at).length);
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
     } finally {
@@ -164,5 +178,13 @@ export function useReceiverDashboard(userId: string) {
     () => computeReceiverKpis({ shipments, notificationsUnread: unread }),
     [shipments, unread]
   );
-  return { kpis, shipments, loading, error, reload: load } as const;
+  return {
+    kpis,
+    shipments,
+    notifications,
+    unread,
+    loading,
+    error,
+    reload: load
+  } as const;
 }
