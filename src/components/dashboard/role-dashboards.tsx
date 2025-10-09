@@ -20,6 +20,13 @@ import { ForwarderOfferForm } from '@/components/offers/forwarder-offer-form';
 import { SidePanel } from '@/components/ui/side-panel';
 // import { ShipmentsTable } from '@/components/ui/shipments-table';
 import { RequestBrowser } from '@/components/requests/request-browser';
+import {
+  useForwarderDashboard,
+  useReceiverDashboard,
+  useShipperDashboard
+} from '@/features/dashboard/hooks';
+import type { KpiComputed } from '@/features/dashboard/compute';
+import { KpiDetailsPanel } from './kpi-details-panel';
 
 function Section({
   title,
@@ -36,20 +43,24 @@ function Section({
 }
 
 export function ShipperDashboard({ userId }: { userId: string }) {
+  const { kpis, loading } = useShipperDashboard(userId);
+  const [kpiOpen, setKpiOpen] = React.useState(false);
+  const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
   return (
     <>
       <KPICards
-        items={[
-          {
-            label: 'Total Spend',
-            value: '$12,450',
-            trend: 'up',
-            note: 'This month vs last'
-          },
-          { label: 'Shipments in Transit', value: '8', trend: 'flat' },
-          { label: 'On-Time Delivery Rate', value: '96%', trend: 'up' },
-          { label: 'Claims / Issues', value: '2', trend: 'down' }
-        ]}
+        loading={loading}
+        items={kpis.map((k) => ({
+          label: k.label,
+          value: k.key === 'delivery_rate' ? `${k.value}%` : k.value,
+          trend: k.trend,
+          note: k.note,
+          deltaPct: k.deltaPct,
+          onClick: () => {
+            setActiveKpi(k);
+            setKpiOpen(true);
+          }
+        }))}
       />
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
         {/* Left column: Recent Requests card */}
@@ -66,12 +77,20 @@ export function ShipperDashboard({ userId }: { userId: string }) {
           </Section>
         </div>
       </div>
+      <KpiDetailsPanel
+        open={kpiOpen}
+        onClose={() => setKpiOpen(false)}
+        kpi={activeKpi}
+      />
     </>
   );
 }
 
 export function ForwarderDashboard() {
   const [me, setMe] = React.useState('');
+  const { kpis, loading } = useForwarderDashboard(me);
+  const [kpiOpen, setKpiOpen] = React.useState(false);
+  const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
   const [open, setOpen] = React.useState(false);
   const [req, setReq] = React.useState<any | null>(null);
   // Restore state for requests modal (for incoming requests section)
@@ -93,20 +112,18 @@ export function ForwarderDashboard() {
   return (
     <>
       <KPICards
-        items={[
-          { label: 'Active Shipments', value: '23', trend: 'up' },
-          {
-            label: 'Quotes Sent vs. Accepted',
-            value: '58% acceptance',
-            trend: 'up'
-          },
-          {
-            label: 'Fleet / Container Utilization',
-            value: '74%',
-            trend: 'flat'
-          },
-          { label: 'Revenue per Shipment', value: '$1,240', trend: 'up' }
-        ]}
+        loading={loading}
+        items={kpis.map((k) => ({
+          label: k.label,
+          value: k.key === 'acceptance_rate' ? `${k.value}%` : k.value,
+          trend: k.trend,
+          note: k.note,
+          deltaPct: k.deltaPct,
+          onClick: () => {
+            setActiveKpi(k);
+            setKpiOpen(true);
+          }
+        }))}
       />
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
         <Section title='Incoming Requests'>
@@ -122,6 +139,13 @@ export function ForwarderDashboard() {
               Create Request
             </Button>
           </div>
+          <RequestBrowser
+            forwarderId={me}
+            onSelect={(row) => {
+              setReq(row);
+              setOpen(true);
+            }}
+          />
         </Section>
         <div className='flex flex-col gap-4'>
           <Section title='Recent Offers'>
@@ -157,6 +181,11 @@ export function ForwarderDashboard() {
           }}
         />
       </SidePanel>
+      <KpiDetailsPanel
+        open={kpiOpen}
+        onClose={() => setKpiOpen(false)}
+        kpi={activeKpi}
+      />
       {/* Restore modal logic for incoming requests if needed */}
       {/* ...existing code for modal and offer form, if any, can be restored here... */}
     </>
@@ -192,19 +221,28 @@ export function CustomsOfficerDashboard() {
 }
 
 export function ReceiverDashboard() {
+  const [me, setMe] = React.useState('');
+  const { kpis, loading } = useReceiverDashboard(me);
+  const [kpiOpen, setKpiOpen] = React.useState(false);
+  const [activeKpi, setActiveKpi] = React.useState<KpiComputed | null>(null);
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id || ''));
+  }, []);
   return (
     <>
       <KPICards
-        items={[
-          { label: 'Incoming Shipments', value: '6', trend: 'flat' },
-          {
-            label: 'Estimated Arrival Time',
-            value: 'Avg. 3d 4h',
-            trend: 'down'
-          },
-          { label: 'Delivery Accuracy Rate', value: '98%', trend: 'up' },
-          { label: 'Claims Filed / Resolved', value: '1 / 1', trend: 'up' }
-        ]}
+        loading={loading}
+        items={kpis.map((k) => ({
+          label: k.label,
+          value: k.key?.includes('accuracy') ? `${k.value}%` : k.value,
+          trend: k.trend,
+          note: k.note,
+          deltaPct: k.deltaPct,
+          onClick: () => {
+            setActiveKpi(k);
+            setKpiOpen(true);
+          }
+        }))}
       />
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
         <Section title='Shipment Tracking Timeline'>
@@ -219,6 +257,11 @@ export function ReceiverDashboard() {
           </Section>
         </div>
       </div>
+      <KpiDetailsPanel
+        open={kpiOpen}
+        onClose={() => setKpiOpen(false)}
+        kpi={activeKpi}
+      />
     </>
   );
 }
