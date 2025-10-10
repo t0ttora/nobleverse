@@ -5,7 +5,13 @@ import { createClient } from '@/../utils/supabase/server';
 // GET /api/noblesuite/files?parentId=&search=&limit=
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const parentId = searchParams.get('parentId');
+  const rawParent = searchParams.get('parentId');
+  const isUuid = (s: string) =>
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+      s
+    );
+  // If parentId is not a UUID (e.g., optimistic ids like "optim-..."), treat as root
+  const parentId = rawParent && isUuid(rawParent) ? rawParent : null;
   const search = searchParams.get('search')?.trim();
   const limit = Math.min(Number(searchParams.get('limit') || 50), 200);
   const cookieStore = await cookies();

@@ -28,6 +28,25 @@ interface FileItem {
   updated_at: string;
 }
 
+// Helpers for filename handling (hide extensions on UI)
+function isUuid(s: string | null | undefined): boolean {
+  if (!s) return false;
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+    s
+  );
+}
+function baseName(name: string): string {
+  const idx = name.lastIndexOf('.');
+  return idx > 0 ? name.slice(0, idx) : name;
+}
+function extension(name: string): string {
+  const idx = name.lastIndexOf('.');
+  return idx > 0 ? name.slice(idx + 1).toLowerCase() : '';
+}
+function visibleName(item: FileItem): string {
+  return item.type === 'folder' ? item.name : baseName(item.name);
+}
+
 export default function FilesBrowser() {
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -213,18 +232,23 @@ export default function FilesBrowser() {
 
   const submitRename = async (item: FileItem, newName: string) => {
     const trimmed = newName.trim();
-    if (!trimmed || trimmed === item.name) {
+    // Recombine with original extension for files
+    const oldExt =
+      item.type !== 'folder' ? item.ext || extension(item.name) : '';
+    const finalName =
+      item.type !== 'folder' && oldExt ? `${trimmed}.${oldExt}` : trimmed;
+    if (!trimmed || finalName === item.name) {
       setRenamingId(null);
       return;
     }
     const prev = items;
     setItems((p) =>
-      p.map((i) => (i.id === item.id ? { ...i, name: trimmed } : i))
+      p.map((i) => (i.id === item.id ? { ...i, name: finalName } : i))
     );
     const res = await fetch(`/api/noblesuite/files/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed })
+      body: JSON.stringify({ name: finalName })
     });
     const json = await res.json();
     if (!json.ok) {
@@ -232,7 +256,7 @@ export default function FilesBrowser() {
       setError(mapError(json.error));
     }
     setRenamingId(null);
-    refreshBreadcrumbNames({ ...item, name: trimmed });
+    refreshBreadcrumbNames({ ...item, name: finalName });
   };
 
   type SortKey = 'updated' | 'name' | 'size' | 'type';
@@ -538,13 +562,17 @@ export default function FilesBrowser() {
           </button>
         )}
         {breadcrumb.map((b, idx) => (
-          <span key={b.id ?? 'root'} className='flex items-center gap-1'>
+          <span
+            key={`${b.id ?? 'root'}-${idx}`}
+            className='flex items-center gap-1'
+          >
             <button
               className={cn(
                 'transition-colors hover:underline',
                 b.id === parentId ? 'text-foreground font-medium' : ''
               )}
               onClick={() => {
+                if (b.id && !isUuid(b.id)) return; // ignore invalid id crumbs
                 setParentId(b.id);
                 setBreadcrumb((prev) => prev.slice(0, idx + 1));
               }}
@@ -622,11 +650,16 @@ export default function FilesBrowser() {
                   <button
                     className='flex flex-1 cursor-pointer items-center gap-3 text-left text-[14px] font-medium'
                     onClick={() => {
+                      if (!isUuid(f.id)) return; // avoid navigating to optimistic/new folder before real id
                       setParentId(f.id);
-                      setBreadcrumb((prev) => [
-                        ...prev,
-                        { id: f.id, name: f.name }
-                      ]);
+                      setBreadcrumb((prev) => {
+                        const existingIdx = prev.findIndex(
+                          (c) => c.id === f.id
+                        );
+                        if (existingIdx !== -1)
+                          return prev.slice(0, existingIdx + 1);
+                        return [...prev, { id: f.id, name: f.name }];
+                      });
                     }}
                     title={f.name}
                   >
@@ -674,7 +707,7 @@ export default function FilesBrowser() {
                     <Icons.file className='text-primary size-7 shrink-0' />
                     <input
                       ref={renameInputRef}
-                      defaultValue={f.name}
+                      defaultValue={visibleName(f)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -778,11 +811,16 @@ export default function FilesBrowser() {
                       className='cursor-pointer truncate pr-1 text-left whitespace-nowrap hover:underline'
                       title={f.name}
                       onClick={() => {
+                        if (!isUuid(f.id)) return;
                         setParentId(f.id);
-                        setBreadcrumb((prev) => [
-                          ...prev,
-                          { id: f.id, name: f.name }
-                        ]);
+                        setBreadcrumb((prev) => {
+                          const existingIdx = prev.findIndex(
+                            (c) => c.id === f.id
+                          );
+                          if (existingIdx !== -1)
+                            return prev.slice(0, existingIdx + 1);
+                          return [...prev, { id: f.id, name: f.name }];
+                        });
                       }}
                     >
                       {displayName(f.name)}
