@@ -10,8 +10,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function PATCH(req: Request, context: RouteContext) {
   const { id } = await context.params;
   const body = await req.json().catch(() => ({}));
-  const { name, parentId } = body;
-  if (!name && !('parentId' in body)) {
+  const { name, parentId, is_starred } = body;
+  if (!name && !('parentId' in body) && !('is_starred' in body)) {
     return NextResponse.json(
       { ok: false, error: 'NOTHING_TO_UPDATE' },
       { status: 400 }
@@ -35,12 +35,13 @@ export async function PATCH(req: Request, context: RouteContext) {
   const update: Record<string, any> = {};
   if (typeof name === 'string' && name.trim()) update.name = name.trim();
   if ('parentId' in body) update.parent_id = parentId || null;
+  if ('is_starred' in body) update.is_starred = Boolean(is_starred);
 
   const { data, error } = await supabase
     .from('files')
     .update(update)
     .eq('id', id)
-    .select('id,name,parent_id,type,updated_at')
+    .select('id,name,parent_id,type,updated_at,is_starred')
     .single();
   if (error) {
     if (error.message.includes('duplicate')) {

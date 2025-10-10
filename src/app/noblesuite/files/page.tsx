@@ -1,5 +1,4 @@
-import FilesBrowser from '@/features/files/components/files-browser';
-
-export default function NobleSuiteFilesPage() {
-  return <FilesBrowser />;
+import { redirect } from 'next/navigation';
+export default function NobleSuiteFilesRedirect() {
+  redirect('/noblefiles');
 }

@@ -23,10 +23,11 @@ export async function GET(req: Request) {
       { status: 401 }
     );
 
-  let query = supabase
-    .from('files')
+  // First try selecting with is_starred; if that fails due to column not existing, retry without it.
+  const base = supabase.from('files');
+  let query = base
     .select(
-      'id,parent_id,name,type,mime_type,ext,size_bytes,owner_id,version,updated_at,created_at,storage_path'
+      'id,parent_id,name,type,mime_type,ext,size_bytes,owner_id,version,updated_at,created_at,storage_path,is_starred'
     )
     .eq('is_deleted', false)
     .order('type', { ascending: true })
@@ -35,7 +36,32 @@ export async function GET(req: Request) {
   if (parentId) query = query.eq('parent_id', parentId);
   else query = query.is('parent_id', null);
   if (search) query = query.ilike('name', `%${search}%`);
-  const { data, error } = await query;
+  let { data, error } = await query;
+  if (error && /column .*is_starred.* does not exist/i.test(error.message)) {
+    // Retry without is_starred and default it to false in response to keep UI working until migration is applied
+    let query2 = base
+      .select(
+        'id,parent_id,name,type,mime_type,ext,size_bytes,owner_id,version,updated_at,created_at,storage_path'
+      )
+      .eq('is_deleted', false)
+      .order('type', { ascending: true })
+      .order('name', { ascending: true })
+      .limit(limit);
+    if (parentId) query2 = query2.eq('parent_id', parentId);
+    else query2 = query2.is('parent_id', null);
+    if (search) query2 = query2.ilike('name', `%${search}%`);
+    const res2 = await query2;
+    if (res2.error)
+      return NextResponse.json(
+        { ok: false, error: res2.error.message },
+        { status: 400 }
+      );
+    const items = (res2.data || []).map((it: any) => ({
+      ...it,
+      is_starred: false
+    }));
+    return NextResponse.json({ ok: true, items });
+  }
   if (error)
     return NextResponse.json(
       { ok: false, error: error.message },

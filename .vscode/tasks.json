@@ -28,6 +28,66 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck (tsc)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Remove-Item -ErrorAction SilentlyContinue tsconfig.tsbuildinfo; pnpm exec tsc -b --clean; pnpm exec tsc -p tsconfig.json --noEmit"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }

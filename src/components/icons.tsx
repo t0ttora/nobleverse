@@ -44,7 +44,24 @@ import {
   IconPlane,
   IconTrain,
   IconBox,
-  IconFolder
+  IconFolder,
+  IconStar,
+  IconStarFilled,
+  IconShare
+} from '@tabler/icons-react';
+import {
+  IconVideo,
+  IconMusic,
+  IconArchive,
+  IconCode,
+  IconDownload,
+  IconExternalLink
+} from '@tabler/icons-react';
+import {
+  IconSearch,
+  IconFilter,
+  IconFolderFilled,
+  IconCalendar
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -97,5 +114,22 @@ export const Icons = {
   rail: IconTrain,
   multimodal: IconGridDots,
   courier: IconBox,
-  folder: IconFolder
+  folder: IconFolder,
+  folderFilled: IconFolderFilled,
+  star: IconStar,
+  starFilled: IconStarFilled,
+  share: IconShare,
+  // File type specific
+  video: IconVideo,
+  audio: IconMusic,
+  archive: IconArchive,
+  code: IconCode,
+  image: IconPhoto,
+  doc: IconFileText,
+  // Actions
+  download: IconDownload,
+  external: IconExternalLink,
+  filter: IconFilter,
+  search: IconSearch,
+  calendar: IconCalendar
 };

@@ -1,4 +1,5 @@
-import { redirect } from 'next/navigation';
-export default function LegacyFilesRedirect() {
-  redirect('/noblesuite/files');
+import FilesBrowser from '@/features/files/components/files-browser';
+
+export default function NobleFilesPage() {
+  return <FilesBrowser />;
 }
