@@ -14,6 +14,7 @@ export async function GET(req: Request) {
   const parentId = rawParent && isUuid(rawParent) ? rawParent : null;
   const search = searchParams.get('search')?.trim();
   const limit = Math.min(Number(searchParams.get('limit') || 50), 200);
+  const sharedOnly = searchParams.get('sharedOnly') === '1';
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data: auth } = await supabase.auth.getUser();
@@ -27,17 +28,39 @@ export async function GET(req: Request) {
   const base = supabase.from('files');
   let query = base
     .select(
-      'id,parent_id,name,type,mime_type,ext,size_bytes,owner_id,version,updated_at,created_at,storage_path,is_starred'
+      'id,parent_id,name,type,mime_type,ext,size_bytes,owner_id,version,updated_at,created_at,storage_path,is_starred,visibility'
     )
     .eq('is_deleted', false)
     .order('type', { ascending: true })
     .order('name', { ascending: true })
     .limit(limit);
-  if (parentId) query = query.eq('parent_id', parentId);
-  else query = query.is('parent_id', null);
+  if (sharedOnly) {
+    // Fetch file ids shared with the user, then filter files by those ids
+    const { data: sharedRows, error: sharedErr } = await supabase
+      .from('files_shares')
+      .select('file_id')
+      .eq('user_id', auth.user.id);
+    if (sharedErr)
+      return NextResponse.json(
+        { ok: false, error: sharedErr.message },
+        { status: 400 }
+      );
+    const ids = (sharedRows || []).map((r: any) => r.file_id).filter(Boolean);
+    if (ids.length === 0) {
+      return NextResponse.json({ ok: true, items: [] });
+    }
+    query = query.in('id', ids);
+  } else {
+    if (parentId) query = query.eq('parent_id', parentId);
+    else query = query.is('parent_id', null);
+  }
   if (search) query = query.ilike('name', `%${search}%`);
   let { data, error } = await query;
-  if (error && /column .*is_starred.* does not exist/i.test(error.message)) {
+  if (
+    error &&
+    (/column .*is_starred.* does not exist/i.test(error.message) ||
+      /column .*visibility.* does not exist/i.test(error.message))
+  ) {
     // Retry without is_starred and default it to false in response to keep UI working until migration is applied
     let query2 = base
       .select(
@@ -58,7 +81,8 @@ export async function GET(req: Request) {
       );
     const items = (res2.data || []).map((it: any) => ({
       ...it,
-      is_starred: false
+      is_starred: false,
+      visibility: 'private'
     }));
     return NextResponse.json({ ok: true, items });
   }
@@ -74,7 +98,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, parentId, type = 'folder' } = body || {};
+    const { name, parentId, type = 'folder', visibility } = body || {};
     if (!name || typeof name !== 'string')
       return NextResponse.json(
         { ok: false, error: 'NAME_REQUIRED' },
@@ -94,17 +118,45 @@ export async function POST(req: Request) {
         { status: 401 }
       );
 
-    const insert = {
+    const insertBase: any = {
       name: name.trim(),
       parent_id: parentId || null,
       type: 'folder',
       owner_id: auth.user.id
     };
-    const { data, error } = await supabase
+    if (visibility && (visibility === 'public' || visibility === 'private')) {
+      insertBase.visibility = visibility;
+    }
+    let { data, error } = await supabase
       .from('files')
-      .insert(insert)
-      .select('id,name,parent_id,type,created_at')
+      .insert(insertBase)
+      .select('id,name,parent_id,type,created_at,visibility')
       .single();
+    // Fallback if visibility column does not exist
+    if (error && /column .*visibility.* does not exist/i.test(error.message)) {
+      const { data: data2, error: error2 } = await supabase
+        .from('files')
+        .insert({
+          name: name.trim(),
+          parent_id: parentId || null,
+          type: 'folder',
+          owner_id: auth.user.id
+        })
+        .select('id,name,parent_id,type,created_at')
+        .single();
+      if (error2) {
+        if (error2.message.includes('duplicate'))
+          return NextResponse.json(
+            { ok: false, error: 'NAME_CONFLICT' },
+            { status: 409 }
+          );
+        return NextResponse.json(
+          { ok: false, error: error2.message },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json({ ok: true, item: data2 });
+    }
     if (error) {
       if (error.message.includes('duplicate'))
         return NextResponse.json(

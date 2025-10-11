@@ -1,5 +1,11 @@
 'use client';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +14,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
@@ -20,7 +27,8 @@ export interface UploadDialogProps {
   // Called for each file. Should throw on error.
   uploadOne: (
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    opts?: { signal?: AbortSignal }
   ) => Promise<void>;
   // Optional: max size in bytes for soft validation (default 50MB)
   maxSizeBytes?: number;
@@ -44,6 +52,13 @@ export default function UploadDialog({
     }[]
   >([]);
   const [busy, setBusy] = useState(false);
+  const controllerRef = useRef<AbortController | null>(null);
+  const stoppedRef = useRef(false);
+  const itemsRef = useRef(items);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const oversizeCount = useMemo(
     () => items.filter((i) => i.file.size > maxSizeBytes).length,
@@ -60,8 +75,7 @@ export default function UploadDialog({
       status: 'pending' as FileStatus
     }));
     setItems((prev) => [...prev, ...next]);
-    // Auto start upload for optimal UX
-    void startUpload([...next]);
+    // Do not auto-start; wait for user to click Upload.
   }, []);
 
   const startUpload = useCallback(
@@ -69,20 +83,28 @@ export default function UploadDialog({
       const toUpload = subset ?? items;
       if (!toUpload.length) return;
       setBusy(true);
+      stoppedRef.current = false;
+      controllerRef.current?.abort();
+      controllerRef.current = new AbortController();
       for (const it of toUpload) {
+        if (stoppedRef.current) break;
         setItems((prev) =>
           prev.map((p) =>
             p.id === it.id ? { ...p, status: 'uploading', progress: 0 } : p
           )
         );
         try {
-          await uploadOne(it.file, (percent) => {
-            setItems((prev) =>
-              prev.map((p) =>
-                p.id === it.id ? { ...p, progress: percent } : p
-              )
-            );
-          });
+          await uploadOne(
+            it.file,
+            (percent) => {
+              setItems((prev) =>
+                prev.map((p) =>
+                  p.id === it.id ? { ...p, progress: percent } : p
+                )
+              );
+            },
+            { signal: controllerRef.current?.signal }
+          );
           setItems((prev) =>
             prev.map((p) =>
               p.id === it.id ? { ...p, status: 'done', progress: 100 } : p
@@ -90,15 +112,25 @@ export default function UploadDialog({
           );
         } catch (e: any) {
           const msg =
-            typeof e?.message === 'string' ? e.message : 'UPLOAD_FAILED';
+            controllerRef.current?.signal.aborted || e?.name === 'AbortError'
+              ? 'CANCELLED'
+              : typeof e?.message === 'string'
+                ? e.message
+                : 'UPLOAD_FAILED';
           setItems((prev) =>
             prev.map((p) =>
               p.id === it.id ? { ...p, status: 'error', error: msg } : p
             )
           );
+          if (controllerRef.current?.signal.aborted) break;
         }
       }
       setBusy(false);
+      // Auto-close if everything succeeded (all done, none error/pending)
+      const list = itemsRef.current;
+      if (list.length > 0 && list.every((i) => i.status === 'done')) {
+        onOpenChange(false);
+      }
     },
     [items, uploadOne]
   );
@@ -112,6 +144,12 @@ export default function UploadDialog({
 
   const resetAll = () => setItems([]);
 
+  const cancelUpload = () => {
+    if (!busy) return;
+    stoppedRef.current = true;
+    controllerRef.current?.abort();
+  };
+
   return (
     <Dialog
       open={open}
@@ -120,7 +158,7 @@ export default function UploadDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className='overflow-hidden p-0 sm:max-w-xl'>
+      <DialogContent className='flex h-[50vh] flex-col overflow-hidden p-0 sm:max-w-xl'>
         <DialogHeader className='px-6 pt-5'>
           <DialogTitle>Upload files</DialogTitle>
           <DialogDescription>
@@ -181,56 +219,63 @@ export default function UploadDialog({
 
         {/* Selected list */}
         {items.length > 0 && (
-          <div className='mx-6 mb-3 space-y-2'>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                className='flex items-center justify-between rounded-md border px-3 py-2 text-sm'
-              >
-                <div className='flex min-w-0 items-center gap-3'>
-                  <span className='inline-flex h-6 w-6 items-center justify-center rounded bg-red-100 text-[10px] font-semibold text-red-700'>
-                    {(it.file.name.split('.').pop() || '').toUpperCase() ||
-                      'FILE'}
-                  </span>
-                  <div className='min-w-0 flex-1'>
-                    <div className='truncate' title={it.file.name}>
-                      {it.file.name}
-                    </div>
-                    <div className='text-muted-foreground text-xs'>
-                      {Math.round(it.file.size / 1024)} KB •{' '}
-                      {it.status === 'uploading' && <span>Uploading…</span>}
-                      {it.status === 'done' && (
-                        <span className='text-green-600'>Completed</span>
-                      )}
-                      {it.status === 'pending' && <span>Pending</span>}
-                      {it.status === 'error' && (
-                        <span className='text-destructive'>Failed</span>
-                      )}
-                    </div>
-                    {it.status === 'uploading' && (
-                      <div className='bg-muted mt-1 h-0.5 w-full overflow-hidden rounded'>
-                        <div
-                          className='bg-primary/70 h-full rounded transition-[width] duration-150'
-                          style={{
-                            width: `${Math.max(2, Math.min(98, Math.round(it.progress ?? 0)))}%`
-                          }}
-                        />
+          <div className='mx-6 mb-3 min-h-0 flex-1'>
+            <ScrollArea className='h-[28vh] pr-2 sm:h-[36vh]'>
+              <div className='space-y-2'>
+                {items.map((it) => (
+                  <div
+                    key={it.id}
+                    className='flex items-center justify-between rounded-md border px-3 py-2 text-sm'
+                  >
+                    <div className='flex min-w-0 items-center gap-3'>
+                      <span className='inline-flex h-6 w-6 items-center justify-center rounded bg-red-100 text-[10px] font-semibold text-red-700'>
+                        {(it.file.name.split('.').pop() || '').toUpperCase() ||
+                          'FILE'}
+                      </span>
+                      <div className='min-w-0 flex-1'>
+                        <div className='truncate' title={it.file.name}>
+                          {it.file.name}
+                        </div>
+                        <div className='text-muted-foreground text-xs'>
+                          {Math.round(it.file.size / 1024)} KB •{' '}
+                          {it.status === 'uploading' && <span>Uploading…</span>}
+                          {it.status === 'done' && (
+                            <span className='text-green-600'>Completed</span>
+                          )}
+                          {it.status === 'pending' && <span>Pending</span>}
+                          {it.status === 'error' && (
+                            <span className='text-destructive'>
+                              Failed
+                              {it.error === 'CANCELLED' ? ' (Cancelled)' : ''}
+                            </span>
+                          )}
+                        </div>
+                        {it.status === 'uploading' && (
+                          <div className='bg-muted mt-1 h-0.5 w-full overflow-hidden rounded'>
+                            <div
+                              className='bg-primary/70 h-full rounded transition-[width] duration-150'
+                              style={{
+                                width: `${Math.max(2, Math.min(98, Math.round(it.progress ?? 0)))}%`
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+                    <div className='text-muted-foreground flex items-center gap-2'>
+                      {it.status === 'uploading' && (
+                        <span className='text-[11px] tabular-nums'>
+                          {Math.round(it.progress ?? 0)}%
+                        </span>
+                      )}
+                      {it.status === 'done' && (
+                        <span className='h-2.5 w-2.5 rounded-full bg-emerald-500' />
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className='text-muted-foreground flex items-center gap-2'>
-                  {it.status === 'uploading' && (
-                    <span className='text-[11px] tabular-nums'>
-                      {Math.round(it.progress ?? 0)}%
-                    </span>
-                  )}
-                  {it.status === 'done' && (
-                    <span className='h-2.5 w-2.5 rounded-full bg-emerald-500' />
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
+            </ScrollArea>
           </div>
         )}
 
@@ -270,6 +315,11 @@ export default function UploadDialog({
             })()}
           </div>
           <div className='flex items-center gap-2'>
+            {busy && (
+              <Button variant='ghost' size='sm' onClick={cancelUpload}>
+                Cancel Upload
+              </Button>
+            )}
             <Button
               variant='ghost'
               size='sm'
