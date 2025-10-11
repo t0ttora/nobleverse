@@ -149,6 +149,9 @@ export default function FilesBrowser() {
     url: string;
   } | null>(null);
   const [navLoading, setNavLoading] = useState(false);
+  // Global recent files (across all folders)
+  const [globalRecent, setGlobalRecent] = useState<FileItem[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
 
   // Folder colors (client-only visuals)
   const [folderColors, setFolderColors] = useState<Record<string, string>>({});
@@ -271,6 +274,34 @@ export default function FilesBrowser() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Load global recent when at root (once per root view/search change)
+  useEffect(() => {
+    const atRootForEffect = parentId == null;
+    let cancelled = false;
+    async function run() {
+      if (!atRootForEffect) return;
+      setRecentLoading(true);
+      try {
+        const res = await fetch('/api/noblesuite/files/recent?limit=6', {
+          cache: 'no-store'
+        });
+        const json = await res.json();
+        if (!cancelled) {
+          if (json.ok) setGlobalRecent(json.items || []);
+          else setGlobalRecent([]);
+        }
+      } catch {
+        if (!cancelled) setGlobalRecent([]);
+      } finally {
+        if (!cancelled) setRecentLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [parentId]);
 
   // Stop the navigation skeleton when the list has loaded
   useEffect(() => {
@@ -1809,237 +1840,61 @@ export default function FilesBrowser() {
         </div>
       )}
 
-      {/* CONTENT: Sections - Folders, Recent, All Files */}
-      {/* Folders */}
-      {sortedFolders.length > 0 && (
+      {/* CONTENT: Unified grid/list below header */}
+      {/* Note: Folders and files are unified in rendering via visibleList */}
+
+      {/* Global Recent (only at root) */}
+      {atRoot && globalRecent.length > 0 && (
         <div className='space-y-2'>
-          <div className='text-foreground text-sm font-semibold'>Folders</div>
-          <div
-            className={cn(
-              'relative grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 transition',
-              dndActive && 'ring-primary/60 bg-primary/5 rounded-md p-3 ring-2'
-            )}
-          >
-            {navLoading && (
-              <div className='col-span-full grid animate-pulse grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4'>
-                {Array.from({
-                  length: Math.max(3, Math.min(6, sortedFolders.length || 6))
-                }).map((_, i) => (
-                  <div
-                    key={`folder-skel-${i}`}
-                    className='bg-muted/10 rounded-xl border p-4'
+          <div className='text-foreground text-sm font-semibold'>Recent</div>
+          <div className='no-scrollbar flex gap-3 overflow-x-auto pb-1'>
+            {globalRecent.map((f) => (
+              <ContextMenu key={`recent-${f.id}`}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    className='bg-card hover:bg-card/80 min-w-[220px] rounded-xl border px-3 py-2 text-left shadow-sm transition md:min-w-[260px]'
+                    title={f.name}
+                    onClick={(e) => {
+                      if (e.shiftKey)
+                        return selectRange(f.id, e.ctrlKey || e.metaKey);
+                      if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
+                      void openFile(f, false);
+                    }}
                   >
-                    <div className='flex items-center gap-3'>
-                      <div className='bg-muted/40 h-9 w-9 rounded-md' />
-                      <div className='flex-1'>
-                        <div className='bg-muted/40 mb-2 h-3 w-2/3 rounded' />
-                        <div className='bg-muted/30 h-2 w-1/3 rounded' />
+                    <div className='flex items-center gap-2'>
+                      {renderFileIcon(f, 'size-8')}
+                      <div className='min-w-0'>
+                        <div className='truncate text-sm font-medium'>
+                          {visibleName(f)}
+                        </div>
+                        <div className='text-muted-foreground text-[11px]'>
+                          {formatDate(f.updated_at)} •{' '}
+                          {formatSize(f.size_bytes)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {sortedFolders.map((f) => (
-              <ContextMenu key={`ctx-${f.id}`}>
-                <ContextMenuTrigger asChild>
-                  <div
-                    key={f.id}
-                    className={cn(
-                      'group from-card/80 to-background hover:from-card hover:to-card hover:border-primary/40 relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-gradient-to-br p-4 shadow-sm transition hover:shadow-md',
-                      isSelected(f.id) && 'border-primary border-2',
-                      dropHoverId === f.id && 'ring-2 ring-amber-400/70'
-                    )}
-                    draggable
-                    onDragStart={(e) => {
-                      const ids =
-                        selectedIds.size > 0 && selectedIds.has(f.id)
-                          ? Array.from(selectedIds)
-                          : [f.id];
-                      const payload = JSON.stringify({ ids });
-                      e.dataTransfer.effectAllowed = 'move';
-                      e.dataTransfer.setData('text/plain', payload);
-                      e.dataTransfer.setData('application/json', payload);
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                      setDropHoverId(f.id);
-                    }}
-                    onDrop={async (e) => {
-                      e.preventDefault();
-                      setDropHoverId((prev) => (prev === f.id ? null : prev));
-                      try {
-                        const raw =
-                          e.dataTransfer.getData('text/plain') ||
-                          e.dataTransfer.getData('application/json');
-                        let ids: string[] = [];
-                        try {
-                          const parsed = JSON.parse(raw);
-                          if (Array.isArray(parsed?.ids)) ids = parsed.ids;
-                        } catch {
-                          // noop
-                        }
-                        const moveIds = (ids || []).filter(
-                          (id) => id && id !== f.id
-                        );
-                        if (moveIds.length === 0) return;
-                        const prevItems = items;
-                        setItems((p) =>
-                          p.filter((it) => !moveIds.includes(it.id))
-                        );
-                        const res = await Promise.all(
-                          moveIds.map((id) =>
-                            fetch(`/api/noblesuite/files/${id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ parentId: f.id })
-                            })
-                          )
-                        );
-                        if (res.some((r) => !r.ok)) setItems(prevItems);
-                        void load();
-                      } catch {}
-                    }}
-                    onDragLeave={() => {
-                      setDropHoverId((prev) => (prev === f.id ? null : prev));
-                    }}
-                  >
-                    {/* Hover checkbox for selection */}
-                    <button
-                      className={cn(
-                        'bg-background/80 absolute top-2 left-2 z-10 rounded border p-0.5 opacity-0 transition group-hover:opacity-100',
-                        isSelected(f.id) && 'opacity-100'
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCtrl(f.id);
-                      }}
-                      aria-label='Select folder'
-                      title={isSelected(f.id) ? 'Deselect' : 'Select'}
-                    >
-                      {isSelected(f.id) ? (
-                        <Icons.check className='text-primary size-4' />
-                      ) : (
-                        <span className='block size-4 rounded-sm border' />
-                      )}
-                    </button>
-                    <div className='flex w-full min-w-0 items-start gap-3'>
-                      {renamingId === f.id ? (
-                        <div className='flex flex-1 items-center gap-3'>
-                          <Icons.folderFilled
-                            className={cn(
-                              'size-9 shrink-0 drop-shadow',
-                              folderColorClass(f.id)
-                            )}
-                          />
-                          <input
-                            ref={renameInputRef}
-                            defaultValue={f.name}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                submitRename(
-                                  f,
-                                  (e.target as HTMLInputElement).value
-                                );
-                              } else if (e.key === 'Escape') {
-                                setRenamingId(null);
-                              }
-                            }}
-                            className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          className='flex flex-1 cursor-pointer items-center gap-3 text-left text-[14px] font-medium'
-                          onClick={(e) => {
-                            // Selection shortcuts
-                            if (e.shiftKey)
-                              return selectRange(f.id, e.ctrlKey || e.metaKey);
-                            if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
-                            if (!isUuid(f.id)) return;
-                            setLoading(true);
-                            setNavLoading(true);
-                            setParentId(f.id);
-                            setBreadcrumb((prev) => {
-                              const existingIdx = prev.findIndex(
-                                (c) => c.id === f.id
-                              );
-                              if (existingIdx !== -1)
-                                return prev.slice(0, existingIdx + 1);
-                              return [...prev, { id: f.id, name: f.name }];
-                            });
-                          }}
-                          title={f.name}
-                          data-selected={isSelected(f.id) || undefined}
-                        >
-                          <Icons.folderFilled
-                            className={cn(
-                              'size-9 shrink-0 drop-shadow',
-                              folderColorClass(f.id)
-                            )}
-                          />
-                          <span
-                            className='min-w-0 flex-1 truncate pr-1 whitespace-nowrap'
-                            title={f.name}
-                          >
-                            {displayName(f.name)}
-                          </span>
-                          {f.is_starred ? (
-                            <Icons.starFilled className='size-4 shrink-0 text-amber-500' />
-                          ) : null}
-                        </button>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className='text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer rounded-md p-1 opacity-0 transition group-hover:opacity-100'>
-                            <Icons.ellipsis className='size-4' />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align='end' className='text-xs'>
-                          <DropdownMenuItem onClick={() => startRename(f)}>
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleStar(f)}>
-                            {f.is_starred ? 'Unstar' : 'Star'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => downloadFolderZip(f)}
-                            disabled={zipBusyId === f.id}
-                          >
-                            {zipBusyId === f.id
-                              ? 'Zipping…'
-                              : 'Download as ZIP'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => deleteItem(f)}
-                            className='text-destructive focus:text-destructive'
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <div className='text-muted-foreground flex justify-between text-[10px]'>
-                      <span>{`${folderMeta[f.id]?.count || 0} Files`}</span>
-                      <span>{formatSize(folderMeta[f.id]?.size || 0)}</span>
-                    </div>
-                  </div>
+                  </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent className='text-xs'>
+                  <ContextMenuItem onClick={() => void openFile(f, false)}>
+                    Open
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => void openFile(f, true)}>
+                    Download
+                  </ContextMenuItem>
                   <ContextMenuItem onClick={() => startRename(f)}>
                     Rename
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => toggleStar(f)}>
                     {f.is_starred ? 'Unstar' : 'Star'}
                   </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() => downloadFolderZip(f)}
-                    disabled={zipBusyId === f.id}
-                  >
-                    {zipBusyId === f.id ? 'Zipping…' : 'Download as ZIP'}
-                  </ContextMenuItem>
+                  {f.storage_path ? (
+                    <ContextMenuItem
+                      onClick={() => setSharePath(f.storage_path!)}
+                    >
+                      Share link
+                    </ContextMenuItem>
+                  ) : null}
                   <ContextMenuItem
                     onClick={() => deleteItem(f)}
                     data-variant='destructive'
@@ -2053,84 +1908,9 @@ export default function FilesBrowser() {
         </div>
       )}
 
-      {/* Recent (only at root) */}
-      {atRoot &&
-        files.length > 0 &&
-        (() => {
-          const recent = [...files]
-            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-            .slice(0, 6);
-          return recent.length ? (
-            <div className='space-y-2'>
-              <div className='text-foreground text-sm font-semibold'>
-                Recent
-              </div>
-              <div className='no-scrollbar flex gap-3 overflow-x-auto pb-1'>
-                {recent.map((f) => (
-                  <ContextMenu key={`recent-${f.id}`}>
-                    <ContextMenuTrigger asChild>
-                      <button
-                        className='bg-card hover:bg-card/80 min-w-[220px] rounded-xl border px-3 py-2 text-left shadow-sm transition md:min-w-[260px]'
-                        title={f.name}
-                        onClick={(e) => {
-                          if (e.shiftKey)
-                            return selectRange(f.id, e.ctrlKey || e.metaKey);
-                          if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
-                          void openFile(f, false);
-                        }}
-                      >
-                        <div className='flex items-center gap-2'>
-                          {renderFileIcon(f, 'size-8')}
-                          <div className='min-w-0'>
-                            <div className='truncate text-sm font-medium'>
-                              {visibleName(f)}
-                            </div>
-                            <div className='text-muted-foreground text-[11px]'>
-                              {formatDate(f.updated_at)} •{' '}
-                              {formatSize(f.size_bytes)}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent className='text-xs'>
-                      <ContextMenuItem onClick={() => void openFile(f, false)}>
-                        Open
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => void openFile(f, true)}>
-                        Download
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => startRename(f)}>
-                        Rename
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => toggleStar(f)}>
-                        {f.is_starred ? 'Unstar' : 'Star'}
-                      </ContextMenuItem>
-                      {f.storage_path ? (
-                        <ContextMenuItem
-                          onClick={() => setSharePath(f.storage_path!)}
-                        >
-                          Share link
-                        </ContextMenuItem>
-                      ) : null}
-                      <ContextMenuItem
-                        onClick={() => deleteItem(f)}
-                        data-variant='destructive'
-                      >
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))}
-              </div>
-            </div>
-          ) : null;
-        })()}
-
-      {/* All Files */}
       <div className='space-y-2'>
         <div className='flex items-center justify-between'>
-          <div className='text-foreground text-sm font-semibold'>All Files</div>
+          <div className='text-foreground text-sm font-semibold'>Files</div>
           <div className='flex items-center gap-2'>
             {/* Filters */}
             <DropdownMenu>
@@ -2259,112 +2039,166 @@ export default function FilesBrowser() {
               dndActive && 'ring-primary/60 bg-primary/5 rounded-md p-3 ring-2'
             )}
           >
-            {sortedFiles.map((f) => (
-              <ContextMenu key={`ctx-${f.id}`}>
+            {visibleList.map((it) => (
+              <ContextMenu key={`ctx-${it.id}`}>
                 <ContextMenuTrigger asChild>
-                  <div
-                    key={f.id}
-                    className={cn(
-                      'group bg-card relative flex flex-col overflow-hidden rounded-xl border shadow-sm transition hover:shadow-md',
-                      isSelected(f.id) && 'border-primary border-2'
-                    )}
-                    draggable
-                    onDragStart={(e) => {
-                      const ids =
-                        selectedIds.size > 0 && selectedIds.has(f.id)
-                          ? Array.from(selectedIds)
-                          : [f.id];
-                      e.dataTransfer.setData(
-                        'application/json',
-                        JSON.stringify({ ids })
-                      );
-                    }}
-                  >
-                    {/* Hover checkbox for selection */}
-                    <button
+                  {/* Grid item: render folder or file card */}
+                  {it.type === 'folder' ? (
+                    <div
+                      key={it.id}
                       className={cn(
-                        'bg-background/80 absolute top-2 left-2 z-10 rounded border p-0.5 opacity-0 transition group-hover:opacity-100',
-                        isSelected(f.id) && 'opacity-100'
+                        'group from-card/80 to-background hover:from-card hover:to-card hover:border-primary/40 relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-gradient-to-br p-4 shadow-sm transition hover:shadow-md',
+                        isSelected(it.id) && 'border-primary border-2',
+                        dropHoverId === it.id && 'ring-2 ring-amber-400/70'
                       )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCtrl(f.id);
+                      draggable
+                      onDragStart={(e) => {
+                        const ids =
+                          selectedIds.size > 0 && selectedIds.has(it.id)
+                            ? Array.from(selectedIds)
+                            : [it.id];
+                        const payload = JSON.stringify({ ids });
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', payload);
+                        e.dataTransfer.setData('application/json', payload);
                       }}
-                      aria-label='Select file'
-                      title={isSelected(f.id) ? 'Deselect' : 'Select'}
-                    >
-                      {isSelected(f.id) ? (
-                        <Icons.check className='text-primary size-4' />
-                      ) : (
-                        <span className='block size-4 rounded-sm border' />
-                      )}
-                    </button>
-                    <button
-                      className='bg-muted/40 relative flex aspect-video w-full items-center justify-center overflow-hidden'
-                      onClick={(e) => {
-                        if (e.shiftKey)
-                          return selectRange(f.id, e.ctrlKey || e.metaKey);
-                        if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
-                        return void openFile(f, false);
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropHoverId(it.id);
                       }}
-                      title={f.name}
-                      data-selected={isSelected(f.id) || undefined}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        setDropHoverId((prev) =>
+                          prev === it.id ? null : prev
+                        );
+                        try {
+                          const raw =
+                            e.dataTransfer.getData('text/plain') ||
+                            e.dataTransfer.getData('application/json');
+                          let ids: string[] = [];
+                          try {
+                            const parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed?.ids)) ids = parsed.ids;
+                          } catch {
+                            // noop
+                          }
+                          const moveIds = (ids || []).filter(
+                            (id) => id && id !== it.id
+                          );
+                          if (moveIds.length === 0) return;
+                          const prevItems = items;
+                          setItems((p) =>
+                            p.filter((x) => !moveIds.includes(x.id))
+                          );
+                          const res = await Promise.all(
+                            moveIds.map((id) =>
+                              fetch(`/api/noblesuite/files/${id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ parentId: it.id })
+                              })
+                            )
+                          );
+                          if (res.some((r) => !r.ok)) setItems(prevItems);
+                          void load();
+                        } catch {}
+                      }}
+                      onDragLeave={() => {
+                        setDropHoverId((prev) =>
+                          prev === it.id ? null : prev
+                        );
+                      }}
                     >
-                      {isImage(f) && thumbUrls[f.id] ? (
-                        <img
-                          src={thumbUrls[f.id]}
-                          alt=''
-                          className='h-full w-full object-cover'
-                        />
-                      ) : (
-                        <div className='text-muted-foreground'>
-                          {renderFileIcon(f, 'size-10')}
-                        </div>
-                      )}
-                      {f.is_starred ? (
-                        <Icons.starFilled className='absolute top-2 right-2 size-4 text-amber-500 drop-shadow' />
-                      ) : null}
-                    </button>
-                    {/* Info */}
-                    <div className='flex flex-col gap-1 p-3 pt-2'>
-                      {renamingId === f.id ? (
-                        <input
-                          ref={renameInputRef}
-                          defaultValue={visibleName(f)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              submitRename(
-                                f,
-                                (e.target as HTMLInputElement).value
-                              );
-                            } else if (e.key === 'Escape') {
-                              setRenamingId(null);
-                            }
-                          }}
-                          className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
-                        />
-                      ) : (
-                        <div className='flex items-start gap-2'>
-                          <button
-                            className='cursor-pointer truncate text-left font-medium'
-                            onClick={() => void openFile(f, false)}
-                            title={f.name}
-                          >
-                            {displayName(f.name)}
-                          </button>
-                          <span className='bg-muted/60 ml-auto rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase'>
-                            {f.ext || f.mime_type?.split('/')?.[1] || 'FILE'}
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className='text-muted-foreground truncate text-[11px]'
-                        title={`${formatDate(f.updated_at)} • ${formatSize(f.size_bytes)}`}
+                      {/* Hover checkbox for selection */}
+                      <button
+                        className={cn(
+                          'bg-background/80 absolute top-2 left-2 z-10 rounded-md border p-1 opacity-0 transition group-hover:opacity-100',
+                          isSelected(it.id) && 'opacity-100'
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCtrl(it.id);
+                        }}
+                        aria-label='Select folder'
+                        title={isSelected(it.id) ? 'Deselect' : 'Select'}
                       >
-                        {formatDate(f.updated_at)} • {formatSize(f.size_bytes)}
-                      </div>
-                      <div className='flex justify-end'>
+                        {isSelected(it.id) ? (
+                          <Icons.check className='text-primary size-5' />
+                        ) : (
+                          <span className='block size-5 rounded-sm border' />
+                        )}
+                      </button>
+                      <div className='flex w-full min-w-0 items-start gap-3'>
+                        {renamingId === it.id ? (
+                          <div className='flex flex-1 items-center gap-3'>
+                            <Icons.folderFilled
+                              className={cn(
+                                'size-9 shrink-0 drop-shadow',
+                                folderColorClass(it.id)
+                              )}
+                            />
+                            <input
+                              ref={renameInputRef}
+                              defaultValue={it.name}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  submitRename(
+                                    it,
+                                    (e.target as HTMLInputElement).value
+                                  );
+                                } else if (e.key === 'Escape') {
+                                  setRenamingId(null);
+                                }
+                              }}
+                              className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            className='flex flex-1 cursor-pointer items-center gap-3 text-left text-[14px] font-medium'
+                            onClick={(e) => {
+                              if (e.shiftKey)
+                                return selectRange(
+                                  it.id,
+                                  e.ctrlKey || e.metaKey
+                                );
+                              if (e.ctrlKey || e.metaKey)
+                                return toggleCtrl(it.id);
+                              if (!isUuid(it.id)) return;
+                              setLoading(true);
+                              setNavLoading(true);
+                              setParentId(it.id);
+                              setBreadcrumb((prev) => {
+                                const existingIdx = prev.findIndex(
+                                  (c) => c.id === it.id
+                                );
+                                if (existingIdx !== -1)
+                                  return prev.slice(0, existingIdx + 1);
+                                return [...prev, { id: it.id, name: it.name }];
+                              });
+                            }}
+                            title={it.name}
+                            data-selected={isSelected(it.id) || undefined}
+                          >
+                            <Icons.folderFilled
+                              className={cn(
+                                'size-9 shrink-0 drop-shadow',
+                                folderColorClass(it.id)
+                              )}
+                            />
+                            <span
+                              className='min-w-0 flex-1 truncate pr-1 whitespace-nowrap'
+                              title={it.name}
+                            >
+                              {displayName(it.name)}
+                            </span>
+                            {it.is_starred ? (
+                              <Icons.starFilled className='size-4 shrink-0 text-amber-500' />
+                            ) : null}
+                          </button>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className='text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer rounded-md p-1 opacity-0 transition group-hover:opacity-100'>
@@ -2372,31 +2206,22 @@ export default function FilesBrowser() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align='end' className='text-xs'>
-                            <DropdownMenuItem
-                              onClick={() => void openFile(f, false)}
-                            >
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => void openFile(f, true)}
-                            >
-                              Download
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => startRename(f)}>
+                            <DropdownMenuItem onClick={() => startRename(it)}>
                               Rename
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleStar(f)}>
-                              {f.is_starred ? 'Unstar' : 'Star'}
+                            <DropdownMenuItem onClick={() => toggleStar(it)}>
+                              {it.is_starred ? 'Unstar' : 'Star'}
                             </DropdownMenuItem>
-                            {f.storage_path ? (
-                              <DropdownMenuItem
-                                onClick={() => setSharePath(f.storage_path!)}
-                              >
-                                Share link
-                              </DropdownMenuItem>
-                            ) : null}
                             <DropdownMenuItem
-                              onClick={() => deleteItem(f)}
+                              onClick={() => downloadFolderZip(it as any)}
+                              disabled={zipBusyId === it.id}
+                            >
+                              {zipBusyId === it.id
+                                ? 'Zipping…'
+                                : 'Download as ZIP'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => deleteItem(it)}
                               className='text-destructive focus:text-destructive'
                             >
                               Delete
@@ -2404,39 +2229,223 @@ export default function FilesBrowser() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                      <div className='text-muted-foreground flex justify-between text-[10px]'>
+                        <span>{`${folderMeta[it.id]?.count || 0} Files`}</span>
+                        <span>{formatSize(folderMeta[it.id]?.size || 0)}</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      key={it.id}
+                      className={cn(
+                        'group bg-card relative flex flex-col overflow-hidden rounded-xl border shadow-sm transition hover:shadow-md',
+                        isSelected(it.id) && 'border-primary border-2'
+                      )}
+                      draggable
+                      onDragStart={(e) => {
+                        const ids =
+                          selectedIds.size > 0 && selectedIds.has(it.id)
+                            ? Array.from(selectedIds)
+                            : [it.id];
+                        e.dataTransfer.setData(
+                          'application/json',
+                          JSON.stringify({ ids })
+                        );
+                      }}
+                    >
+                      {/* Hover checkbox for selection */}
+                      <button
+                        className={cn(
+                          'bg-background/80 absolute top-2 left-2 z-10 rounded-md border p-1 opacity-0 transition group-hover:opacity-100',
+                          isSelected(it.id) && 'opacity-100'
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCtrl(it.id);
+                        }}
+                        aria-label='Select file'
+                        title={isSelected(it.id) ? 'Deselect' : 'Select'}
+                      >
+                        {isSelected(it.id) ? (
+                          <Icons.check className='text-primary size-5' />
+                        ) : (
+                          <span className='block size-5 rounded-sm border' />
+                        )}
+                      </button>
+                      <button
+                        className='bg-muted/40 relative flex aspect-video w-full items-center justify-center overflow-hidden'
+                        onClick={(e) => {
+                          if (e.shiftKey)
+                            return selectRange(it.id, e.ctrlKey || e.metaKey);
+                          if (e.ctrlKey || e.metaKey) return toggleCtrl(it.id);
+                          return void openFile(it, false);
+                        }}
+                        title={it.name}
+                        data-selected={isSelected(it.id) || undefined}
+                      >
+                        {isImage(it as any) && thumbUrls[it.id] ? (
+                          <img
+                            src={thumbUrls[it.id]}
+                            alt=''
+                            className='h-full w-full object-cover'
+                          />
+                        ) : (
+                          <div className='text-muted-foreground'>
+                            {renderFileIcon(it as any, 'size-10')}
+                          </div>
+                        )}
+                        {it.is_starred ? (
+                          <Icons.starFilled className='absolute top-2 right-2 size-4 text-amber-500 drop-shadow' />
+                        ) : null}
+                      </button>
+                      {/* Info */}
+                      <div className='flex flex-col gap-1 p-3 pt-2'>
+                        {renamingId === it.id ? (
+                          <input
+                            ref={renameInputRef}
+                            defaultValue={visibleName(it)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                submitRename(
+                                  it,
+                                  (e.target as HTMLInputElement).value
+                                );
+                              } else if (e.key === 'Escape') {
+                                setRenamingId(null);
+                              }
+                            }}
+                            className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
+                          />
+                        ) : (
+                          <div className='flex items-start gap-2'>
+                            <button
+                              className='cursor-pointer truncate text-left font-medium'
+                              onClick={() => void openFile(it, false)}
+                              title={it.name}
+                            >
+                              {displayName(it.name)}
+                            </button>
+                            <span className='bg-muted/60 ml-auto rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase'>
+                              {(it as any).ext ||
+                                (it as any).mime_type?.split('/')?.[1] ||
+                                'FILE'}
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          className='text-muted-foreground truncate text-[11px]'
+                          title={`${formatDate(it.updated_at)} • ${formatSize((it as any).size_bytes)}`}
+                        >
+                          {formatDate(it.updated_at)} •{' '}
+                          {formatSize((it as any).size_bytes)}
+                        </div>
+                        <div className='flex justify-end'>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className='text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer rounded-md p-1 opacity-0 transition group-hover:opacity-100'>
+                                <Icons.ellipsis className='size-4' />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align='end'
+                              className='text-xs'
+                            >
+                              <DropdownMenuItem
+                                onClick={() => void openFile(it, false)}
+                              >
+                                Open
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => void openFile(it, true)}
+                              >
+                                Download
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => startRename(it)}>
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleStar(it)}>
+                                {it.is_starred ? 'Unstar' : 'Star'}
+                              </DropdownMenuItem>
+                              {(it as any).storage_path ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setSharePath((it as any).storage_path!)
+                                  }
+                                >
+                                  Share link
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuItem
+                                onClick={() => deleteItem(it)}
+                                className='text-destructive focus:text-destructive'
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </ContextMenuTrigger>
                 <ContextMenuContent className='text-xs'>
-                  <ContextMenuItem onClick={() => void openFile(f, false)}>
-                    Open
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => void openFile(f, true)}>
-                    Download
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => startRename(f)}>
-                    Rename
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => toggleStar(f)}>
-                    {f.is_starred ? 'Unstar' : 'Star'}
-                  </ContextMenuItem>
-                  {f.storage_path ? (
-                    <ContextMenuItem
-                      onClick={() => setSharePath(f.storage_path!)}
-                    >
-                      Share link
-                    </ContextMenuItem>
-                  ) : null}
-                  <ContextMenuItem
-                    onClick={() => deleteItem(f)}
-                    data-variant='destructive'
-                  >
-                    Delete
-                  </ContextMenuItem>
+                  {it.type === 'folder' ? (
+                    <>
+                      <ContextMenuItem onClick={() => startRename(it)}>
+                        Rename
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => toggleStar(it)}>
+                        {it.is_starred ? 'Unstar' : 'Star'}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onClick={() => downloadFolderZip(it as any)}
+                        disabled={zipBusyId === it.id}
+                      >
+                        {zipBusyId === it.id ? 'Zipping…' : 'Download as ZIP'}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onClick={() => deleteItem(it)}
+                        data-variant='destructive'
+                      >
+                        Delete
+                      </ContextMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <ContextMenuItem onClick={() => void openFile(it, false)}>
+                        Open
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => void openFile(it, true)}>
+                        Download
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => startRename(it)}>
+                        Rename
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => toggleStar(it)}>
+                        {it.is_starred ? 'Unstar' : 'Star'}
+                      </ContextMenuItem>
+                      {(it as any).storage_path ? (
+                        <ContextMenuItem
+                          onClick={() =>
+                            setSharePath((it as any).storage_path!)
+                          }
+                        >
+                          Share link
+                        </ContextMenuItem>
+                      ) : null}
+                      <ContextMenuItem
+                        onClick={() => deleteItem(it)}
+                        data-variant='destructive'
+                      >
+                        Delete
+                      </ContextMenuItem>
+                    </>
+                  )}
                 </ContextMenuContent>
               </ContextMenu>
             ))}
-            {!loading && files.length === 0 && (
+            {!loading && visibleList.length === 0 && (
               <div className='col-span-full'>
                 {search.trim() && items.length === 0 ? (
                   <div className='text-muted-foreground/80 bg-muted/10 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center'>
@@ -2461,7 +2470,7 @@ export default function FilesBrowser() {
                   <div className='text-muted-foreground/70 bg-muted/10 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center'>
                     <Icons.folder className='size-8 opacity-60' />
                     <div className='text-sm font-medium'>
-                      {atRoot ? 'No files yet' : 'This folder is empty'}
+                      {atRoot ? 'No items yet' : 'This folder is empty'}
                     </div>
                     <div className='text-xs'>
                       Drag and drop files here, upload, or create a new folder.
@@ -2495,16 +2504,16 @@ export default function FilesBrowser() {
               <div className='flex items-center justify-center'>
                 <Checkbox
                   checked={
-                    sortedFiles.length > 0 &&
-                    selectedIds.size === sortedFiles.length
+                    visibleList.length > 0 &&
+                    selectedIds.size === visibleList.length
                   }
                   onCheckedChange={(v) => {
                     const checked = Boolean(v);
                     if (checked)
-                      setSelectedIds(new Set(sortedFiles.map((f) => f.id)));
+                      setSelectedIds(new Set(visibleList.map((x) => x.id)));
                     else setSelectedIds(new Set());
                   }}
-                  aria-label='Select all files'
+                  aria-label='Select all items'
                 />
               </div>
               <div>Name</div>
@@ -2514,22 +2523,22 @@ export default function FilesBrowser() {
               <div />
             </div>
             <div className='divide-y text-sm'>
-              {sortedFiles.map((f) => (
-                <ContextMenu key={`ctx-row-${f.id}`}>
+              {visibleList.map((it) => (
+                <ContextMenu key={`ctx-row-${it.id}`}>
                   <ContextMenuTrigger asChild>
                     <div
-                      key={f.id}
+                      key={it.id}
                       className={cn(
                         'hover:bg-muted/20 grid grid-cols-[40px_1fr_120px_100px_120px_40px] items-center px-2 py-2 text-xs',
-                        isSelected(f.id) &&
+                        isSelected(it.id) &&
                           'outline-primary/50 rounded-sm outline outline-2'
                       )}
                       draggable
                       onDragStart={(e) => {
                         const ids =
-                          selectedIds.size > 0 && selectedIds.has(f.id)
+                          selectedIds.size > 0 && selectedIds.has(it.id)
                             ? Array.from(selectedIds)
-                            : [f.id];
+                            : [it.id];
                         e.dataTransfer.setData(
                           'application/json',
                           JSON.stringify({ ids })
@@ -2540,32 +2549,32 @@ export default function FilesBrowser() {
                         {/* Hover checkbox for selection */}
                         <button
                           className={cn(
-                            'bg-background/60 hover:bg-background flex h-5 w-5 items-center justify-center rounded-sm border transition',
-                            isSelected(f.id) && 'bg-primary/10 border-primary'
+                            'bg-background/60 hover:bg-background flex h-6 w-6 items-center justify-center rounded-md border transition',
+                            isSelected(it.id) && 'bg-primary/10 border-primary'
                           )}
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleCtrl(f.id);
+                            toggleCtrl(it.id);
                           }}
                           aria-label='Select row'
-                          title={isSelected(f.id) ? 'Deselect' : 'Select'}
+                          title={isSelected(it.id) ? 'Deselect' : 'Select'}
                         >
-                          {isSelected(f.id) ? (
-                            <Icons.check className='text-primary size-4' />
+                          {isSelected(it.id) ? (
+                            <Icons.check className='text-primary size-5' />
                           ) : null}
                         </button>
-                        {renderFileIcon(f, 'size-5')}
+                        {renderFileIcon(it as any, 'size-5')}
                       </div>
                       <div className='flex w-full items-center gap-2'>
-                        {renamingId === f.id ? (
+                        {renamingId === it.id ? (
                           <input
                             ref={renameInputRef}
-                            defaultValue={f.name}
+                            defaultValue={it.name}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
                                 submitRename(
-                                  f,
+                                  it,
                                   (e.target as HTMLInputElement).value
                                 );
                               } else if (e.key === 'Escape') {
@@ -2577,33 +2586,55 @@ export default function FilesBrowser() {
                         ) : (
                           <button
                             className='cursor-pointer truncate pr-1 text-left whitespace-nowrap hover:underline'
-                            title={f.name}
+                            title={it.name}
                             onClick={(e) => {
                               if (e.shiftKey)
                                 return selectRange(
-                                  f.id,
+                                  it.id,
                                   e.ctrlKey || e.metaKey
                                 );
                               if (e.ctrlKey || e.metaKey)
-                                return toggleCtrl(f.id);
-                              return void openFile(f, false);
+                                return toggleCtrl(it.id);
+                              if (it.type === 'folder') {
+                                if (!isUuid(it.id)) return;
+                                setLoading(true);
+                                setNavLoading(true);
+                                setParentId(it.id);
+                                setBreadcrumb((prev) => {
+                                  const existingIdx = prev.findIndex(
+                                    (c) => c.id === it.id
+                                  );
+                                  if (existingIdx !== -1)
+                                    return prev.slice(0, existingIdx + 1);
+                                  return [
+                                    ...prev,
+                                    { id: it.id, name: it.name }
+                                  ];
+                                });
+                                return;
+                              }
+                              return void openFile(it, false);
                             }}
                           >
-                            {displayName(f.name)}
+                            {displayName(it.name)}
                           </button>
                         )}
-                        {f.is_starred ? (
+                        {it.is_starred ? (
                           <Icons.starFilled className='size-3 text-amber-500' />
                         ) : null}
                       </div>
                       <div className='text-muted-foreground text-[10px] uppercase'>
-                        {f.ext || f.mime_type?.split('/')?.[1] || 'FILE'}
+                        {(it as any).ext ||
+                          (it as any).mime_type?.split('/')?.[1] ||
+                          (it.type === 'folder' ? 'FOLDER' : 'FILE')}
                       </div>
                       <div className='text-[10px]'>
-                        {formatSize(f.size_bytes)}
+                        {it.type === 'folder'
+                          ? formatSize(folderMeta[it.id]?.size || 0)
+                          : formatSize((it as any).size_bytes)}
                       </div>
                       <div className='text-[10px]'>
-                        {formatDate(f.updated_at)}
+                        {formatDate(it.updated_at)}
                       </div>
                       <div className='flex justify-end'>
                         <DropdownMenu>
@@ -2613,70 +2644,138 @@ export default function FilesBrowser() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align='end' className='text-xs'>
-                            <DropdownMenuItem
-                              onClick={() => void openFile(f, false)}
-                            >
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => void openFile(f, true)}
-                            >
-                              Download
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => startRename(f)}>
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleStar(f)}>
-                              {f.is_starred ? 'Unstar' : 'Star'}
-                            </DropdownMenuItem>
-                            {f.storage_path ? (
-                              <DropdownMenuItem
-                                onClick={() => setSharePath(f.storage_path!)}
-                              >
-                                Share link
-                              </DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuItem
-                              onClick={() => deleteItem(f)}
-                              className='text-destructive focus:text-destructive'
-                            >
-                              Delete
-                            </DropdownMenuItem>
+                            {it.type === 'folder' ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => startRename(it)}
+                                >
+                                  Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => toggleStar(it)}
+                                >
+                                  {it.is_starred ? 'Unstar' : 'Star'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => downloadFolderZip(it as any)}
+                                  disabled={zipBusyId === it.id}
+                                >
+                                  {zipBusyId === it.id
+                                    ? 'Zipping…'
+                                    : 'Download as ZIP'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => deleteItem(it)}
+                                  className='text-destructive focus:text-destructive'
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => void openFile(it, false)}
+                                >
+                                  Open
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void openFile(it, true)}
+                                >
+                                  Download
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => startRename(it)}
+                                >
+                                  Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => toggleStar(it)}
+                                >
+                                  {it.is_starred ? 'Unstar' : 'Star'}
+                                </DropdownMenuItem>
+                                {(it as any).storage_path ? (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      setSharePath((it as any).storage_path!)
+                                    }
+                                  >
+                                    Share link
+                                  </DropdownMenuItem>
+                                ) : null}
+                                <DropdownMenuItem
+                                  onClick={() => deleteItem(it)}
+                                  className='text-destructive focus:text-destructive'
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className='text-xs'>
-                    <ContextMenuItem onClick={() => void openFile(f, false)}>
-                      Open
-                    </ContextMenuItem>
-                    <ContextMenuItem onClick={() => void openFile(f, true)}>
-                      Download
-                    </ContextMenuItem>
-                    <ContextMenuItem onClick={() => startRename(f)}>
-                      Rename
-                    </ContextMenuItem>
-                    <ContextMenuItem onClick={() => toggleStar(f)}>
-                      {f.is_starred ? 'Unstar' : 'Star'}
-                    </ContextMenuItem>
-                    {f.storage_path ? (
-                      <ContextMenuItem
-                        onClick={() => setSharePath(f.storage_path!)}
-                      >
-                        Share link
-                      </ContextMenuItem>
-                    ) : null}
-                    <ContextMenuItem
-                      onClick={() => deleteItem(f)}
-                      data-variant='destructive'
-                    >
-                      Delete
-                    </ContextMenuItem>
+                    {it.type === 'folder' ? (
+                      <>
+                        <ContextMenuItem onClick={() => startRename(it)}>
+                          Rename
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => toggleStar(it)}>
+                          {it.is_starred ? 'Unstar' : 'Star'}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onClick={() => downloadFolderZip(it as any)}
+                          disabled={zipBusyId === it.id}
+                        >
+                          {zipBusyId === it.id ? 'Zipping…' : 'Download as ZIP'}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onClick={() => deleteItem(it)}
+                          data-variant='destructive'
+                        >
+                          Delete
+                        </ContextMenuItem>
+                      </>
+                    ) : (
+                      <>
+                        <ContextMenuItem
+                          onClick={() => void openFile(it, false)}
+                        >
+                          Open
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onClick={() => void openFile(it, true)}
+                        >
+                          Download
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => startRename(it)}>
+                          Rename
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => toggleStar(it)}>
+                          {it.is_starred ? 'Unstar' : 'Star'}
+                        </ContextMenuItem>
+                        {(it as any).storage_path ? (
+                          <ContextMenuItem
+                            onClick={() =>
+                              setSharePath((it as any).storage_path!)
+                            }
+                          >
+                            Share link
+                          </ContextMenuItem>
+                        ) : null}
+                        <ContextMenuItem
+                          onClick={() => deleteItem(it)}
+                          data-variant='destructive'
+                        >
+                          Delete
+                        </ContextMenuItem>
+                      </>
+                    )}
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
-              {!loading && items.length === 0 && (
+              {!loading && visibleList.length === 0 && (
                 <div className='py-6 text-center text-xs'>
                   {search.trim() ? (
                     <div className='text-muted-foreground'>
@@ -2690,7 +2789,7 @@ export default function FilesBrowser() {
                     </div>
                   ) : (
                     <div className='text-muted-foreground'>
-                      {atRoot ? 'No files yet' : 'This folder is empty'}
+                      {atRoot ? 'No items yet' : 'This folder is empty'}
                     </div>
                   )}
                 </div>
