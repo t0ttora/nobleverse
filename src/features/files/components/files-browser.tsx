@@ -9,6 +9,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Heading } from '@/components/ui/heading';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SidePanel } from '@/components/ui/side-panel';
+import { Checkbox } from '@/components/ui/checkbox';
+// Removed tooltip (Select mode removed)
 import {
   Dialog,
   DialogContent,
@@ -17,6 +22,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -77,22 +87,26 @@ export default function FilesBrowser() {
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
-  const [dndActive, setDndActive] = useState(false);
+  // View & filters
+  const [starOnly, setStarOnly] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Selection & renaming
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
-  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
-  const [sharePath, setSharePath] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag & drop / upload
+  const [dndActive, setDndActive] = useState(false);
   const [dropHoverId, setDropHoverId] = useState<string | null>(null);
-  const [selectMode, setSelectMode] = useState(false);
-  const [starOnly, setStarOnly] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  // New Folder dialog state
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderForm, setNewFolderForm] = useState<{
     name: string;
@@ -101,19 +115,143 @@ export default function FilesBrowser() {
     star: boolean;
     genLinks: boolean;
     visibility: 'public' | 'private';
+    shareWithIds: Set<string>;
   }>({
     name: '',
     color: 'blue',
     include: new Set(),
     star: false,
     genLinks: false,
-    visibility: 'private'
+    visibility: 'private',
+    shareWithIds: new Set()
   });
-  const [folderColors, setFolderColors] = useState<Record<string, string>>({});
-  const [zipBusyId, setZipBusyId] = useState<string | null>(null);
+
+  // Share link dialog (single file)
+  const [sharePath, setSharePath] = useState<string | null>(null);
   const [shareLinks, setShareLinks] = useState<
     { name: string; url: string }[] | null
   >(null);
+
+  // Move dialog
+  const [showMove, setShowMove] = useState(false);
+  const [moveParentId, setMoveParentId] = useState<string | null>(null);
+  const [movePath, setMovePath] = useState<
+    Array<{ id: string | null; name: string }>
+  >([{ id: null, name: 'Home' }]);
+  const [moveFolders, setMoveFolders] = useState<FileItem[]>([]);
+  const [moveLoading, setMoveLoading] = useState(false);
+
+  // Misc UI state
+  const [zipBusyId, setZipBusyId] = useState<string | null>(null);
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<{
+    item: FileItem;
+    url: string;
+  } | null>(null);
+  const [navLoading, setNavLoading] = useState(false);
+
+  // Folder colors (client-only visuals)
+  const [folderColors, setFolderColors] = useState<Record<string, string>>({});
+
+  // Contacts: Send popover
+  const [showSend, setShowSend] = useState(false);
+  const [sendQuery, setSendQuery] = useState('');
+  const [sendSelected, setSendSelected] = useState<Set<string>>(new Set());
+  const [sendContacts, setSendContacts] = useState<any[]>([]);
+  const [sendExpiry, setSendExpiry] = useState<'5m' | '1h' | '24h'>('24h');
+  const [sendLinks, setSendLinks] = useState<{ name: string; url: string }[]>(
+    []
+  );
+  const [sendBusy, setSendBusy] = useState(false);
+
+  // Contacts: Share-with in New Folder dialog
+  const [shareQuery, setShareQuery] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareContacts, setShareContacts] = useState<any[]>([]);
+  const [shareCache, setShareCache] = useState<Record<string, any>>({});
+
+  // Load contacts for Send popover when opened or query changes
+  useEffect(() => {
+    if (!showSend) return;
+    let cancelled = false;
+    async function run() {
+      try {
+        const params = new URLSearchParams();
+        if (sendQuery.trim()) params.set('q', sendQuery.trim());
+        const res = await fetch(`/api/contacts?${params.toString()}`);
+        const json = await res.json();
+        if (!cancelled) setSendContacts(json?.ok ? json.items || [] : []);
+        if (!cancelled) {
+          // cache contacts by id for chip labels
+          const map: Record<string, any> = {};
+          for (const c of json?.items || []) map[c.id] = c;
+          setShareCache((prev) => ({ ...prev, ...map }));
+        }
+      } catch {
+        if (!cancelled) setSendContacts([]);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSend, sendQuery]);
+
+  // Load contacts for New Folder dialog (share-with)
+  useEffect(() => {
+    if (newFolderForm.visibility !== 'public') return;
+    let cancelled = false;
+    async function run() {
+      setShareLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (shareQuery.trim()) params.set('q', shareQuery.trim());
+        const res = await fetch(`/api/contacts?${params.toString()}`);
+        const json = await res.json();
+        if (!cancelled) setShareContacts(json?.ok ? json.items || [] : []);
+        if (!cancelled) {
+          const map: Record<string, any> = {};
+          for (const c of json?.items || []) map[c.id] = c;
+          setShareCache((prev) => ({ ...prev, ...map }));
+        }
+      } catch {
+        if (!cancelled) setShareContacts([]);
+      } finally {
+        if (!cancelled) setShareLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [shareQuery, newFolderForm.visibility]);
+
+  // Load available folders for Move dialog
+  useEffect(() => {
+    if (!showMove) return;
+    let cancelled = false;
+    async function run() {
+      setMoveLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (moveParentId) params.set('parentId', moveParentId);
+        const res = await fetch(`/api/noblesuite/files?${params.toString()}`);
+        const json = await res.json();
+        const foldersOnly: FileItem[] = (json?.items || []).filter(
+          (i: FileItem) => i.type === 'folder'
+        );
+        if (!cancelled) setMoveFolders(foldersOnly);
+      } catch {
+        if (!cancelled) setMoveFolders([]);
+      } finally {
+        if (!cancelled) setMoveLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [showMove, moveParentId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +271,11 @@ export default function FilesBrowser() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Stop the navigation skeleton when the list has loaded
+  useEffect(() => {
+    if (!loading) setNavLoading(false);
+  }, [loading]);
 
   // Load & persist folder colors (client-only visual)
   useEffect(() => {
@@ -299,12 +442,20 @@ export default function FilesBrowser() {
           a.click();
           a.remove();
         }
-      } else window.open(url, '_blank');
+      } else {
+        // Default open action now uses in-app preview dialog
+        setPreview({ item: f, url });
+      }
     } catch (e: any) {
       if (typeof e?.message === 'string' && /Bucket not found/i.test(e.message))
         setError('BUCKET_NOT_FOUND');
       else setError(e?.message || 'OPEN_FAILED');
     }
+  };
+
+  // Convenience wrapper when we want to force preview regardless of previous behavior
+  const openPreview = async (f: FileItem) => {
+    await openFile(f, false);
   };
 
   // Helper: Download folder contents as a ZIP (recursively)
@@ -697,12 +848,10 @@ export default function FilesBrowser() {
   // Selection helpers
   const clearSelection = () => setSelectedIds(new Set());
   const selectSingle = (id: string) => {
-    if (!selectMode) return; // gating selection behind select mode
     setSelectedIds(new Set([id]));
     setAnchorId(id);
   };
   const toggleCtrl = (id: string) => {
-    if (!selectMode) return; // gating
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -712,7 +861,6 @@ export default function FilesBrowser() {
     setAnchorId(id);
   };
   const selectRange = (toId: string, additive = false) => {
-    if (!selectMode) return; // gating
     if (!anchorId) return selectSingle(toId);
     const a = idToIndex[anchorId];
     const b = idToIndex[toId];
@@ -724,7 +872,7 @@ export default function FilesBrowser() {
       additive ? new Set([...prev, ...rangeIds]) : rangeIds
     );
   };
-  const isSelected = (id: string) => selectMode && selectedIds.has(id);
+  const isSelected = (id: string) => selectedIds.has(id);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -739,12 +887,7 @@ export default function FilesBrowser() {
         searchInputRef.current?.focus();
         return;
       }
-      if (
-        !isTyping &&
-        e.key === 'Enter' &&
-        selectMode &&
-        selectedIds.size === 1
-      ) {
+      if (!isTyping && e.key === 'Enter' && selectedIds.size === 1) {
         e.preventDefault();
         const id = Array.from(selectedIds)[0];
         const it = items.find((i) => i.id === id);
@@ -757,7 +900,7 @@ export default function FilesBrowser() {
         }
         return;
       }
-      if (!isTyping && e.key === 'F2' && selectMode && selectedIds.size === 1) {
+      if (!isTyping && e.key === 'F2' && selectedIds.size === 1) {
         e.preventDefault();
         const id = Array.from(selectedIds)[0];
         const it = items.find((i) => i.id === id);
@@ -767,7 +910,6 @@ export default function FilesBrowser() {
       if (
         !isTyping &&
         (e.key === 'Delete' || e.key === 'Backspace') &&
-        selectMode &&
         hasSelection
       ) {
         e.preventDefault();
@@ -936,124 +1078,12 @@ export default function FilesBrowser() {
           Drop to upload
         </div>
       )}
-      <div className='flex flex-wrap items-center gap-3'>
-        <h2 className='text-lg font-semibold tracking-tight'>Documents</h2>
-        <div className='flex items-center gap-2'>
-          {/* New menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size='sm' variant='default' className='gap-1'>
-                <Icons.add className='size-4' /> New
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='start' className='w-44 text-xs'>
-              <DropdownMenuItem onClick={() => setShowNewFolder(true)}>
-                New Folder
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowUpload(true)}>
-                Upload Files
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* Filters */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size='sm' variant='outline' className='gap-1'>
-                <Icons.filter className='size-4' /> Filters
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='start' className='w-44 text-xs'>
-              <DropdownMenuItem
-                onClick={() => setStarOnly((v) => !v)}
-                className='flex items-center gap-2'
-              >
-                {starOnly ? (
-                  <Icons.check className='text-primary size-4' />
-                ) : (
-                  <span className='inline-block size-4' />
-                )}
-                Starred only
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* Sort By */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size='sm' variant='outline' className='gap-1'>
-                {sortLabel()}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='start' className='w-44 text-xs'>
-              <div className='text-muted-foreground px-2 py-1.5 text-[10px] tracking-wide uppercase'>
-                Modified
-              </div>
-              <DropdownMenuItem
-                onClick={() => setSort('updated', 'desc')}
-                inset
-                disabled={sortKey === 'updated' && sortDir === 'desc'}
-              >
-                Latest
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSort('updated', 'asc')}
-                inset
-                disabled={sortKey === 'updated' && sortDir === 'asc'}
-              >
-                Oldest
-              </DropdownMenuItem>
-              <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
-                Name
-              </div>
-              <DropdownMenuItem
-                onClick={() => setSort('name', 'asc')}
-                inset
-                disabled={sortKey === 'name' && sortDir === 'asc'}
-              >
-                A → Z
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSort('name', 'desc')}
-                inset
-                disabled={sortKey === 'name' && sortDir === 'desc'}
-              >
-                Z → A
-              </DropdownMenuItem>
-              <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
-                Size
-              </div>
-              <DropdownMenuItem
-                onClick={() => setSort('size', 'desc')}
-                inset
-                disabled={sortKey === 'size' && sortDir === 'desc'}
-              >
-                Largest
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSort('size', 'asc')}
-                inset
-                disabled={sortKey === 'size' && sortDir === 'asc'}
-              >
-                Smallest
-              </DropdownMenuItem>
-              <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
-                Type
-              </div>
-              <DropdownMenuItem
-                onClick={() => setSort('type', 'asc')}
-                inset
-                disabled={sortKey === 'type' && sortDir === 'asc'}
-              >
-                A → Z
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSort('type', 'desc')}
-                inset
-                disabled={sortKey === 'type' && sortDir === 'desc'}
-              >
-                Z → A
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className='flex flex-wrap items-start gap-3'>
+        <div className='flex-1'>
+          <Heading
+            title='Files'
+            description='Manage, share, and organize your files.'
+          />
         </div>
         <div className='ml-auto flex items-center gap-2'>
           <div className='relative'>
@@ -1062,98 +1092,27 @@ export default function FilesBrowser() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               ref={searchInputRef}
-              className='bg-background focus-visible:ring-primary/40 h-8 w-52 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none'
+              className='bg-background focus-visible:ring-primary/40 h-9 w-56 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none'
             />
           </div>
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={() => setViewMode((v) => (v === 'grid' ? 'list' : 'grid'))}
-            className='gap-1'
-          >
-            {viewMode === 'grid' ? (
-              <Icons.fileDescription className='size-4' />
-            ) : (
-              <Icons.grid className='size-4' />
-            )}
-            <span className='hidden md:inline'>
-              {viewMode === 'grid' ? 'List' : 'Grid'}
-            </span>
-          </Button>
-          <Button
-            size='sm'
-            variant={selectMode ? 'default' : 'outline'}
-            onClick={() => {
-              setSelectMode((v) => !v);
-              if (selectMode) clearSelection();
-            }}
-            className='gap-1'
-          >
-            <Icons.check className='size-4' />
-            <span className='hidden sm:inline'>
-              {selectMode ? 'Done' : 'Select files'}
-            </span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size='sm' variant='default' className='gap-1'>
+                <Icons.add className='size-4' /> New
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end' className='w-44 text-xs'>
+              <DropdownMenuItem onClick={() => setShowNewFolder(true)}>
+                New Folder
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowUpload(true)}>
+                Upload Files
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-      <div className='text-foreground flex flex-wrap items-center gap-1 text-sm md:text-base'>
-        {breadcrumb.map((b, idx) => (
-          <span
-            key={`${b.id ?? 'root'}-${idx}`}
-            className='flex items-center gap-1'
-          >
-            <button
-              className={cn(
-                'transition-colors hover:underline',
-                b.id === parentId
-                  ? 'text-foreground font-semibold'
-                  : 'text-muted-foreground'
-              )}
-              onClick={() => {
-                if (b.id && !isUuid(b.id)) return; // ignore invalid id crumbs
-                setParentId(b.id);
-                setBreadcrumb((prev) => prev.slice(0, idx + 1));
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-              }}
-              onDrop={async (e) => {
-                e.preventDefault();
-                try {
-                  const raw =
-                    e.dataTransfer.getData('text/plain') ||
-                    e.dataTransfer.getData('application/json');
-                  let ids: string[] = [];
-                  try {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed?.ids)) ids = parsed.ids;
-                  } catch {}
-                  if (!ids.length) return;
-                  const prevItems = items;
-                  setItems((p) => p.filter((it) => !ids.includes(it.id)));
-                  const res = await Promise.all(
-                    ids.map((id) =>
-                      fetch(`/api/noblesuite/files/${id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ parentId: b.id || null })
-                      })
-                    )
-                  );
-                  if (res.some((r) => !r.ok)) setItems(prevItems);
-                  void load();
-                } catch {}
-              }}
-            >
-              {b.name}
-            </button>
-            {idx < breadcrumb.length - 1 && (
-              <span className='opacity-40'>/</span>
-            )}
-          </span>
-        ))}
-      </div>
+      {/* Header breadcrumb removed; using fixed bottom breadcrumb strip as the primary navigation */}
       {error && (
         <div className='text-destructive border-destructive/30 bg-destructive/5 rounded border px-2 py-1 text-xs'>
           {mapError(error)}
@@ -1186,14 +1145,600 @@ export default function FilesBrowser() {
         storagePath={sharePath || ''}
       />
 
-      {/* Floating bottom selection bar (only in select mode) */}
-      {selectMode && selectedIds.size > 0 && (
+      {/* Move to Folder Dialog */}
+      <Dialog
+        open={showMove}
+        onOpenChange={(o) => {
+          setShowMove(o);
+          if (!o) {
+            setMoveFolders([]);
+            setMovePath([{ id: null, name: 'Home' }]);
+            setMoveParentId(null);
+          }
+        }}
+      >
+        <DialogContent className='sm:max-w-[560px]'>
+          <DialogHeader>
+            <DialogTitle>Move to folder</DialogTitle>
+            <DialogDescription>Select a destination folder</DialogDescription>
+          </DialogHeader>
+          <div className='flex flex-col gap-3'>
+            <div className='text-foreground/90 flex flex-wrap items-center gap-1 text-sm'>
+              {movePath.map((b, idx) => (
+                <span
+                  key={`${b.id ?? 'root'}-${idx}`}
+                  className='flex items-center gap-1'
+                >
+                  <button
+                    className='text-muted-foreground hover:underline'
+                    onClick={() => {
+                      setMoveParentId(b.id);
+                      setMovePath((prev) => prev.slice(0, idx + 1));
+                    }}
+                  >
+                    {b.name}
+                  </button>
+                  {idx < movePath.length - 1 && (
+                    <span className='opacity-40'>/</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div className='rounded-md border'>
+              <div className='bg-muted/50 text-muted-foreground grid grid-cols-1 px-2 py-1 text-[10px] tracking-wide uppercase'>
+                <div className='flex items-center justify-between'>
+                  <span>Folders</span>
+                  <button
+                    className='text-muted-foreground hover:text-foreground underline'
+                    onClick={async () => {
+                      const name = prompt('New folder name');
+                      if (!name) return;
+                      // Create directly at the current moveParentId destination
+                      try {
+                        const res = await fetch('/api/noblesuite/files', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            name,
+                            parentId: moveParentId,
+                            type: 'folder'
+                          })
+                        });
+                        const json = await res.json();
+                        if (!json?.ok) {
+                          toast.error(mapError(json?.error || 'CREATE_FAILED'));
+                          return;
+                        }
+                        const created: FileItem = {
+                          id: json.item.id,
+                          name: json.item.name,
+                          parent_id: json.item.parent_id,
+                          type: 'folder',
+                          updated_at: new Date().toISOString()
+                        } as FileItem;
+                        setMoveFolders((prev) => [created, ...prev]);
+                        setMoveParentId(created.id);
+                        setMovePath((prev) => [
+                          ...prev,
+                          { id: created.id, name: created.name }
+                        ]);
+                      } catch (e: any) {
+                        toast.error(e?.message || 'CREATE_FAILED');
+                      }
+                    }}
+                  >
+                    New folder here
+                  </button>
+                </div>
+              </div>
+              <div className='max-h-[320px] divide-y overflow-auto'>
+                {moveLoading ? (
+                  <div className='text-muted-foreground p-3 text-xs'>
+                    Loading…
+                  </div>
+                ) : moveFolders.length === 0 ? (
+                  <div className='text-muted-foreground p-3 text-xs'>
+                    No folders here
+                  </div>
+                ) : (
+                  moveFolders.map((f) => (
+                    <button
+                      key={`mv-${f.id}`}
+                      className='hover:bg-muted/50 flex w-full items-center gap-2 px-3 py-2 text-left text-sm'
+                      onClick={() => {
+                        if (!isUuid(f.id)) return;
+                        setMoveParentId(f.id);
+                        setMovePath((prev) => [
+                          ...prev,
+                          { id: f.id, name: f.name }
+                        ]);
+                      }}
+                    >
+                      <Icons.folderFilled
+                        className={cn('size-5', folderColorClass(f.id))}
+                      />
+                      <span className='truncate'>{f.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setShowMove(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const ids = Array.from(selectedIds);
+                if (ids.length === 0) return;
+                const dest = moveParentId; // can be null for root
+                // prevent moving into itself if a folder is selected as destination
+                if (dest && ids.includes(dest)) {
+                  toast.error('Cannot move into the selected item');
+                  return;
+                }
+                const prevItems = items;
+                // optimistic: remove moved items from current list
+                setItems((p) => p.filter((it) => !ids.includes(it.id)));
+                try {
+                  const res = await Promise.all(
+                    ids.map((id) =>
+                      fetch(`/api/noblesuite/files/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ parentId: dest })
+                      })
+                    )
+                  );
+                  if (res.some((r) => !r.ok)) throw new Error('MOVE_FAILED');
+                  toast.success('Moved successfully');
+                  setShowMove(false);
+                  clearSelection();
+                  void load();
+                } catch (e: any) {
+                  setItems(prevItems);
+                  setError(e?.message || 'MOVE_FAILED');
+                }
+              }}
+            >
+              Select this folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send to People Popover */}
+      <Popover
+        open={showSend}
+        onOpenChange={(o) => {
+          setShowSend(o);
+          if (!o) {
+            setSendSelected(new Set());
+            setSendLinks([]);
+            setSendQuery('');
+          }
+        }}
+      >
+        <PopoverTrigger asChild>
+          {/* Anchor is the selection bar button below; we render the same button there */}
+          <span />
+        </PopoverTrigger>
+        <PopoverContent
+          align='center'
+          side='top'
+          sideOffset={12}
+          className='w-[620px] max-w-[95vw]'
+        >
+          <div className='flex flex-col gap-3'>
+            <div className='flex items-center gap-2'>
+              <input
+                value={sendQuery}
+                onChange={(e) => setSendQuery(e.target.value)}
+                placeholder='Search contacts…'
+                className='bg-background focus-visible:ring-primary/40 h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none'
+              />
+              <select
+                value={sendExpiry}
+                onChange={(e) => setSendExpiry(e.target.value as any)}
+                className='bg-background h-9 rounded-md border px-2 text-sm'
+              >
+                <option value='5m'>5 minutes</option>
+                <option value='1h'>1 hour</option>
+                <option value='24h'>24 hours</option>
+              </select>
+            </div>
+            {/* Selected chips */}
+            <div className='flex flex-wrap gap-2'>
+              {Array.from(sendSelected).map((id) => {
+                const c = (sendContacts.find((x) => x.id === id) ||
+                  shareCache[id]) as any;
+                const label = c?.display_name || c?.username || c?.email || id;
+                return (
+                  <span
+                    key={`chip-${id}`}
+                    className='bg-muted text-foreground/90 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs'
+                  >
+                    {label}
+                    <button
+                      className='text-muted-foreground hover:text-foreground'
+                      onClick={() =>
+                        setSendSelected((prev) => {
+                          const next = new Set(prev);
+                          next.delete(id);
+                          return next;
+                        })
+                      }
+                    >
+                      <Icons.close className='size-3' />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+            {/* Results */}
+            {sendLinks.length > 0 && (
+              <div className='rounded-md border'>
+                <div className='bg-muted/50 text-muted-foreground flex items-center justify-between px-2 py-1 text-[10px] tracking-wide uppercase'>
+                  <div>Generated Links</div>
+                  <button
+                    className='text-muted-foreground hover:text-foreground text-[11px] underline'
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(
+                          sendLinks.map((l) => `${l.name}: ${l.url}`).join('\n')
+                        );
+                        toast.success('Copied all links');
+                      } catch {}
+                    }}
+                  >
+                    Copy All
+                  </button>
+                </div>
+                <div className='max-h-[240px] divide-y overflow-auto'>
+                  {sendLinks.map((l, idx) => (
+                    <div
+                      key={`link-${idx}`}
+                      className='flex items-center gap-2 px-3 py-2 text-xs'
+                    >
+                      <span className='min-w-0 flex-1 truncate' title={l.name}>
+                        {l.name}
+                      </span>
+                      <button
+                        className='text-muted-foreground hover:text-foreground underline'
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(l.url);
+                            toast.success('Copied');
+                          } catch {}
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Suggestions list */}
+            <div className='rounded-md border'>
+              <div className='bg-muted/50 text-muted-foreground grid grid-cols-1 px-2 py-1 text-[10px] tracking-wide uppercase'>
+                <div>Contacts</div>
+              </div>
+              <div className='max-h-[200px] divide-y overflow-auto'>
+                {sendContacts.length === 0 ? (
+                  <div className='text-muted-foreground p-3 text-xs'>
+                    No contacts
+                  </div>
+                ) : (
+                  sendContacts.map((c) => {
+                    const label =
+                      c.display_name || c.username || c.email || c.id;
+                    const active = sendSelected.has(c.id);
+                    return (
+                      <button
+                        key={`c-${c.id}`}
+                        className={cn(
+                          'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                          active && 'bg-primary/10'
+                        )}
+                        onClick={() =>
+                          setSendSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.id)) next.delete(c.id);
+                            else next.add(c.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <Icons.user className='size-4' />
+                        <span className='truncate'>{label}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className='flex items-center justify-end gap-2 pt-1'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setShowSend(false)}
+              >
+                Close
+              </Button>
+              <Button
+                size='sm'
+                disabled={sendBusy}
+                onClick={async () => {
+                  setSendBusy(true);
+                  try {
+                    const secs =
+                      sendExpiry === '5m'
+                        ? 300
+                        : sendExpiry === '1h'
+                          ? 3600
+                          : 86400;
+                    const out: { name: string; url: string }[] = [];
+                    for (const id of Array.from(selectedIds)) {
+                      const it = items.find((i) => i.id === id);
+                      if (!it?.storage_path) continue;
+                      try {
+                        const { data, error } = await supabase.storage
+                          .from(FILES_BUCKET)
+                          .createSignedUrl(it.storage_path, secs);
+                        if (!error && data?.signedUrl) {
+                          out.push({ name: it.name, url: data.signedUrl });
+                        }
+                      } catch {}
+                    }
+                    setSendLinks(out);
+                    if (out.length === 0) toast.error('No links generated');
+                    else toast.success('Links generated');
+                  } finally {
+                    setSendBusy(false);
+                  }
+                }}
+              >
+                Generate links
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Floating bottom selection bar */}
+      {selectedIds.size > 0 && (
         <div className='pointer-events-auto fixed inset-x-0 bottom-4 z-20 flex justify-center px-4'>
           <div className='bg-card/95 supports-[backdrop-filter]:bg-card/70 flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs shadow-2xl backdrop-blur'>
             <div className='flex items-center gap-2 pr-2'>
               <Icons.check className='text-primary size-4' />
               <span className='font-medium'>{selectedIds.size} selected</span>
             </div>
+            <div className='bg-muted mx-1 h-4 w-px' />
+            <Button
+              size='sm'
+              variant='ghost'
+              className='gap-1'
+              onClick={() => {
+                // initialize move browser with current breadcrumb
+                setMoveParentId(parentId);
+                setMovePath(breadcrumb);
+                setShowMove(true);
+              }}
+            >
+              <Icons.folder className='size-4' />
+              Move
+            </Button>
+            <Popover
+              open={showSend}
+              onOpenChange={(o) => {
+                setShowSend(o);
+                if (!o) {
+                  setSendSelected(new Set());
+                  setSendLinks([]);
+                  setSendQuery('');
+                }
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button size='sm' variant='ghost' className='gap-1'>
+                  <Icons.share className='size-4' />
+                  Send to people
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align='center'
+                side='top'
+                sideOffset={12}
+                className='w-[620px] max-w-[95vw]'
+              >
+                <div className='flex flex-col gap-3'>
+                  <div className='flex items-center gap-2'>
+                    <input
+                      value={sendQuery}
+                      onChange={(e) => setSendQuery(e.target.value)}
+                      placeholder='Search contacts…'
+                      className='bg-background focus-visible:ring-primary/40 h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none'
+                    />
+                    <select
+                      value={sendExpiry}
+                      onChange={(e) => setSendExpiry(e.target.value as any)}
+                      className='bg-background h-9 rounded-md border px-2 text-sm'
+                    >
+                      <option value='5m'>5 minutes</option>
+                      <option value='1h'>1 hour</option>
+                      <option value='24h'>24 hours</option>
+                    </select>
+                  </div>
+                  {/* Selected chips */}
+                  <div className='flex flex-wrap gap-2'>
+                    {Array.from(sendSelected).map((id) => {
+                      const c = (sendContacts.find((x) => x.id === id) ||
+                        shareCache[id]) as any;
+                      const label =
+                        c?.display_name || c?.username || c?.email || id;
+                      return (
+                        <span
+                          key={`chip-${id}`}
+                          className='bg-muted text-foreground/90 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs'
+                        >
+                          {label}
+                          <button
+                            className='text-muted-foreground hover:text-foreground'
+                            onClick={() =>
+                              setSendSelected((prev) => {
+                                const next = new Set(prev);
+                                next.delete(id);
+                                return next;
+                              })
+                            }
+                          >
+                            <Icons.close className='size-3' />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {/* Results */}
+                  {sendLinks.length > 0 && (
+                    <div className='rounded-md border'>
+                      <div className='bg-muted/50 text-muted-foreground flex items-center justify-between px-2 py-1 text-[10px] tracking-wide uppercase'>
+                        <div>Generated Links</div>
+                        <button
+                          className='text-muted-foreground hover:text-foreground text-[11px] underline'
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(
+                                sendLinks
+                                  .map((l) => `${l.name}: ${l.url}`)
+                                  .join('\n')
+                              );
+                              toast.success('Copied all links');
+                            } catch {}
+                          }}
+                        >
+                          Copy All
+                        </button>
+                      </div>
+                      <div className='max-h-[240px] divide-y overflow-auto'>
+                        {sendLinks.map((l, idx) => (
+                          <div
+                            key={`link-${idx}`}
+                            className='flex items-center gap-2 px-3 py-2 text-xs'
+                          >
+                            <span
+                              className='min-w-0 flex-1 truncate'
+                              title={l.name}
+                            >
+                              {l.name}
+                            </span>
+                            <button
+                              className='text-muted-foreground hover:text-foreground underline'
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(l.url);
+                                  toast.success('Copied');
+                                } catch {}
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Suggestions list */}
+                  <div className='rounded-md border'>
+                    <div className='bg-muted/50 text-muted-foreground grid grid-cols-1 px-2 py-1 text-[10px] tracking-wide uppercase'>
+                      <div>Contacts</div>
+                    </div>
+                    <div className='max-h-[200px] divide-y overflow-auto'>
+                      {sendContacts.length === 0 ? (
+                        <div className='text-muted-foreground p-3 text-xs'>
+                          No contacts
+                        </div>
+                      ) : (
+                        sendContacts.map((c) => {
+                          const label =
+                            c.display_name || c.username || c.email || c.id;
+                          const active = sendSelected.has(c.id);
+                          return (
+                            <button
+                              key={`c-${c.id}`}
+                              className={cn(
+                                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                                active && 'bg-primary/10'
+                              )}
+                              onClick={() =>
+                                setSendSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(c.id)) next.delete(c.id);
+                                  else next.add(c.id);
+                                  return next;
+                                })
+                              }
+                            >
+                              <Icons.user className='size-4' />
+                              <span className='truncate'>{label}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                  <div className='flex items-center justify-end gap-2 pt-1'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setShowSend(false)}
+                    >
+                      Close
+                    </Button>
+                    <Button
+                      size='sm'
+                      disabled={sendBusy}
+                      onClick={async () => {
+                        setSendBusy(true);
+                        try {
+                          const secs =
+                            sendExpiry === '5m'
+                              ? 300
+                              : sendExpiry === '1h'
+                                ? 3600
+                                : 86400;
+                          const out: { name: string; url: string }[] = [];
+                          for (const id of Array.from(selectedIds)) {
+                            const it = items.find((i) => i.id === id);
+                            if (!it?.storage_path) continue;
+                            try {
+                              const { data, error } = await supabase.storage
+                                .from(FILES_BUCKET)
+                                .createSignedUrl(it.storage_path, secs);
+                              if (!error && data?.signedUrl) {
+                                out.push({
+                                  name: it.name,
+                                  url: data.signedUrl
+                                });
+                              }
+                            } catch {}
+                          }
+                          setSendLinks(out);
+                          if (out.length === 0)
+                            toast.error('No links generated');
+                          else toast.success('Links generated');
+                        } finally {
+                          setSendBusy(false);
+                        }
+                      }}
+                    >
+                      Generate links
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <div className='bg-muted mx-1 h-4 w-px' />
             {selectedIds.size === 1 && (
               <Button
@@ -1206,6 +1751,7 @@ export default function FilesBrowser() {
                   if (it) {
                     if (it.type === 'folder') {
                       if (!isUuid(it.id)) return;
+                      setNavLoading(true);
                       setParentId(it.id);
                       setBreadcrumb((prev) => [
                         ...prev,
@@ -1267,15 +1813,33 @@ export default function FilesBrowser() {
       {/* Folders */}
       {sortedFolders.length > 0 && (
         <div className='space-y-2'>
-          <div className='text-muted-foreground text-xs font-medium tracking-wide'>
-            Folders
-          </div>
+          <div className='text-foreground text-sm font-semibold'>Folders</div>
           <div
             className={cn(
               'relative grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 transition',
               dndActive && 'ring-primary/60 bg-primary/5 rounded-md p-3 ring-2'
             )}
           >
+            {navLoading && (
+              <div className='col-span-full grid animate-pulse grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4'>
+                {Array.from({
+                  length: Math.max(3, Math.min(6, sortedFolders.length || 6))
+                }).map((_, i) => (
+                  <div
+                    key={`folder-skel-${i}`}
+                    className='bg-muted/10 rounded-xl border p-4'
+                  >
+                    <div className='flex items-center gap-3'>
+                      <div className='bg-muted/40 h-9 w-9 rounded-md' />
+                      <div className='flex-1'>
+                        <div className='bg-muted/40 mb-2 h-3 w-2/3 rounded' />
+                        <div className='bg-muted/30 h-2 w-1/3 rounded' />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {sortedFolders.map((f) => (
               <ContextMenu key={`ctx-${f.id}`}>
                 <ContextMenuTrigger asChild>
@@ -1283,7 +1847,7 @@ export default function FilesBrowser() {
                     key={f.id}
                     className={cn(
                       'group from-card/80 to-background hover:from-card hover:to-card hover:border-primary/40 relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-gradient-to-br p-4 shadow-sm transition hover:shadow-md',
-                      isSelected(f.id) && 'ring-primary/60 ring-2',
+                      isSelected(f.id) && 'border-primary border-2',
                       dropHoverId === f.id && 'ring-2 ring-amber-400/70'
                     )}
                     draggable
@@ -1341,6 +1905,25 @@ export default function FilesBrowser() {
                       setDropHoverId((prev) => (prev === f.id ? null : prev));
                     }}
                   >
+                    {/* Hover checkbox for selection */}
+                    <button
+                      className={cn(
+                        'bg-background/80 absolute top-2 left-2 z-10 rounded border p-0.5 opacity-0 transition group-hover:opacity-100',
+                        isSelected(f.id) && 'opacity-100'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCtrl(f.id);
+                      }}
+                      aria-label='Select folder'
+                      title={isSelected(f.id) ? 'Deselect' : 'Select'}
+                    >
+                      {isSelected(f.id) ? (
+                        <Icons.check className='text-primary size-4' />
+                      ) : (
+                        <span className='block size-4 rounded-sm border' />
+                      )}
+                    </button>
                     <div className='flex w-full min-w-0 items-start gap-3'>
                       {renamingId === f.id ? (
                         <div className='flex flex-1 items-center gap-3'>
@@ -1371,12 +1954,13 @@ export default function FilesBrowser() {
                         <button
                           className='flex flex-1 cursor-pointer items-center gap-3 text-left text-[14px] font-medium'
                           onClick={(e) => {
+                            // Selection shortcuts
                             if (e.shiftKey)
                               return selectRange(f.id, e.ctrlKey || e.metaKey);
                             if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
-                            // normal click navigates, do not select unless in select mode
-                            if (selectMode) selectSingle(f.id);
                             if (!isUuid(f.id)) return;
+                            setLoading(true);
+                            setNavLoading(true);
                             setParentId(f.id);
                             setBreadcrumb((prev) => {
                               const existingIdx = prev.findIndex(
@@ -1478,7 +2062,7 @@ export default function FilesBrowser() {
             .slice(0, 6);
           return recent.length ? (
             <div className='space-y-2'>
-              <div className='text-muted-foreground text-xs font-medium tracking-wide'>
+              <div className='text-foreground text-sm font-semibold'>
                 Recent
               </div>
               <div className='no-scrollbar flex gap-3 overflow-x-auto pb-1'>
@@ -1489,7 +2073,9 @@ export default function FilesBrowser() {
                         className='bg-card hover:bg-card/80 min-w-[220px] rounded-xl border px-3 py-2 text-left shadow-sm transition md:min-w-[260px]'
                         title={f.name}
                         onClick={(e) => {
-                          if (selectMode) return toggleCtrl(f.id);
+                          if (e.shiftKey)
+                            return selectRange(f.id, e.ctrlKey || e.metaKey);
+                          if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
                           void openFile(f, false);
                         }}
                       >
@@ -1543,8 +2129,128 @@ export default function FilesBrowser() {
 
       {/* All Files */}
       <div className='space-y-2'>
-        <div className='text-muted-foreground text-xs font-medium tracking-wide'>
-          All Files
+        <div className='flex items-center justify-between'>
+          <div className='text-foreground text-sm font-semibold'>All Files</div>
+          <div className='flex items-center gap-2'>
+            {/* Filters */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size='sm' variant='outline' className='gap-1'>
+                  <Icons.filter className='size-4' /> Filters
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='end' className='w-44 text-xs'>
+                <DropdownMenuItem
+                  onClick={() => setStarOnly((v) => !v)}
+                  className='flex items-center gap-2'
+                >
+                  {starOnly ? (
+                    <Icons.check className='text-primary size-4' />
+                  ) : (
+                    <span className='inline-block size-4' />
+                  )}
+                  Starred only
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Sort By */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size='sm' variant='outline' className='gap-1'>
+                  {sortLabel()}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='end' className='w-44 text-xs'>
+                <div className='text-muted-foreground px-2 py-1.5 text-[10px] tracking-wide uppercase'>
+                  Modified
+                </div>
+                <DropdownMenuItem
+                  onClick={() => setSort('updated', 'desc')}
+                  inset
+                  disabled={sortKey === 'updated' && sortDir === 'desc'}
+                >
+                  Latest
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSort('updated', 'asc')}
+                  inset
+                  disabled={sortKey === 'updated' && sortDir === 'asc'}
+                >
+                  Oldest
+                </DropdownMenuItem>
+                <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
+                  Name
+                </div>
+                <DropdownMenuItem
+                  onClick={() => setSort('name', 'asc')}
+                  inset
+                  disabled={sortKey === 'name' && sortDir === 'asc'}
+                >
+                  A → Z
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSort('name', 'desc')}
+                  inset
+                  disabled={sortKey === 'name' && sortDir === 'desc'}
+                >
+                  Z → A
+                </DropdownMenuItem>
+                <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
+                  Size
+                </div>
+                <DropdownMenuItem
+                  onClick={() => setSort('size', 'desc')}
+                  inset
+                  disabled={sortKey === 'size' && sortDir === 'desc'}
+                >
+                  Largest
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSort('size', 'asc')}
+                  inset
+                  disabled={sortKey === 'size' && sortDir === 'asc'}
+                >
+                  Smallest
+                </DropdownMenuItem>
+                <div className='text-muted-foreground px-2 pt-2 pb-1 text-[10px] tracking-wide uppercase'>
+                  Type
+                </div>
+                <DropdownMenuItem
+                  onClick={() => setSort('type', 'asc')}
+                  inset
+                  disabled={sortKey === 'type' && sortDir === 'asc'}
+                >
+                  A → Z
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSort('type', 'desc')}
+                  inset
+                  disabled={sortKey === 'type' && sortDir === 'desc'}
+                >
+                  Z → A
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* View toggle */}
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() =>
+                setViewMode((v) => (v === 'grid' ? 'list' : 'grid'))
+              }
+              className='gap-1'
+            >
+              {viewMode === 'grid' ? (
+                <Icons.fileDescription className='size-4' />
+              ) : (
+                <Icons.grid className='size-4' />
+              )}
+              <span className='hidden md:inline'>
+                {viewMode === 'grid' ? 'List' : 'Grid'}
+              </span>
+            </Button>
+            {/* Selection is always available; no Select mode button */}
+          </div>
         </div>
         {viewMode === 'grid' ? (
           <div
@@ -1559,8 +2265,8 @@ export default function FilesBrowser() {
                   <div
                     key={f.id}
                     className={cn(
-                      'group from-card/80 to-background hover:from-card hover:to-card hover:border-primary/40 relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-gradient-to-br p-4 shadow-sm transition hover:shadow-md',
-                      isSelected(f.id) && 'ring-primary/60 ring-2'
+                      'group bg-card relative flex flex-col overflow-hidden rounded-xl border shadow-sm transition hover:shadow-md',
+                      isSelected(f.id) && 'border-primary border-2'
                     )}
                     draggable
                     onDragStart={(e) => {
@@ -1574,109 +2280,130 @@ export default function FilesBrowser() {
                       );
                     }}
                   >
-                    <div className='flex w-full min-w-0 items-start gap-3'>
-                      {renamingId === f.id ? (
-                        <div className='flex flex-1 items-center gap-3'>
-                          {isImage(f) && thumbUrls[f.id] ? (
-                            <img
-                              src={thumbUrls[f.id]}
-                              alt=''
-                              className='size-9 shrink-0 rounded object-cover'
-                            />
-                          ) : (
-                            <Icons.file className='text-primary size-7 shrink-0' />
-                          )}
-                          <input
-                            ref={renameInputRef}
-                            defaultValue={visibleName(f)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                submitRename(
-                                  f,
-                                  (e.target as HTMLInputElement).value
-                                );
-                              } else if (e.key === 'Escape') {
-                                setRenamingId(null);
-                              }
-                            }}
-                            className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
-                          />
-                        </div>
+                    {/* Hover checkbox for selection */}
+                    <button
+                      className={cn(
+                        'bg-background/80 absolute top-2 left-2 z-10 rounded border p-0.5 opacity-0 transition group-hover:opacity-100',
+                        isSelected(f.id) && 'opacity-100'
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCtrl(f.id);
+                      }}
+                      aria-label='Select file'
+                      title={isSelected(f.id) ? 'Deselect' : 'Select'}
+                    >
+                      {isSelected(f.id) ? (
+                        <Icons.check className='text-primary size-4' />
                       ) : (
-                        <button
-                          className='flex flex-1 cursor-pointer items-center gap-3 text-left text-[14px] font-medium'
-                          onClick={(e) => {
-                            if (e.shiftKey)
-                              return selectRange(f.id, e.ctrlKey || e.metaKey);
-                            if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
-                            if (selectMode) selectSingle(f.id);
-                            else void openFile(f, false);
+                        <span className='block size-4 rounded-sm border' />
+                      )}
+                    </button>
+                    <button
+                      className='bg-muted/40 relative flex aspect-video w-full items-center justify-center overflow-hidden'
+                      onClick={(e) => {
+                        if (e.shiftKey)
+                          return selectRange(f.id, e.ctrlKey || e.metaKey);
+                        if (e.ctrlKey || e.metaKey) return toggleCtrl(f.id);
+                        return void openFile(f, false);
+                      }}
+                      title={f.name}
+                      data-selected={isSelected(f.id) || undefined}
+                    >
+                      {isImage(f) && thumbUrls[f.id] ? (
+                        <img
+                          src={thumbUrls[f.id]}
+                          alt=''
+                          className='h-full w-full object-cover'
+                        />
+                      ) : (
+                        <div className='text-muted-foreground'>
+                          {renderFileIcon(f, 'size-10')}
+                        </div>
+                      )}
+                      {f.is_starred ? (
+                        <Icons.starFilled className='absolute top-2 right-2 size-4 text-amber-500 drop-shadow' />
+                      ) : null}
+                    </button>
+                    {/* Info */}
+                    <div className='flex flex-col gap-1 p-3 pt-2'>
+                      {renamingId === f.id ? (
+                        <input
+                          ref={renameInputRef}
+                          defaultValue={visibleName(f)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              submitRename(
+                                f,
+                                (e.target as HTMLInputElement).value
+                              );
+                            } else if (e.key === 'Escape') {
+                              setRenamingId(null);
+                            }
                           }}
-                          title={f.name}
-                          data-selected={isSelected(f.id) || undefined}
-                        >
-                          {renderFileIcon(f, 'size-7')}
-                          <span
-                            className='min-w-0 flex-1 truncate pr-1 whitespace-nowrap'
+                          className='bg-background/80 focus:ring-primary/40 w-full rounded border px-1 py-1 text-xs ring-1 ring-transparent outline-none'
+                        />
+                      ) : (
+                        <div className='flex items-start gap-2'>
+                          <button
+                            className='cursor-pointer truncate text-left font-medium'
+                            onClick={() => void openFile(f, false)}
                             title={f.name}
                           >
                             {displayName(f.name)}
-                          </span>
-                          {f.is_starred ? (
-                            <Icons.starFilled className='size-4 shrink-0 text-amber-500' />
-                          ) : null}
-                        </button>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className='text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer rounded-md p-1 opacity-0 transition group-hover:opacity-100'>
-                            <Icons.ellipsis className='size-4' />
                           </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align='end' className='text-xs'>
-                          <DropdownMenuItem
-                            onClick={() => void openFile(f, false)}
-                          >
-                            Open
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => void openFile(f, true)}
-                          >
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => startRename(f)}>
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleStar(f)}>
-                            {f.is_starred ? 'Unstar' : 'Star'}
-                          </DropdownMenuItem>
-                          {f.storage_path ? (
+                          <span className='bg-muted/60 ml-auto rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase'>
+                            {f.ext || f.mime_type?.split('/')?.[1] || 'FILE'}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        className='text-muted-foreground truncate text-[11px]'
+                        title={`${formatDate(f.updated_at)} • ${formatSize(f.size_bytes)}`}
+                      >
+                        {formatDate(f.updated_at)} • {formatSize(f.size_bytes)}
+                      </div>
+                      <div className='flex justify-end'>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className='text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer rounded-md p-1 opacity-0 transition group-hover:opacity-100'>
+                              <Icons.ellipsis className='size-4' />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align='end' className='text-xs'>
                             <DropdownMenuItem
-                              onClick={() => setSharePath(f.storage_path!)}
+                              onClick={() => void openFile(f, false)}
                             >
-                              Share link
+                              Open
                             </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuItem
-                            onClick={() => deleteItem(f)}
-                            className='text-destructive focus:text-destructive'
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <div className='text-muted-foreground flex items-center justify-between text-[11px]'>
-                      <span className='bg-muted/60 rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase'>
-                        {f.ext || f.mime_type?.split('/')?.[1] || 'FILE'}
-                      </span>
-                      <span className='truncate'>
-                        {formatSize(f.size_bytes)}
-                      </span>
-                    </div>
-                    <div className='text-muted-foreground text-[11px]'>
-                      Updated {formatDate(f.updated_at)}
+                            <DropdownMenuItem
+                              onClick={() => void openFile(f, true)}
+                            >
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => startRename(f)}>
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleStar(f)}>
+                              {f.is_starred ? 'Unstar' : 'Star'}
+                            </DropdownMenuItem>
+                            {f.storage_path ? (
+                              <DropdownMenuItem
+                                onClick={() => setSharePath(f.storage_path!)}
+                              >
+                                Share link
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem
+                              onClick={() => deleteItem(f)}
+                              className='text-destructive focus:text-destructive'
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
                 </ContextMenuTrigger>
@@ -1764,12 +2491,27 @@ export default function FilesBrowser() {
           </div>
         ) : (
           <div className='overflow-hidden rounded-md border'>
-            <div className='bg-muted/50 text-muted-foreground grid grid-cols-[40px_1fr_120px_100px_120px] px-2 py-1 text-[10px] tracking-wide uppercase'>
-              <div />
+            <div className='bg-muted/50 text-muted-foreground grid grid-cols-[40px_1fr_120px_100px_120px_40px] px-2 py-1 text-[10px] tracking-wide uppercase'>
+              <div className='flex items-center justify-center'>
+                <Checkbox
+                  checked={
+                    sortedFiles.length > 0 &&
+                    selectedIds.size === sortedFiles.length
+                  }
+                  onCheckedChange={(v) => {
+                    const checked = Boolean(v);
+                    if (checked)
+                      setSelectedIds(new Set(sortedFiles.map((f) => f.id)));
+                    else setSelectedIds(new Set());
+                  }}
+                  aria-label='Select all files'
+                />
+              </div>
               <div>Name</div>
               <div>Type</div>
               <div>Size</div>
               <div>Updated</div>
+              <div />
             </div>
             <div className='divide-y text-sm'>
               {sortedFiles.map((f) => (
@@ -1778,8 +2520,9 @@ export default function FilesBrowser() {
                     <div
                       key={f.id}
                       className={cn(
-                        'hover:bg-muted/40 grid grid-cols-[40px_1fr_120px_100px_120px] items-center px-2 py-2 text-xs',
-                        isSelected(f.id) && 'bg-primary/5'
+                        'hover:bg-muted/20 grid grid-cols-[40px_1fr_120px_100px_120px_40px] items-center px-2 py-2 text-xs',
+                        isSelected(f.id) &&
+                          'outline-primary/50 rounded-sm outline outline-2'
                       )}
                       draggable
                       onDragStart={(e) => {
@@ -1793,7 +2536,26 @@ export default function FilesBrowser() {
                         );
                       }}
                     >
-                      <div>{renderFileIcon(f, 'size-5')}</div>
+                      <div className='flex items-center gap-2'>
+                        {/* Hover checkbox for selection */}
+                        <button
+                          className={cn(
+                            'bg-background/60 hover:bg-background flex h-5 w-5 items-center justify-center rounded-sm border transition',
+                            isSelected(f.id) && 'bg-primary/10 border-primary'
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCtrl(f.id);
+                          }}
+                          aria-label='Select row'
+                          title={isSelected(f.id) ? 'Deselect' : 'Select'}
+                        >
+                          {isSelected(f.id) ? (
+                            <Icons.check className='text-primary size-4' />
+                          ) : null}
+                        </button>
+                        {renderFileIcon(f, 'size-5')}
+                      </div>
                       <div className='flex w-full items-center gap-2'>
                         {renamingId === f.id ? (
                           <input
@@ -1824,8 +2586,7 @@ export default function FilesBrowser() {
                                 );
                               if (e.ctrlKey || e.metaKey)
                                 return toggleCtrl(f.id);
-                              if (selectMode) selectSingle(f.id);
-                              else void openFile(f, false);
+                              return void openFile(f, false);
                             }}
                           >
                             {displayName(f.name)}
@@ -1942,22 +2703,86 @@ export default function FilesBrowser() {
         <div className='from-primary via-primary/40 to-primary absolute inset-x-0 top-0 h-0.5 animate-[pulse_2s_ease-in-out_infinite] bg-gradient-to-r' />
       )}
 
+      {/* Fixed bottom breadcrumb strip with drop targets (primary nav) */}
+      <div className='pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center px-4 pb-2'>
+        <div className='bg-card/95 supports-[backdrop-filter]:bg-card/70 pointer-events-auto relative mx-auto flex max-w-[900px] items-center gap-2 rounded-2xl border px-3 py-2 text-xs shadow-2xl backdrop-blur'>
+          {breadcrumb.map((b, idx) => (
+            <div
+              key={`crumb-bottom-${b.id ?? 'root'}-${idx}`}
+              className='flex items-center'
+            >
+              <button
+                className={cn(
+                  'hover:bg-muted/60 flex items-center gap-2 rounded-full px-2 py-1 transition',
+                  b.id === parentId
+                    ? 'bg-primary/10 ring-primary/40 ring-1'
+                    : 'bg-muted/30'
+                )}
+                title={b.name}
+                onClick={() => {
+                  if (b.id && !isUuid(b.id)) return;
+                  setParentId(b.id);
+                  setBreadcrumb((prev) => prev.slice(0, idx + 1));
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const raw =
+                      e.dataTransfer.getData('text/plain') ||
+                      e.dataTransfer.getData('application/json');
+                    let ids: string[] = [];
+                    try {
+                      const parsed = JSON.parse(raw);
+                      if (Array.isArray(parsed?.ids)) ids = parsed.ids;
+                    } catch {}
+                    if (!ids.length) return;
+                    const prevItems = items;
+                    setItems((p) => p.filter((it) => !ids.includes(it.id)));
+                    const res = await Promise.all(
+                      ids.map((id) =>
+                        fetch(`/api/noblesuite/files/${id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ parentId: b.id || null })
+                        })
+                      )
+                    );
+                    if (res.some((r) => !r.ok)) setItems(prevItems);
+                    void load();
+                  } catch {}
+                }}
+              >
+                <Icons.folder className='size-4 opacity-60' />
+                <span className='max-w-[140px] truncate'>{b.name}</span>
+              </button>
+              {idx < breadcrumb.length - 1 && (
+                <div className='bg-border mx-1 h-px w-6' />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* New Folder Dialog */}
       <Dialog
         open={showNewFolder}
         onOpenChange={(o: boolean) => setShowNewFolder(o)}
       >
-        <DialogContent className='w-[60vw] sm:max-w-none'>
-          <DialogHeader>
+        <DialogContent className='flex h-[100dvh] w-[100vw] flex-col sm:max-w-none md:h-[70vh] md:w-[50vw]'>
+          <DialogHeader className='space-y-1'>
             <DialogTitle>Create new folder</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className='leading-tight'>
               Choose a name, a color, and optionally include existing files.
             </DialogDescription>
           </DialogHeader>
-          <div className='grid grid-cols-1 gap-6 md:grid-cols-5'>
+          <div className='grid min-h-0 flex-1 grid-cols-1 gap-6 md:grid-cols-5'>
             {/* Left: folder preview */}
             <div className='md:col-span-2'>
-              <div className='bg-card relative flex h-60 flex-col rounded-xl border p-4 shadow-sm md:h-80'>
+              <div className='bg-card relative flex h-full flex-col rounded-xl border p-4 shadow-sm'>
                 {/* Star toggle */}
                 <button
                   type='button'
@@ -1998,8 +2823,15 @@ export default function FilesBrowser() {
                     )}
                   />
                 </div>
-                <div className='truncate text-center text-sm font-medium'>
-                  {newFolderForm.name || 'New Folder'}
+                <div className='mt-1 text-center'>
+                  <div className='truncate text-sm font-medium'>
+                    {newFolderForm.name || 'New Folder'}
+                  </div>
+                  <div className='text-muted-foreground mt-0.5 text-[11px]'>
+                    {newFolderForm.visibility === 'public'
+                      ? 'Public'
+                      : 'Private'}
+                  </div>
                 </div>
                 {/* Color picker at bottom */}
                 <div className='mt-3'>
@@ -2032,109 +2864,248 @@ export default function FilesBrowser() {
                 </div>
               </div>
             </div>
-            {/* Right: input fields */}
-            <div className='space-y-4 md:col-span-3'>
-              <div className='space-y-1'>
-                <label className='text-xs font-medium'>Name</label>
-                <input
-                  value={newFolderForm.name}
-                  onChange={(e) =>
-                    setNewFolderForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                  placeholder='e.g., Market Analysis'
-                  className='bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm'
-                />
-              </div>
-              {/* Visibility selector */}
-              <div className='space-y-1'>
-                <label className='text-xs font-medium'>Visibility</label>
-                <div className='inline-flex overflow-hidden rounded-md border text-xs'>
-                  <button
-                    type='button'
-                    onClick={() =>
-                      setNewFolderForm((f) => ({ ...f, visibility: 'public' }))
-                    }
-                    className={cn(
-                      'px-3 py-1.5',
-                      newFolderForm.visibility === 'public'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    )}
-                  >
-                    Public
-                  </button>
-                  <button
-                    type='button'
-                    onClick={() =>
-                      setNewFolderForm((f) => ({ ...f, visibility: 'private' }))
-                    }
-                    className={cn(
-                      'border-l px-3 py-1.5',
-                      newFolderForm.visibility === 'private'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    )}
-                  >
-                    Private
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className='text-xs font-medium'>
-                  Include existing files
-                </label>
-                <div className='text-muted-foreground mb-2 text-[11px]'>
-                  Move selected files into the new folder after it’s created.
-                </div>
-                {files.length === 0 ? (
-                  <div className='text-muted-foreground text-[11px]'>
-                    No files to include in this location.
+            {/* Right: input fields (scrollable) */}
+            <div className='min-h-0 md:col-span-3'>
+              <ScrollArea className='h-full pr-1'>
+                <div className='space-y-4'>
+                  <div className='space-y-1'>
+                    <label className='text-xs font-medium'>Name</label>
+                    <input
+                      value={newFolderForm.name}
+                      onChange={(e) =>
+                        setNewFolderForm((f) => ({
+                          ...f,
+                          name: e.target.value
+                        }))
+                      }
+                      placeholder='e.g., Market Analysis'
+                      className='bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm'
+                    />
                   </div>
-                ) : (
-                  <div className='max-h-48 overflow-auto rounded border p-2'>
-                    <div className='grid grid-cols-2 gap-2 md:grid-cols-3'>
-                      {files.map((f) => {
-                        const selected = newFolderForm.include.has(f.id);
-                        return (
-                          <button
-                            key={`inc-${f.id}`}
-                            type='button'
-                            onClick={() =>
-                              setNewFolderForm((prev) => {
-                                const next = new Set(prev.include);
-                                if (next.has(f.id)) next.delete(f.id);
-                                else next.add(f.id);
-                                return { ...prev, include: next };
-                              })
-                            }
-                            className={cn(
-                              'bg-card hover:bg-card/80 rounded-lg border p-2 text-left shadow-sm transition',
-                              selected && 'ring-primary/60 ring-2'
-                            )}
-                            title={f.name}
-                          >
-                            <div className='flex items-center gap-2'>
-                              {renderFileIcon(f, 'size-6')}
-                              <div className='min-w-0'>
-                                <div className='truncate text-xs font-medium'>
-                                  {visibleName(f)}
-                                </div>
-                                <div className='text-muted-foreground text-[10px]'>
-                                  {formatSize(f.size_bytes)}
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
+                  {/* Visibility selector */}
+                  <div className='space-y-1'>
+                    <label className='text-xs font-medium'>Visibility</label>
+                    <div className='flex items-center gap-2'>
+                      <button
+                        type='button'
+                        onClick={() =>
+                          setNewFolderForm((f) => ({
+                            ...f,
+                            visibility: 'public'
+                          }))
+                        }
+                        className={cn(
+                          'rounded-md border px-3 py-1.5 text-xs',
+                          newFolderForm.visibility === 'public'
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        Public
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() =>
+                          setNewFolderForm((f) => ({
+                            ...f,
+                            visibility: 'private'
+                          }))
+                        }
+                        className={cn(
+                          'rounded-md border px-3 py-1.5 text-xs',
+                          newFolderForm.visibility === 'private'
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'hover:bg-muted'
+                        )}
+                      >
+                        Private
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+                  {/* Share with (only when public) */}
+                  {newFolderForm.visibility === 'public' && (
+                    <div className='space-y-2'>
+                      <label className='text-xs font-medium'>Share with</label>
+                      <div className='space-y-2'>
+                        {/* Chip input */}
+                        <div className='flex flex-wrap items-center gap-1 rounded-md border px-2 py-1'>
+                          {newFolderForm.shareWithIds &&
+                            Array.from(newFolderForm.shareWithIds ?? []).map(
+                              (id) => {
+                                const c =
+                                  shareCache[id] ||
+                                  shareContacts.find((x) => x.id === id);
+                                const label = (c?.display_name ||
+                                  (c as any)?.username ||
+                                  (c as any)?.email ||
+                                  'User') as string;
+                                return (
+                                  <span
+                                    key={`chip-${id}`}
+                                    className='inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]'
+                                  >
+                                    {label}
+                                    <button
+                                      type='button'
+                                      className='text-muted-foreground hover:text-foreground'
+                                      onClick={() =>
+                                        setNewFolderForm((prev) => {
+                                          const next = new Set(
+                                            prev.shareWithIds
+                                          );
+                                          next.delete(id);
+                                          return {
+                                            ...prev,
+                                            shareWithIds: next
+                                          } as any;
+                                        })
+                                      }
+                                      aria-label='Remove'
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                );
+                              }
+                            )}
+                          <input
+                            value={shareQuery}
+                            onChange={(e) => setShareQuery(e.target.value)}
+                            placeholder='Search contacts...'
+                            className='h-7 min-w-[120px] flex-1 border-0 bg-transparent text-xs outline-none focus:outline-none'
+                          />
+                        </div>
+                        {/* Results */}
+                        <div className='max-h-36 overflow-auto rounded border'>
+                          {shareLoading ? (
+                            <div className='text-muted-foreground p-2 text-[11px]'>
+                              Loading...
+                            </div>
+                          ) : (
+                            <ul className='divide-y text-sm'>
+                              {shareContacts.map((c) => {
+                                const label = (c.display_name ||
+                                  c.username ||
+                                  c.email ||
+                                  'User') as string;
+                                const selected =
+                                  newFolderForm.shareWithIds?.has(c.id);
+                                return (
+                                  <li key={c.id}>
+                                    <button
+                                      type='button'
+                                      onClick={() =>
+                                        setNewFolderForm((prev) => {
+                                          const next = new Set(
+                                            prev.shareWithIds
+                                          );
+                                          if (next.has(c.id)) next.delete(c.id);
+                                          else next.add(c.id);
+                                          return {
+                                            ...prev,
+                                            shareWithIds: next
+                                          } as any;
+                                        })
+                                      }
+                                      className={cn(
+                                        'hover:bg-muted/40 w-full px-2 py-2 text-left',
+                                        selected && 'bg-primary/5'
+                                      )}
+                                    >
+                                      <div className='flex items-center gap-2'>
+                                        <div className='bg-muted/60 flex h-6 w-6 items-center justify-center rounded-full text-[10px]'>
+                                          {label.slice(0, 2).toUpperCase()}
+                                        </div>
+                                        <div className='min-w-0'>
+                                          <div className='truncate text-xs font-medium'>
+                                            {label}
+                                          </div>
+                                          {c.email ? (
+                                            <div className='text-muted-foreground truncate text-[10px]'>
+                                              {c.email}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                              {shareContacts.length === 0 && (
+                                <li className='text-muted-foreground px-2 py-2 text-[11px]'>
+                                  No contacts found.
+                                </li>
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className='text-xs font-medium'>
+                      Include existing files
+                    </label>
+                    <div className='text-muted-foreground mb-2 text-[11px]'>
+                      Move selected files into the new folder after it’s
+                      created.
+                    </div>
+                    {files.length === 0 ? (
+                      <div className='text-muted-foreground text-[11px]'>
+                        No files to include in this location.
+                      </div>
+                    ) : (
+                      <div className='max-h-48 overflow-auto rounded border p-2'>
+                        <div className='grid grid-cols-2 gap-2 md:grid-cols-3'>
+                          {files.map((f) => {
+                            const selected = newFolderForm.include.has(f.id);
+                            return (
+                              <button
+                                key={`inc-${f.id}`}
+                                type='button'
+                                onClick={() =>
+                                  setNewFolderForm((prev) => {
+                                    const next = new Set(prev.include);
+                                    if (next.has(f.id)) next.delete(f.id);
+                                    else next.add(f.id);
+                                    return { ...prev, include: next };
+                                  })
+                                }
+                                className={cn(
+                                  'bg-card hover:bg-card/80 rounded-lg border p-2 text-left shadow-sm transition',
+                                  selected && 'ring-primary/60 ring-2'
+                                )}
+                                title={f.name}
+                              >
+                                <div className='flex items-center gap-2'>
+                                  {renderFileIcon(f, 'size-6')}
+                                  <div className='min-w-0'>
+                                    <div className='truncate text-xs font-medium'>
+                                      {visibleName(f)}
+                                    </div>
+                                    <div className='text-muted-foreground text-[10px]'>
+                                      {formatSize(f.size_bytes)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </ScrollArea>
             </div>
           </div>
           <DialogFooter className='flex items-center gap-2'>
-            {/* Primary actions */}
+            {/* Cancel left */}
+            <Button variant='outline' onClick={() => setShowNewFolder(false)}>
+              Cancel
+            </Button>
+            <div className='ml-auto' />
+            {/* Primary actions right */}
             <Button
               disabled={!newFolderForm.name.trim() || creating}
               onClick={async () => {
@@ -2179,7 +3150,8 @@ export default function FilesBrowser() {
                   include: new Set(),
                   star: false,
                   genLinks: false,
-                  visibility: 'private'
+                  visibility: 'private',
+                  shareWithIds: new Set()
                 });
                 void load();
               }}
@@ -2282,7 +3254,8 @@ export default function FilesBrowser() {
                     include: new Set(),
                     star: false,
                     genLinks: false,
-                    visibility: 'private'
+                    visibility: 'private',
+                    shareWithIds: new Set()
                   });
                   void load();
                 }}
@@ -2290,11 +3263,6 @@ export default function FilesBrowser() {
                 Share
               </Button>
             )}
-            {/* Spacer to push Cancel to far right */}
-            <div className='ml-auto' />
-            <Button variant='outline' onClick={() => setShowNewFolder(false)}>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2342,6 +3310,140 @@ export default function FilesBrowser() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* In-app File Preview SidePanel */}
+      <SidePanel
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        title={
+          preview?.item ? (
+            <div className='flex min-w-0 items-center gap-2'>
+              {preview ? renderFileIcon(preview.item, 'size-5') : null}
+              <span className='truncate'>{preview?.item.name}</span>
+            </div>
+          ) : (
+            'Preview'
+          )
+        }
+        footer={
+          preview?.item ? (
+            <>
+              <Button variant='outline' onClick={() => setPreview(null)}>
+                Close
+              </Button>
+              <Button
+                onClick={() => void openFile(preview.item!, true)}
+                className='gap-1'
+              >
+                <Icons.download className='size-4' /> Download
+              </Button>
+            </>
+          ) : null
+        }
+      >
+        {preview &&
+          (() => {
+            const kind = getKind(preview.item);
+            if (kind === 'image') {
+              return (
+                <img
+                  src={preview.url}
+                  alt=''
+                  className='max-h-[70vh] w-full object-contain'
+                />
+              );
+            }
+            if (kind === 'video') {
+              return (
+                <video
+                  src={preview.url}
+                  controls
+                  className='h-[60vh] w-full bg-black'
+                />
+              );
+            }
+            if (kind === 'audio') {
+              return (
+                <div className='p-4'>
+                  <audio src={preview.url} controls className='w-full' />
+                </div>
+              );
+            }
+            if (
+              preview.item.ext?.toLowerCase() === 'pdf' ||
+              preview.item.mime_type === 'application/pdf'
+            ) {
+              const it = preview.item;
+              return (
+                <div className='flex h-full min-h-[60vh] flex-col'>
+                  {/* Info card */}
+                  <div className='bg-card/70 mb-3 rounded-md border p-3 text-xs'>
+                    <div className='flex items-center gap-2'>
+                      {renderFileIcon(it, 'size-5')}
+                      <div className='min-w-0'>
+                        <div className='truncate font-medium'>{it.name}</div>
+                        <div className='text-muted-foreground mt-0.5 flex flex-wrap gap-3'>
+                          <span>{formatSize(it.size_bytes)}</span>
+                          <span>•</span>
+                          <span>{formatDate(it.updated_at)}</span>
+                          <span>•</span>
+                          <span>
+                            {it.ext?.toUpperCase() || it.mime_type || 'FILE'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className='ml-auto flex items-center gap-2'>
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          onClick={() => void openFile(it, true)}
+                          className='gap-1'
+                        >
+                          <Icons.download className='size-4' /> Download
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          onClick={() => toggleStar(it)}
+                          className='gap-1'
+                        >
+                          {it.is_starred ? (
+                            <Icons.starFilled className='size-4 text-amber-500' />
+                          ) : (
+                            <Icons.star className='size-4' />
+                          )}
+                          {it.is_starred ? 'Unstar' : 'Star'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {/* PDF iframe fills remaining height */}
+                  <div className='flex-1 overflow-hidden rounded-md border'>
+                    <iframe
+                      src={preview.url}
+                      className='h-full w-full'
+                      title='PDF Preview'
+                    />
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className='p-6 text-sm'>
+                <div className='text-muted-foreground mb-2'>
+                  Preview not available for this file type.
+                </div>
+                <Button
+                  size='sm'
+                  onClick={() => void openFile(preview.item, true)}
+                  className='gap-1'
+                >
+                  <Icons.download className='size-4' /> Download
+                </Button>
+              </div>
+            );
+          })()}
+      </SidePanel>
     </div>
   );
 }
@@ -2357,34 +3459,34 @@ function mapError(code?: string): string {
     case 'LOAD_FAILED':
       return 'Unable to load files.';
     case 'BUCKET_NOT_FOUND':
-      return 'Storage bucket "files" bulunamadı veya politikalar erişimi engelliyor. Supabase Storage > files bucket oluştur / politikaları ekle.';
+      return 'Storage bucket "files" not found or access is blocked by policies. Create the bucket or update RLS policies.';
     case 'NO_STORAGE_PATH':
-      return 'Dosya yolu kayıtlı değil.';
+      return 'File storage path is not set.';
     case 'FILE_URL_UNAVAILABLE':
-      return 'Dosya URL üretilemedi.';
+      return 'File URL could not be generated.';
     case 'NOT_FOUND':
-      return 'Kayıt bulunamadı.';
+      return 'Record not found.';
     case 'FORBIDDEN':
-      return 'Bu dosyayı silme yetkin yok.';
+      return 'You do not have permission to perform this action.';
     case 'FOLDER_NOT_EMPTY':
-      return 'Klasör boş değil.';
+      return 'Folder is not empty.';
     case 'OPEN_FAILED':
-      return 'Dosya açılamadı (detay için console bak).';
+      return 'Failed to open file (see console for details).';
     // Raw messages we sometimes surface from Supabase SDK:
     case 'new row violates row-level security policy for table "objects"':
     case 'permission denied for table objects':
-      return 'RLS engeli: Path ilk segmenti user id ile eşleşmiyor veya oturum yok.';
+      return 'RLS blocked: Path first segment does not match user id, or no active session.';
     case 'JWT expired':
-      return 'Oturum süresi doldu, yeniden giriş yap.';
+      return 'Session expired. Please sign in again.';
     case 'Invalid JWT':
-      return 'Oturum geçersiz, çıkış yapıp tekrar giriş deneyin.';
+      return 'Invalid session. Please sign out and sign in again.';
     default:
       return code || 'Unknown error';
   }
 }
 
-// DEBUG YARDIMI: Tarayıcı console’da şu komutları çalıştırabilirsin:
+// DEBUG HELP: Useful console snippets
 // 1) (await supabase.auth.getUser()).data.user?.id  -> client user id
 // 2) await supabase.storage.from('files').createSignedUrl('<storage_path>', 60)
-// 3) Karşılaştır: storage_path ilk segment == user id ?
-// 4) Hata RLS ise politika koşulu: bucket_id='files' AND split_part(name,'/',1)=auth.uid()::text
+// 3) Verify: storage_path first segment == user id ?
+// 4) If RLS failure: bucket_id='files' AND split_part(name,'/',1)=auth.uid()::text
