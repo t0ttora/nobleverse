@@ -1,9 +1,13 @@
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
+import { toast } from 'sonner';
+import { Loader2, Folder, File as FileIcon, FileText } from 'lucide-react';
+
+const FILES_BUCKET = process.env.NEXT_PUBLIC_FILES_BUCKET || 'files';
 
 export type NobleAction = {
   label: string;
@@ -94,6 +98,24 @@ export type NobleCard =
       actions?: NobleAction[];
     }
   | {
+      type: 'suite_files_card';
+      title: string;
+      subtitle?: string;
+      breadcrumb?: { id: string | null; name: string }[];
+      items: Array<{
+        id: string;
+        kind: 'file' | 'folder';
+        name: string;
+        size_bytes?: number | null;
+        updated_at?: string | null;
+        storage_path?: string | null;
+        parent_id?: string | null;
+        visibility?: string | null;
+        ext?: string | null;
+      }>;
+      actions?: NobleAction[];
+    }
+  | {
       type: 'approval_card';
       id: string;
       subject?: string;
@@ -109,6 +131,9 @@ export type NobleCard =
       timestamp?: string;
       actions?: NobleAction[];
     };
+
+type SuiteFilesCard = Extract<NobleCard, { type: 'suite_files_card' }>;
+type SuiteFilesCardItem = SuiteFilesCard['items'][number];
 
 export type UserRole = 'owner' | 'forwarder' | 'customs_broker' | 'finance';
 
@@ -287,6 +312,31 @@ export function CardRenderer({
           />
         </BaseCard>
       );
+    case 'suite_files_card': {
+      const meta: (string | undefined)[] = [];
+      if (card.subtitle) meta.push(card.subtitle);
+      meta.push(
+        `${card.items.length} item${card.items.length === 1 ? '' : 's'}`
+      );
+      return (
+        <BaseCard
+          typeLabel='Suite'
+          title={card.title || 'Suite Files'}
+          status={undefined}
+          meta={meta}
+        >
+          <div className='mt-3 space-y-2'>
+            {card.items.map((item) => (
+              <SuiteFileRow key={item.id} item={item} />
+            ))}
+          </div>
+          <Actions
+            actions={card.actions}
+            onAction={(a) => onAction?.(a, card)}
+          />
+        </BaseCard>
+      );
+    }
     case 'task_card':
       return (
         <BaseCard
@@ -960,6 +1010,85 @@ function Actions({
   );
 }
 
+function SuiteFileRow({ item }: { item: SuiteFilesCardItem }) {
+  const [loading, setLoading] = useState(false);
+  const isFolder = item.kind === 'folder';
+  const meta: string[] = [];
+  if (isFolder) meta.push('Folder');
+  else {
+    const size = formatBytes(item.size_bytes);
+    if (size) meta.push(size);
+  }
+  if (item.updated_at) meta.push(formatDate(item.updated_at));
+
+  return (
+    <div className='bg-muted/40 flex items-center gap-3 rounded-lg border px-3 py-2'>
+      <div className='bg-background flex size-9 shrink-0 items-center justify-center rounded-md border'>
+        {renderSuiteIcon(item)}
+      </div>
+      <div className='min-w-0 flex-1'>
+        <div className='truncate text-sm font-medium'>{item.name}</div>
+        {meta.length > 0 && (
+          <div className='text-muted-foreground text-[11px]'>
+            {meta.join(' • ')}
+          </div>
+        )}
+      </div>
+      <Button
+        variant='secondary'
+        size='sm'
+        className='shrink-0'
+        onClick={() => void handleOpen()}
+        disabled={loading}
+      >
+        {loading && <Loader2 className='mr-2 size-3 animate-spin' />}
+        Open
+      </Button>
+    </div>
+  );
+
+  async function handleOpen() {
+    if (typeof window === 'undefined') return;
+    if (isFolder) {
+      const href = `/noblefiles?folder=${item.id}`;
+      window.open(href, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (!item.storage_path) {
+      toast.error('File unavailable');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: signed, error } = await supabase.storage
+        .from(FILES_BUCKET)
+        .createSignedUrl(item.storage_path, 300);
+      if (error) throw error;
+      const url =
+        signed?.signedUrl ||
+        supabase.storage.from(FILES_BUCKET).getPublicUrl(item.storage_path).data
+          ?.publicUrl;
+      if (!url) throw new Error('Link unavailable');
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e: any) {
+      toast.error('Unable to open file', {
+        description: e?.message || undefined
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+}
+
+function renderSuiteIcon(item: SuiteFilesCardItem) {
+  if (item.kind === 'folder')
+    return <Folder className='size-4 text-blue-500 dark:text-blue-300' />;
+  const ext = (item.ext || '').toLowerCase();
+  if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext))
+    return <FileText className='size-4 text-purple-500 dark:text-purple-300' />;
+  return <FileIcon className='text-muted-foreground size-4' />;
+}
+
 function statusColor(s: string) {
   const key = s.toLowerCase();
   if (key.includes('in transit') || key.includes('processing'))
@@ -990,6 +1119,20 @@ function formatDate(iso?: string) {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(d);
+}
+
+function formatBytes(size?: number | null) {
+  if (size == null || size < 0) return '';
+  if (size === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = size;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  const precision = value >= 10 || idx === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
 // (no-op)

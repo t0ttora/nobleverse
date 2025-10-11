@@ -728,6 +728,9 @@ export default function InboxPage() {
                     case 'approval_card':
                       label = `✔️ Approval: ${card.subject || card.id}`;
                       break;
+                    case 'suite_files_card':
+                      label = `📁 Files: ${(card.items || []).length} shared`;
+                      break;
                     case 'note_card':
                       label = `🗒️ Note: ${card.author || card.id}`;
                       break;
@@ -817,7 +820,7 @@ export default function InboxPage() {
   };
 
   return (
-    <div className='bg-background flex h-[calc(100vh-4rem)] w-full overflow-hidden rounded-xl border'>
+    <div className='bg-background flex h-full min-h-0 w-full flex-1 overflow-hidden'>
       {/* Left list */}
       <div
         className={clsx(

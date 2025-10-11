@@ -24,7 +24,9 @@ import {
   Wallet,
   ClipboardCheck,
   CheckSquare,
-  StickyNote
+  StickyNote,
+  LayoutGrid,
+  Folder
 } from 'lucide-react';
 import {
   Popover,
@@ -51,6 +53,10 @@ import type { NobleCard } from '@/components/chat-cards/card-renderer';
 import { useTheme } from 'next-themes';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
+import {
+  ChatFilesDialog,
+  type SuiteFilesSelectionPayload
+} from '@/features/files/components/chat-files-dialog';
 
 interface RealtimeChatProps {
   roomName: string;
@@ -289,7 +295,63 @@ export const RealtimeChat = ({
   >(null);
   // Cards staged in composer
   const [pendingCards, setPendingCards] = useState<NobleCard[]>([]);
+  const [suiteDialogOpen, setSuiteDialogOpen] = useState(false);
   const { role } = useProfileRole();
+
+  const handleSuiteFilesShare = useCallback(
+    (payload: SuiteFilesSelectionPayload) => {
+      if (!payload.items.length) return;
+      const breadcrumbs = payload.breadcrumb;
+      const context = breadcrumbs
+        .map((b) => b.name)
+        .filter(Boolean)
+        .join(' / ');
+      const uniq = new Map<
+        string,
+        SuiteFilesSelectionPayload['items'][number]
+      >();
+      for (const item of payload.items) uniq.set(item.id, item);
+      const mapped = Array.from(uniq.values()).map((item) => {
+        const isFolder = item.type === 'folder';
+        const ext = item.ext || item.name.split('.').pop();
+        const kind = (isFolder ? 'folder' : 'file') as 'folder' | 'file';
+        return {
+          id: item.id,
+          kind,
+          name: item.name,
+          size_bytes: item.size_bytes ?? null,
+          updated_at: item.updated_at ?? null,
+          storage_path: isFolder ? null : (item.storage_path ?? null),
+          parent_id: item.parent_id ?? null,
+          visibility: item.visibility ?? null,
+          ext: ext ? ext.toLowerCase() : null
+        };
+      });
+      const fileCount = mapped.filter((it) => it.kind === 'file').length;
+      const folderCount = mapped.filter((it) => it.kind === 'folder').length;
+      const title = (() => {
+        if (mapped.length === 1) return mapped[0].name;
+        if (folderCount && fileCount)
+          return `${mapped.length} entries from NobleFiles`;
+        if (folderCount)
+          return `${folderCount} ${folderCount > 1 ? 'folders' : 'folder'}`;
+        return `${fileCount} ${fileCount > 1 ? 'files' : 'file'}`;
+      })();
+
+      setPendingCards((prev) => [
+        ...prev,
+        {
+          type: 'suite_files_card',
+          title,
+          subtitle:
+            context && context !== 'Home' ? context : 'Shared from NobleFiles',
+          breadcrumb: breadcrumbs,
+          items: mapped
+        }
+      ]);
+    },
+    [setPendingCards]
+  );
 
   // Merge realtime + initial
   const allMessages = useMemo(() => {
@@ -1275,6 +1337,30 @@ export const RealtimeChat = ({
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
 
+              {/* Suite Cards */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <div className='flex items-start gap-2'>
+                    <LayoutGrid className='mt-0.5 size-4' />
+                    <div className='-mt-0.5 flex flex-col'>
+                      <span>Suite Cards</span>
+                      <span className='text-muted-foreground text-[11px]'>
+                        Share from NobleFiles
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSuiteDialogOpen(true);
+                    }}
+                  >
+                    <Folder className='mr-2 size-4' /> Files
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
               {/* Task & Approval Cards */}
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
@@ -1497,6 +1583,11 @@ export const RealtimeChat = ({
           </div>
         )}
       </form>
+      <ChatFilesDialog
+        open={suiteDialogOpen}
+        onOpenChange={setSuiteDialogOpen}
+        onShare={handleSuiteFilesShare}
+      />
       <CardBuilderDialog
         open={cardBuilderOpen}
         onOpenChange={setCardBuilderOpen}
@@ -1662,7 +1753,8 @@ function humanizeCard(card: NobleCard): string {
     task_card: 'Task',
     calendar_card: 'Calendar',
     approval_card: 'Approval',
-    note_card: 'Note'
+    note_card: 'Note',
+    suite_files_card: 'Suite Files'
   };
   const label = typeMap[card.type] || card.type;
   const id = (card as any).id ? ` #${(card as any).id}` : '';
