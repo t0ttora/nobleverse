@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Univer, Workbook } from '@univerjs/core';
+import { Univer, LocaleType } from '@univerjs/core';
 import { UniverUIPlugin } from '@univerjs/ui';
 import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { UniverSheetsPlugin } from '@univerjs/sheets';
@@ -44,16 +44,15 @@ export default function UniverSheet({ sheetId }: { sheetId: string }) {
 
       if (disposed || !containerRef.current) return;
       const univer = new Univer({
-        locale: 'enUS',
-        theme: {}
+        locale: LocaleType.EN_US
       });
       univerRef.current = univer;
       univer.registerPlugin(UniverUIPlugin);
       univer.registerPlugin(UniverRenderEnginePlugin);
       univer.registerPlugin(UniverSheetsPlugin);
       univer.registerPlugin(UniverSheetsUIPlugin);
-      // Create or load workbook
-      univer.createUnit(Workbook, data);
+      // Create or load workbook (Sheets plugin exposes helper)
+      (univer as any).createUniverSheet?.(data);
       // Attach UI into container
       const root = containerRef.current;
       if (root) {
@@ -66,10 +65,8 @@ export default function UniverSheet({ sheetId }: { sheetId: string }) {
       let timer: any = null;
       const save = async () => {
         if (!univerRef.current) return;
-        // In Univer 0.10, get snapshot via toJson on Workbook unit
-        const units = (univerRef.current as any)._unitManager?._units || [];
-        const wb = units.find((u: any) => u?.unitType === 1); // 1: Workbook
-        const snapshot = wb?.toJson ? wb.toJson() : data;
+        // Try to get snapshot via sheets UI API; fallback to last data
+        const snapshot = (univerRef.current as any).getSnapshot?.() ?? data;
         await fetch(`/api/noblesuite/cells/sheets/${sheetId}/data`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
