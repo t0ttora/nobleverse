@@ -101,16 +101,17 @@ export default function SheetEditorPage() {
           {workbookId} / {sheetId}
         </span>
       </div>
+      {/* Controls row */}
       <div className='flex items-center gap-2'>
-        <Button size='sm' variant='outline' className='gap-1'>
-          {/* Embedded Excel-like editor (UniverJS) */}
-          <UniverSheet sheetId={sheetId} />
-        </Button>
         <Button size='sm' variant='outline' className='gap-1'>
           <Icons.add className='size-4' /> Add Sheet (soon)
         </Button>
       </div>
-      <SimpleGrid sheetId={sheetId} />
+      {/* Embedded Excel-like editor (UniverJS) */}
+      <div className='relative z-10'>
+        <UniverSheet sheetId={sheetId} />
+      </div>
+      {/* Remove legacy simple grid to avoid interaction conflicts and overlapping popovers */}
     </div>
   );
 }

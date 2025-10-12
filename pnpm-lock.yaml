@@ -206,6 +206,12 @@ importers:
       '@univerjs/core':
         specifier: ^0.10.10
         version: 0.10.10(@grpc/grpc-js@1.14.0)(@wendellhu/redi@1.0.0(react@19.0.0))(rxjs@7.8.2)
+      '@univerjs/docs':
+        specifier: ^0.10.10
+        version: 0.10.10(@grpc/grpc-js@1.14.0)(@wendellhu/redi@1.0.0(react@19.0.0))(rxjs@7.8.2)
+      '@univerjs/docs-ui':
+        specifier: ^0.10.10
+        version: 0.10.10(@grpc/grpc-js@1.14.0)(@types/react-dom@19.0.2(@types/react@19.0.1))(@types/react@19.0.1)(@wendellhu/redi@1.0.0(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(rxjs@7.8.2)
       '@univerjs/engine-render':
         specifier: ^0.10.10
         version: 0.10.10(@grpc/grpc-js@1.14.0)(@wendellhu/redi@1.0.0(react@19.0.0))(rxjs@7.8.2)

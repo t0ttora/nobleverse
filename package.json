@@ -91,6 +91,8 @@
     "@tiptap/react": "^3.4.2",
     "@tiptap/starter-kit": "^3.4.2",
     "@univerjs/core": "^0.10.10",
+    "@univerjs/docs": "^0.10.10",
+    "@univerjs/docs-ui": "^0.10.10",
     "@univerjs/engine-render": "^0.10.10",
     "@univerjs/sheets": "^0.10.10",
     "@univerjs/sheets-formula": "^0.10.10",
