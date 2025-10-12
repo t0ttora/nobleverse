@@ -26,7 +26,9 @@ import {
   StarOff,
   X,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Folder as FolderIcon,
+  File as FileIcon
 } from 'lucide-react';
 import { NewMessageDialog } from '../../components/new-message-dialog';
 import { supabase } from '@/lib/supabaseClient';
@@ -63,6 +65,19 @@ type RoomListItem = {
     avatar_url?: string | null;
   }[];
   isAdmin?: boolean;
+};
+
+// Minimal Files model for inline folder browsing
+type InlineFileItem = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  type: string; // 'folder' or file kind
+  mime_type?: string | null;
+  ext?: string | null;
+  size_bytes?: number | null;
+  storage_path?: string | null;
+  updated_at?: string | null;
 };
 
 // Tiny relative time formatter for the list view
@@ -207,6 +222,14 @@ export default function InboxPage() {
     };
     url: string;
   }>(null);
+  // Inline folder browsing panel
+  const [folderView, setFolderView] = useState<null | {
+    parentId: string | null;
+    breadcrumb: { id: string | null; name: string }[];
+    items: InlineFileItem[];
+    loading: boolean;
+    error?: string | null;
+  }>(null);
   // Collapsible states for sections
   const [dmsOpen, setDmsOpen] = useState(true);
   const [groupsOpen, setGroupsOpen] = useState(true);
@@ -303,10 +326,43 @@ export default function InboxPage() {
       try {
         ev.preventDefault();
       } catch {}
-      // Folder preview: for now just redirect to NobleFiles in a new tab; can be improved to inline folder view
+      // Folder preview: open inline panel and list folder contents
       if (d.kind === 'folder') {
-        const href = `/noblefiles?folder=${d.id}`;
-        window.open(href, '_blank', 'noopener,noreferrer');
+        setFolderView({
+          parentId: d.id,
+          breadcrumb: [{ id: d.id, name: d.name || 'Folder' }],
+          items: [],
+          loading: true,
+          error: null
+        });
+        (async () => {
+          try {
+            const params = new URLSearchParams();
+            params.set('parentId', d.id);
+            const res = await fetch(`/api/noblesuite/files?${params}`);
+            const json = await res.json();
+            if (!json?.ok) throw new Error(json?.error || 'LOAD_FAILED');
+            setFolderView((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    items: (json.items || []) as InlineFileItem[],
+                    loading: false
+                  }
+                : prev
+            );
+          } catch (e: any) {
+            setFolderView((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    loading: false,
+                    error: e?.message || 'LOAD_FAILED'
+                  }
+                : prev
+            );
+          }
+        })();
         return;
       }
       if (!d.storage_path) return;
@@ -1496,10 +1552,21 @@ export default function InboxPage() {
       </AlertDialog>
       {/* SidePanel for file preview */}
       <SidePanel
-        open={!!filePreview}
-        onClose={() => setFilePreview(null)}
+        open={!!filePreview || !!folderView}
+        onClose={() => {
+          setFilePreview(null);
+          setFolderView(null);
+        }}
         title={
-          filePreview?.item ? (
+          folderView ? (
+            <div className='flex min-w-0 items-center gap-2'>
+              <FolderIcon className='size-4' />
+              <span className='truncate'>
+                {folderView.breadcrumb[folderView.breadcrumb.length - 1]
+                  ?.name || 'Folder'}
+              </span>
+            </div>
+          ) : filePreview?.item ? (
             <div className='flex min-w-0 items-center gap-2'>
               <span className='truncate'>{filePreview.item.name}</span>
             </div>
@@ -1508,61 +1575,251 @@ export default function InboxPage() {
           )
         }
       >
-        {(() => {
-          const p = filePreview;
-          if (!p) return null;
-          const ext = (p.item.ext || '').toLowerCase();
-          const mime = (p.item.mime_type || '').toLowerCase();
-          const isImage =
-            /^image\//.test(mime) ||
-            ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
-          const isVideo =
-            /^video\//.test(mime) || ['mp4', 'webm', 'mov'].includes(ext);
-          const isAudio =
-            /^audio\//.test(mime) || ['mp3', 'wav', 'ogg'].includes(ext);
-          if (isImage)
-            return (
-              <img
-                src={p.url}
-                alt=''
-                className='max-h-[70vh] w-full object-contain'
-              />
-            );
-          if (isVideo)
-            return (
-              <video
-                src={p.url}
-                controls
-                className='h-[60vh] w-full bg-black'
-              />
-            );
-          if (isAudio)
-            return (
-              <div className='p-4'>
-                <audio src={p.url} controls className='w-full' />
-              </div>
-            );
-          if (ext === 'pdf' || mime === 'application/pdf')
-            return (
-              <iframe
-                src={`/api/noblesuite/files/preview?id=${filePreview.item.id}`}
-                className='h-full min-h-[60vh] w-full flex-1 rounded-lg border-0 shadow-sm'
-                title='PDF Preview'
-              />
-            );
-          return (
-            <div className='p-6 text-sm'>
-              <div className='text-muted-foreground mb-2'>
-                Preview not available for this file type.
-              </div>
-              <Button asChild size='sm' className='gap-1'>
-                <a href={p.url} target='_blank' rel='noreferrer noopener'>
-                  Open
-                </a>
-              </Button>
+        {folderView ? (
+          <div className='flex h-full min-h-[60vh] flex-col'>
+            {/* Breadcrumb */}
+            <div className='text-muted-foreground flex items-center gap-1 px-3 pt-3 text-xs'>
+              {folderView.breadcrumb.map((b, idx) => (
+                <span
+                  key={`${b.id ?? 'root'}-${idx}`}
+                  className='flex items-center gap-1'
+                >
+                  <button
+                    className='hover:text-foreground underline-offset-2 hover:underline'
+                    onClick={async () => {
+                      // Navigate to this breadcrumb level
+                      const nextCrumb = folderView.breadcrumb.slice(0, idx + 1);
+                      const pid = nextCrumb[nextCrumb.length - 1].id;
+                      setFolderView((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              breadcrumb: nextCrumb,
+                              parentId: pid || null,
+                              loading: true,
+                              error: null
+                            }
+                          : prev
+                      );
+                      try {
+                        const params = new URLSearchParams();
+                        if (pid) params.set('parentId', pid);
+                        const res = await fetch(
+                          `/api/noblesuite/files?${params}`
+                        );
+                        const json = await res.json();
+                        if (!json?.ok)
+                          throw new Error(json?.error || 'LOAD_FAILED');
+                        setFolderView((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                items: (json.items || []) as InlineFileItem[],
+                                loading: false
+                              }
+                            : prev
+                        );
+                      } catch (e: any) {
+                        setFolderView((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                loading: false,
+                                error: e?.message || 'LOAD_FAILED'
+                              }
+                            : prev
+                        );
+                      }
+                    }}
+                  >
+                    {b.name}
+                  </button>
+                  {idx < folderView.breadcrumb.length - 1 && (
+                    <ChevronRight className='size-3 opacity-60' />
+                  )}
+                </span>
+              ))}
             </div>
-          );
-        })()}
+            {/* Items */}
+            <div className='flex-1 overflow-y-auto p-2'>
+              {folderView.loading ? (
+                <div className='text-muted-foreground p-4 text-sm'>
+                  Loading…
+                </div>
+              ) : folderView.error ? (
+                <div className='text-destructive p-4 text-sm'>
+                  {folderView.error}
+                </div>
+              ) : folderView.items.length === 0 ? (
+                <div className='text-muted-foreground p-6 text-sm'>
+                  No items
+                </div>
+              ) : (
+                <ul className='divide-border/60 divide-y'>
+                  {folderView.items.map((it) => (
+                    <li key={it.id}>
+                      <button
+                        className='hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2 text-left'
+                        onClick={async () => {
+                          if (it.type === 'folder') {
+                            // Drill into subfolder
+                            setFolderView((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    parentId: it.id,
+                                    breadcrumb: [
+                                      ...prev.breadcrumb,
+                                      { id: it.id, name: it.name }
+                                    ],
+                                    loading: true,
+                                    error: null
+                                  }
+                                : prev
+                            );
+                            try {
+                              const params = new URLSearchParams();
+                              params.set('parentId', it.id);
+                              const res = await fetch(
+                                `/api/noblesuite/files?${params}`
+                              );
+                              const json = await res.json();
+                              if (!json?.ok)
+                                throw new Error(json?.error || 'LOAD_FAILED');
+                              setFolderView((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      items: (json.items ||
+                                        []) as InlineFileItem[],
+                                      loading: false
+                                    }
+                                  : prev
+                              );
+                            } catch (e: any) {
+                              setFolderView((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      loading: false,
+                                      error: e?.message || 'LOAD_FAILED'
+                                    }
+                                  : prev
+                              );
+                            }
+                          } else if (it.storage_path) {
+                            // Open file preview
+                            try {
+                              const bucket =
+                                process.env.NEXT_PUBLIC_FILES_BUCKET || 'files';
+                              const { data: signed } = await supabase.storage
+                                .from(bucket)
+                                .createSignedUrl(it.storage_path, 300);
+                              const url =
+                                signed?.signedUrl ||
+                                supabase.storage
+                                  .from(bucket)
+                                  .getPublicUrl(it.storage_path).data
+                                  ?.publicUrl ||
+                                '';
+                              if (!url) throw new Error('Link unavailable');
+                              setFilePreview({
+                                item: {
+                                  id: it.id,
+                                  name: it.name,
+                                  ext: it.ext || null,
+                                  mime_type: it.mime_type || null,
+                                  storage_path: it.storage_path || null
+                                },
+                                url
+                              });
+                            } catch (e: any) {
+                              toast.error('Unable to open file', {
+                                description: e?.message || undefined
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <div className='flex items-center gap-3'>
+                          {it.type === 'folder' ? (
+                            <FolderIcon className='size-5 text-blue-600' />
+                          ) : (
+                            <FileIcon className='text-primary size-5' />
+                          )}
+                        </div>
+                        <div className='min-w-0 flex-1'>
+                          <div className='truncate text-sm'>{it.name}</div>
+                          <div className='text-muted-foreground truncate text-[11px]'>
+                            {it.type === 'folder'
+                              ? 'Folder'
+                              : it.ext || it.mime_type || 'File'}
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : (
+          (() => {
+            const p = filePreview;
+            if (!p) return null;
+            const ext = (p.item.ext || '').toLowerCase();
+            const mime = (p.item.mime_type || '').toLowerCase();
+            const isImage =
+              /^image\//.test(mime) ||
+              ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
+            const isVideo =
+              /^video\//.test(mime) || ['mp4', 'webm', 'mov'].includes(ext);
+            const isAudio =
+              /^audio\//.test(mime) || ['mp3', 'wav', 'ogg'].includes(ext);
+            if (isImage)
+              return (
+                <img
+                  src={p.url}
+                  alt=''
+                  className='max-h-[70vh] w-full object-contain'
+                />
+              );
+            if (isVideo)
+              return (
+                <video
+                  src={p.url}
+                  controls
+                  className='h-[60vh] w-full bg-black'
+                />
+              );
+            if (isAudio)
+              return (
+                <div className='p-4'>
+                  <audio src={p.url} controls className='w-full' />
+                </div>
+              );
+            if (ext === 'pdf' || mime === 'application/pdf')
+              return (
+                <iframe
+                  src={`/api/noblesuite/files/preview?id=${filePreview.item.id}`}
+                  className='h-full min-h-[60vh] w-full flex-1 rounded-lg border-0 shadow-sm'
+                  title='PDF Preview'
+                />
+              );
+            return (
+              <div className='p-6 text-sm'>
+                <div className='text-muted-foreground mb-2'>
+                  Preview not available for this file type.
+                </div>
+                <Button asChild size='sm' className='gap-1'>
+                  <a href={p.url} target='_blank' rel='noreferrer noopener'>
+                    Open
+                  </a>
+                </Button>
+              </div>
+            );
+          })()
+        )}
       </SidePanel>
     </div>
   );
