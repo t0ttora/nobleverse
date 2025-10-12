@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { Loader2, Folder, File as FileIcon, FileText } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const FILES_BUCKET = process.env.NEXT_PUBLIC_FILES_BUCKET || 'files';
 
@@ -106,6 +107,7 @@ export type NobleCard =
         id: string;
         kind: 'file' | 'folder';
         name: string;
+        mime_type?: string | null;
         size_bytes?: number | null;
         updated_at?: string | null;
         storage_path?: string | null;
@@ -1028,11 +1030,18 @@ function SuiteFileRow({ item }: { item: SuiteFilesCardItem }) {
       </div>
       <div className='min-w-0 flex-1'>
         <div className='truncate text-sm font-medium'>{item.name}</div>
-        {meta.length > 0 && (
-          <div className='text-muted-foreground text-[11px]'>
-            {meta.join(' • ')}
-          </div>
-        )}
+        <div className='flex flex-wrap items-center gap-2'>
+          {meta.length > 0 && (
+            <div className='text-muted-foreground text-[11px]'>
+              {meta.join(' • ')}
+            </div>
+          )}
+          {item.visibility && (
+            <Badge variant='secondary' className='h-4 rounded px-1 text-[10px]'>
+              {item.visibility === 'public' ? 'Public' : 'Private'}
+            </Badge>
+          )}
+        </div>
       </div>
       <Button
         variant='secondary'
@@ -1050,43 +1059,49 @@ function SuiteFileRow({ item }: { item: SuiteFilesCardItem }) {
   async function handleOpen() {
     if (typeof window === 'undefined') return;
     if (isFolder) {
-      const href = `/noblefiles?folder=${item.id}`;
-      window.open(href, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    // Prefer in-app preview via a global event that inbox page listens to.
-    try {
+      // Emit folder preview request and stop if handled
       const ev = new CustomEvent('noble:files:preview', {
         cancelable: true,
         detail: {
           id: item.id,
           name: item.name,
+          kind: 'folder' as const,
           ext: item.ext,
-          mime_type: undefined as string | undefined,
-          storage_path: item.storage_path || null
+          mime_type: null,
+          storage_path: null
         }
       });
-      const notHandled = !window.dispatchEvent(ev);
-      if (!notHandled) {
-        return;
-      }
-    } catch {}
-
-    // Fallback: open signed/public URL in a new tab
-    if (!item.storage_path) {
-      toast.error('File unavailable');
+      window.dispatchEvent(ev);
+      if ((ev as any).defaultPrevented) return;
+      // Fallback: open in NobleFiles
+      const href = `/noblefiles?folder=${item.id}`;
+      window.open(href, '_blank', 'noopener,noreferrer');
       return;
     }
+    // Prefer in-app preview via a global event that inbox page listens to.
+    const ev = new CustomEvent('noble:files:preview', {
+      cancelable: true,
+      detail: {
+        id: item.id,
+        name: item.name,
+        kind: 'file' as const,
+        ext: item.ext,
+        mime_type: item.mime_type || null,
+        storage_path: item.storage_path || null
+      }
+    });
+    window.dispatchEvent(ev);
+    if (ev.defaultPrevented) return;
     setLoading(true);
     try {
       const { data: signed, error } = await supabase.storage
         .from(FILES_BUCKET)
-        .createSignedUrl(item.storage_path, 300);
+        .createSignedUrl(item.storage_path!, 300);
       if (error) throw error;
       const url =
         signed?.signedUrl ||
-        supabase.storage.from(FILES_BUCKET).getPublicUrl(item.storage_path).data
-          ?.publicUrl;
+        supabase.storage.from(FILES_BUCKET).getPublicUrl(item.storage_path!)
+          .data?.publicUrl;
       if (!url) throw new Error('Link unavailable');
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (e: any) {

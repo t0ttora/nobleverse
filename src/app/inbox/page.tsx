@@ -293,6 +293,7 @@ export default function InboxPage() {
       const cev = ev as CustomEvent<{
         id: string;
         name: string;
+        kind?: 'file' | 'folder';
         ext?: string | null;
         mime_type?: string | null;
         storage_path?: string | null;
@@ -302,6 +303,12 @@ export default function InboxPage() {
       try {
         ev.preventDefault();
       } catch {}
+      // Folder preview: for now just redirect to NobleFiles in a new tab; can be improved to inline folder view
+      if (d.kind === 'folder') {
+        const href = `/noblefiles?folder=${d.id}`;
+        window.open(href, '_blank', 'noopener,noreferrer');
+        return;
+      }
       if (!d.storage_path) return;
       (async () => {
         try {

@@ -319,6 +319,7 @@ export const RealtimeChat = ({
           id: item.id,
           kind,
           name: item.name,
+          mime_type: item.mime_type ?? null,
           size_bytes: item.size_bytes ?? null,
           updated_at: item.updated_at ?? null,
           storage_path: isFolder ? null : (item.storage_path ?? null),
