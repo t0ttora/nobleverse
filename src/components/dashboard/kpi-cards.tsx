@@ -29,6 +29,44 @@ export function KPICards({
   items: Kpi[];
   loading?: boolean;
 }) {
+  function isCurrencyLabel(label: string) {
+    const l = label.toLowerCase();
+    return (
+      l.includes('spend') ||
+      l.includes('revenue') ||
+      l.includes('amount') ||
+      l.includes('cost') ||
+      l.includes('total')
+    );
+  }
+  function formatCurrency(v: number) {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(v);
+    } catch {
+      return `$${v.toLocaleString()}`;
+    }
+  }
+  function renderValue(label: string, value: string | number) {
+    if (typeof value === 'string') {
+      // Don't double-prefix if already formatted
+      if (value.trim().startsWith('$') || /usd/i.test(value)) return value;
+      if (isCurrencyLabel(label)) return `${value} USD`;
+      return value;
+    }
+    if (typeof value === 'number' && isCurrencyLabel(label)) {
+      return (
+        <span className='flex items-baseline gap-2'>
+          <span>{formatCurrency(value)}</span>
+          <span className='text-muted-foreground text-xs'>USD</span>
+        </span>
+      );
+    }
+    return String(value);
+  }
   return (
     <div className='*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs md:grid-cols-2 lg:grid-cols-4'>
       {loading
@@ -62,7 +100,7 @@ export function KPICards({
               <CardHeader>
                 <CardDescription>{kpi.label}</CardDescription>
                 <CardTitle className='text-2xl font-semibold tabular-nums @[250px]/card:text-3xl'>
-                  {String(kpi.value)}
+                  {renderValue(kpi.label, kpi.value)}
                 </CardTitle>
                 <CardAction>
                   <Badge variant='outline'>
@@ -79,24 +117,39 @@ export function KPICards({
                 </CardAction>
               </CardHeader>
               <CardFooter className='flex-col items-start gap-1.5 text-sm'>
-                <div className='line-clamp-1 flex gap-2 font-medium'>
+                <div className='line-clamp-2 flex items-center gap-2 font-medium'>
                   {kpi.headline ? (
-                    <>{kpi.headline}</>
+                    <span className='truncate'>{kpi.headline}</span>
                   ) : (
                     <>
+                      {/* Short copy for tight cards */}
+                      <span className='truncate @[0px]/card:inline @[300px]/card:hidden'>
+                        {kpi.trend === 'up' && 'Up'}
+                        {kpi.trend === 'down' && 'Down'}
+                        {kpi.trend === 'flat' && 'Stable'}
+                        {typeof kpi.deltaPct === 'number' &&
+                          ` ${kpi.deltaPct >= 0 ? '+' : ''}${kpi.deltaPct.toFixed(1)}%`}
+                      </span>
+                      {/* Rich copy for wider cards */}
+                      <span className='hidden truncate @[300px]/card:inline'>
+                        {(() => {
+                          const pct =
+                            typeof kpi.deltaPct === 'number'
+                              ? `${kpi.deltaPct >= 0 ? '+' : ''}${kpi.deltaPct.toFixed(1)}%`
+                              : null;
+                          if (kpi.trend === 'up')
+                            return `${kpi.label} improving ${pct ?? ''}`.trim();
+                          if (kpi.trend === 'down')
+                            return `${kpi.label} decreased ${pct ?? ''}`.trim();
+                          return `${kpi.label} stable ${pct ?? ''}`.trim();
+                        })()}
+                      </span>
                       {kpi.trend === 'up' && (
-                        <>
-                          Trending up this period{' '}
-                          <IconTrendingUp className='size-4' />
-                        </>
+                        <IconTrendingUp className='size-4 shrink-0' />
                       )}
                       {kpi.trend === 'down' && (
-                        <>
-                          Down this period{' '}
-                          <IconTrendingDown className='size-4' />
-                        </>
+                        <IconTrendingDown className='size-4 shrink-0' />
                       )}
-                      {kpi.trend === 'flat' && <>Stable this period</>}
                     </>
                   )}
                 </div>

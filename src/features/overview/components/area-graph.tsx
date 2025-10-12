@@ -17,106 +17,147 @@ import {
   ChartTooltip,
   ChartTooltipContent
 } from '@/components/ui/chart';
+import * as React from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
-const chartData = [
-  { month: 'January', desktop: 186, mobile: 80 },
-  { month: 'February', desktop: 305, mobile: 200 },
-  { month: 'March', desktop: 237, mobile: 120 },
-  { month: 'April', desktop: 73, mobile: 190 },
-  { month: 'May', desktop: 209, mobile: 130 },
-  { month: 'June', desktop: 214, mobile: 140 }
-];
+type Row = { month: string; shipments: number; revenue: number };
 
 const chartConfig = {
   visitors: {
     label: 'Visitors'
   },
-  desktop: {
-    label: 'Desktop',
-    color: 'var(--primary)'
-  },
-  mobile: {
-    label: 'Mobile',
-    color: 'var(--primary)'
-  }
+  revenue: { label: 'Revenue', color: 'var(--primary)' },
+  shipments: { label: 'Shipments', color: 'var(--primary)' }
 } satisfies ChartConfig;
 
 export function AreaGraph() {
+  const [data, setData] = React.useState<Row[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const since = new Date(new Date().getFullYear(), 0, 1).toISOString();
+        const { data, error } = await supabase
+          .from('shipments')
+          .select('id, created_at, net_amount_cents')
+          .gte('created_at', since);
+        if (error) throw error;
+        const map = new Map<string, { shipments: number; revenue: number }>();
+        for (const s of data || []) {
+          const d = new Date(s.created_at);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const prev = map.get(key) || { shipments: 0, revenue: 0 };
+          const rev =
+            typeof s.net_amount_cents === 'number'
+              ? s.net_amount_cents / 100
+              : 0;
+          map.set(key, {
+            shipments: prev.shipments + 1,
+            revenue: prev.revenue + rev
+          });
+        }
+        const arr = Array.from(map.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([k, v]) => ({
+            month: k,
+            shipments: v.shipments,
+            revenue: Math.round(v.revenue)
+          }));
+        setData(arr);
+      } catch {
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void load();
+  }, []);
   return (
     <Card className='@container/card'>
       <CardHeader>
-        <CardTitle>Area Chart - Stacked</CardTitle>
-        <CardDescription>
-          Showing total visitors for the last 6 months
-        </CardDescription>
+        <CardTitle>Year to Date</CardTitle>
+        <CardDescription>Revenue vs Shipments (real data)</CardDescription>
       </CardHeader>
       <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-        <ChartContainer
-          config={chartConfig}
-          className='aspect-auto h-[250px] w-full'
-        >
-          <AreaChart
-            data={chartData}
-            margin={{
-              left: 12,
-              right: 12
-            }}
+        {loading || data.length === 0 ? (
+          <div className='text-muted-foreground flex h-[250px] w-full items-center justify-center text-sm'>
+            {loading ? 'Loading…' : 'No data'}
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className='aspect-auto h-[250px] w-full'
           >
-            <defs>
-              <linearGradient id='fillDesktop' x1='0' y1='0' x2='0' y2='1'>
-                <stop
-                  offset='5%'
-                  stopColor='var(--color-desktop)'
-                  stopOpacity={1.0}
-                />
-                <stop
-                  offset='95%'
-                  stopColor='var(--color-desktop)'
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id='fillMobile' x1='0' y1='0' x2='0' y2='1'>
-                <stop
-                  offset='5%'
-                  stopColor='var(--color-mobile)'
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset='95%'
-                  stopColor='var(--color-mobile)'
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey='month'
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => value.slice(0, 3)}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={<ChartTooltipContent indicator='dot' />}
-            />
-            <Area
-              dataKey='mobile'
-              type='natural'
-              fill='url(#fillMobile)'
-              stroke='var(--color-mobile)'
-              stackId='a'
-            />
-            <Area
-              dataKey='desktop'
-              type='natural'
-              fill='url(#fillDesktop)'
-              stroke='var(--color-desktop)'
-              stackId='a'
-            />
-          </AreaChart>
-        </ChartContainer>
+            <AreaChart
+              data={data}
+              margin={{
+                left: 12,
+                right: 12
+              }}
+            >
+              <defs>
+                <linearGradient id='fillRevenue' x1='0' y1='0' x2='0' y2='1'>
+                  <stop
+                    offset='5%'
+                    stopColor='var(--color-revenue)'
+                    stopOpacity={1.0}
+                  />
+                  <stop
+                    offset='95%'
+                    stopColor='var(--color-revenue)'
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id='fillShipments' x1='0' y1='0' x2='0' y2='1'>
+                  <stop
+                    offset='5%'
+                    stopColor='var(--color-shipments)'
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset='95%'
+                    stopColor='var(--color-shipments)'
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey='month'
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                tickFormatter={(value) => {
+                  const [y, m] = String(value).split('-');
+                  return new Date(Number(y), Number(m) - 1, 1).toLocaleString(
+                    'en-US',
+                    { month: 'short' }
+                  );
+                }}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent indicator='dot' />}
+              />
+              <Area
+                dataKey='shipments'
+                type='natural'
+                fill='url(#fillShipments)'
+                stroke='var(--color-shipments)'
+                stackId='a'
+              />
+              <Area
+                dataKey='revenue'
+                type='natural'
+                fill='url(#fillRevenue)'
+                stroke='var(--color-revenue)'
+                stackId='a'
+              />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
       <CardFooter>
         <div className='flex w-full items-start gap-2 text-sm'>
@@ -126,7 +167,7 @@ export function AreaGraph() {
               <IconTrendingUp className='h-4 w-4' />
             </div>
             <div className='text-muted-foreground flex items-center gap-2 leading-none'>
-              January - June 2024
+              Year to date
             </div>
           </div>
         </div>

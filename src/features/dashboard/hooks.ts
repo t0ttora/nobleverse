@@ -59,7 +59,7 @@ export function useShipperDashboard(userId: string) {
       const s1 = await (supabase as any)
         .from('shipments')
         .select(
-          'id, owner_id, forwarder_id, status, net_amount_cents, created_at, updated_at'
+          'id, code, owner_id, forwarder_id, status, incoterm, cargo, participants, net_amount_cents, created_at, updated_at'
         )
         .eq('owner_id', userId);
       // Requests I created
@@ -103,7 +103,7 @@ export function useForwarderDashboard(userId: string) {
       const s1 = await (supabase as any)
         .from('shipments')
         .select(
-          'id, owner_id, forwarder_id, status, net_amount_cents, created_at, updated_at'
+          'id, code, owner_id, forwarder_id, status, incoterm, cargo, participants, net_amount_cents, created_at, updated_at'
         )
         .eq('forwarder_id', userId);
       const o1 = await (supabase as any)
@@ -148,7 +148,7 @@ export function useReceiverDashboard(userId: string) {
       const s2 = await (supabase as any)
         .from('shipments')
         .select(
-          'id, owner_id, forwarder_id, status, net_amount_cents, created_at, updated_at, participants'
+          'id, code, owner_id, forwarder_id, status, incoterm, cargo, participants, net_amount_cents, created_at, updated_at'
         )
         .contains('participants', [userId]);
       if (s2.error) throw s2.error;

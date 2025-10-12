@@ -38,7 +38,12 @@ import {
   Download,
   FileDown,
   GitCompare,
-  LineChart
+  LineChart,
+  Truck,
+  Ship,
+  Plane,
+  MapPin,
+  Users
 } from 'lucide-react';
 
 type Period = '7d' | '30d' | '90d' | 'custom';
@@ -71,6 +76,47 @@ export function KpiDetailsPanel({
   const [expanded, setExpanded] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const title = kpi?.label || 'Metric';
+  const periodLabel =
+    period === '7d' ? '7 days' : period === '90d' ? '90 days' : '30 days';
+  const subtitle =
+    kpi?.headline ||
+    (kpi?.deltaPct != null
+      ? `${kpi.deltaPct >= 0 ? 'Trending up' : 'Spending down'} this cycle — Comparing last ${periodLabel} vs previous ${periodLabel}`
+      : `Comparing last ${periodLabel} vs previous ${periodLabel}`);
+
+  // Top partners (forwarders) derived from shipments
+  type TopPartner = {
+    id: string;
+    username?: string | null;
+    company_name?: string | null;
+    average_rating?: number | null;
+    noble_score?: number | null;
+    count: number;
+    total_net_cents: number;
+  };
+  const [topPartners, setTopPartners] = React.useState<TopPartner[]>([]);
+  const [loadingPartners, setLoadingPartners] = React.useState(false);
+  const namePreference = 'company_first'; // TODO: read from user settings when available
+  const fmtPartnerName = (p: TopPartner) => {
+    const primary =
+      namePreference === 'company_first'
+        ? p.company_name || p.username
+        : p.username || p.company_name;
+    return primary || p.id.slice(0, 8);
+  };
+  const isCurrencyKpi = (k: string | undefined) =>
+    !!k && /(spend|revenue|amount|cost|total)/i.test(k);
+  const fmtUSD = (v: number) => {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(v);
+    } catch {
+      return `$${v.toLocaleString()}`;
+    }
+  };
 
   function doShare() {
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -377,79 +423,190 @@ export function KpiDetailsPanel({
     [kpi, shipments, requests, offers, notifications, period]
   );
 
+  // Helpers for Breakdown rendering
+  const pickFirstString = (
+    obj: Record<string, any> | undefined,
+    keys: string[]
+  ): string | undefined => {
+    if (!obj) return undefined;
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return undefined;
+  };
+  const resolveRoute = (cargo: any, details: any) => {
+    const origin =
+      pickFirstString(cargo, [
+        'origin',
+        'origin_city',
+        'origin_port',
+        'origin_airport'
+      ]) ||
+      pickFirstString(details, [
+        'origin',
+        'origin_city',
+        'origin_port',
+        'airport_origin'
+      ]);
+    const destination =
+      pickFirstString(cargo, [
+        'destination',
+        'destination_city',
+        'destination_port',
+        'destination_airport'
+      ]) ||
+      pickFirstString(details, [
+        'destination',
+        'destination_city',
+        'destination_port',
+        'airport_destination'
+      ]);
+    return { origin: origin || '—', destination: destination || '—' };
+  };
+  const resolveMode = (cargo: any, details: any) => {
+    const raw =
+      pickFirstString(cargo, ['mode', 'service', 'transport']) ||
+      pickFirstString(details, ['mode', 'service', 'transport']) ||
+      'unknown';
+    const key = String(raw).toLowerCase();
+    const label = key === 'unknown' ? 'Unknown' : String(raw).toUpperCase();
+    const Icon = key.includes('air')
+      ? Plane
+      : key.includes('sea') || key.includes('ocean')
+        ? Ship
+        : Truck;
+    return { label, Icon };
+  };
+
+  // Compute Top Partners whenever shipments change
+  React.useEffect(() => {
+    let active = true;
+    async function run() {
+      try {
+        setLoadingPartners(true);
+        const map = new Map<string, { count: number; total: number }>();
+        const now = Date.now();
+        const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+        const start = now - days * 86400000;
+        for (const s of shipments || []) {
+          const f = s?.forwarder_id;
+          if (!f) continue;
+          const ts = new Date(s?.created_at || s?.updated_at || now).getTime();
+          if (!Number.isFinite(ts) || ts < start) continue;
+          const prev = map.get(f) || { count: 0, total: 0 };
+          const add =
+            typeof s?.net_amount_cents === 'number' ? s.net_amount_cents : 0;
+          map.set(f, { count: prev.count + 1, total: prev.total + add });
+        }
+        const ids = Array.from(map.keys());
+        if (!ids.length) {
+          if (active) setTopPartners([]);
+          return;
+        }
+        // Join with profiles for names
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('id, username, company_name, average_rating, noble_score')
+          .in('id', ids);
+        if (error) {
+          // fall back to ids only
+          const list: TopPartner[] = ids
+            .map((id) => ({
+              id,
+              count: map.get(id)?.count || 0,
+              total_net_cents: map.get(id)?.total || 0,
+              username: null,
+              company_name: null,
+              average_rating: null,
+              noble_score: null
+            }))
+            .sort(
+              (a, b) =>
+                b.count - a.count || b.total_net_cents - a.total_net_cents
+            );
+          if (active) setTopPartners(list);
+          return;
+        }
+        const byId = new Map((profiles || []).map((p: any) => [p.id, p]));
+        const list: TopPartner[] = ids
+          .map((id) => {
+            const p: any = byId.get(id) || {};
+            const agg = map.get(id)!;
+            return {
+              id,
+              username: p.username ?? null,
+              company_name: p.company_name ?? null,
+              average_rating: p.average_rating ?? null,
+              noble_score: p.noble_score ?? null,
+              count: agg.count,
+              total_net_cents: agg.total
+            };
+          })
+          .sort(
+            (a, b) => b.count - a.count || b.total_net_cents - a.total_net_cents
+          );
+        if (active) setTopPartners(list);
+      } finally {
+        if (active) setLoadingPartners(false);
+      }
+    }
+    run();
+    return () => {
+      active = false;
+    };
+  }, [shipments, period]);
+
   return (
     <SidePanel
       open={open}
       onClose={onClose}
       title={
-        <div className='flex w-full items-center gap-3'>
-          {/* Icon + title */}
-          <div className='flex min-w-0 items-center gap-3'>
-            <div className='bg-muted text-muted-foreground flex h-9 w-9 items-center justify-center rounded-md border'>
-              <LineChart className='h-4 w-4' />
-            </div>
-            <div className='min-w-0'>
-              <div className='truncate text-sm font-semibold'>{title}</div>
-              <div className='text-muted-foreground truncate text-xs'>
-                {(kpi?.headline || 'Detailed view and actions') +
-                  (kpi?.note ? ` — ${kpi.note}` : '')}
-              </div>
-            </div>
-          </div>
-          <div className='ml-auto flex items-center gap-2'>
-            <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
-              <SelectTrigger className='h-8 w-[150px]'>
-                <SelectValue placeholder='Last 30d' />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='7d'>Last 7 days</SelectItem>
-                <SelectItem value='30d'>Last 30 days</SelectItem>
-                <SelectItem value='90d'>Last 90 days</SelectItem>
-                <SelectItem value='custom'>Custom range</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className='flex items-center gap-1'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setExpanded((v) => !v)}
-                title={expanded ? 'Minimize' : 'Maximize'}
-                aria-label={expanded ? 'Minimize' : 'Maximize'}
-              >
-                {expanded ? (
-                  <Minimize2 className='h-4 w-4' />
-                ) : (
-                  <Maximize2 className='h-4 w-4' />
-                )}
-              </Button>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={doShare}
-                title='Share'
-                aria-label='Share'
-              >
-                <Share2 className='h-4 w-4' />
-              </Button>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => toast.info('Filters coming soon')}
-                title='Filter'
-                aria-label='Filter'
-              >
-                <Filter className='h-4 w-4' />
-              </Button>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={onClose}
-                title='Close'
-                aria-label='Close'
-              >
-                <Close className='h-4 w-4' />
-              </Button>
-            </div>
+        // Keep header minimal; controls only. Move title/subtitle to content area per spec.
+        <div className='ml-auto flex items-center gap-2'>
+          <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
+            <SelectTrigger className='h-8 w-[150px]'>
+              <SelectValue placeholder='Last 30d' />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='7d'>Last 7 days</SelectItem>
+              <SelectItem value='30d'>Last 30 days</SelectItem>
+              <SelectItem value='90d'>Last 90 days</SelectItem>
+              <SelectItem value='custom'>Custom range</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className='flex items-center gap-1'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? 'Minimize' : 'Maximize'}
+              aria-label={expanded ? 'Minimize' : 'Maximize'}
+            >
+              {expanded ? (
+                <Minimize2 className='h-4 w-4' />
+              ) : (
+                <Maximize2 className='h-4 w-4' />
+              )}
+            </Button>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={doShare}
+              title='Share'
+              aria-label='Share'
+            >
+              <Share2 className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => toast.info('Filters coming soon')}
+              title='Filter'
+              aria-label='Filter'
+            >
+              <Filter className='h-4 w-4' />
+            </Button>
           </div>
         </div>
       }
@@ -507,13 +664,46 @@ export function KpiDetailsPanel({
         <div
           className={`flex flex-col gap-4 ${expanded ? 'max-w-[1100px]' : ''}`}
         >
+          {/* Context title + subtitle per spec */}
+          <div className='flex w-full items-start gap-3'>
+            <div className='bg-muted text-muted-foreground flex h-9 w-9 items-center justify-center rounded-md border'>
+              <LineChart className='h-4 w-4' />
+            </div>
+            <div className='min-w-0'>
+              <div className='truncate text-base font-semibold'>{title}</div>
+              <div className='text-muted-foreground truncate text-sm'>
+                {subtitle}
+              </div>
+            </div>
+          </div>
           {/* Overview KPIs + chart */}
           <div className='rounded-lg border p-3'>
             <div className='text-muted-foreground text-sm'>Current</div>
             <div className='text-3xl font-bold'>
-              {String(kpi.value)}
-              {(kpi.key?.includes('rate') || kpi.key?.includes('accuracy')) &&
-                '%'}
+              {(() => {
+                const base = String(kpi.value);
+                if (isCurrencyKpi(kpi.key)) {
+                  const num = Number(base.replace(/[^0-9.-]/g, ''));
+                  if (!Number.isNaN(num)) {
+                    return (
+                      <span className='flex items-baseline gap-2'>
+                        <span>{fmtUSD(num)}</span>
+                        <span className='text-muted-foreground text-xs'>
+                          USD
+                        </span>
+                      </span>
+                    );
+                  }
+                }
+                return (
+                  <>
+                    {base}
+                    {(kpi.key?.includes('rate') ||
+                      kpi.key?.includes('accuracy')) &&
+                      '%'}
+                  </>
+                );
+              })()}
             </div>
             {kpi.deltaPct != null && (
               <div className='text-xs'>
@@ -529,7 +719,7 @@ export function KpiDetailsPanel({
               <TabsTrigger value='insights'>Insights</TabsTrigger>
             </TabsList>
             <TabsContent value='overview'>
-              <div className='grid grid-cols-1 gap-4 lg:grid-cols-3'>
+              <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
                 <div className='col-span-2 rounded-lg border p-2'>
                   <div className='mb-2 flex items-center gap-2 text-sm font-semibold'>
                     <LineChart className='h-4 w-4' /> Trend
@@ -541,39 +731,156 @@ export function KpiDetailsPanel({
                       }}
                       className='h-full w-full'
                     >
-                      <RLineChart
-                        data={series}
-                        margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
-                      >
-                        <XAxis
-                          dataKey='date'
-                          tick={{ fontSize: 10 }}
-                          tickFormatter={(d: string) => (d || '').slice(5, 10)}
-                        />
-                        <YAxis width={32} tick={{ fontSize: 10 }} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Line
-                          type='monotone'
-                          dataKey='value'
-                          stroke='#0ea5e9'
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </RLineChart>
+                      {Array.isArray(series) && series.length ? (
+                        <RLineChart
+                          data={series}
+                          margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
+                        >
+                          <XAxis
+                            dataKey='date'
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(d: string) =>
+                              (d || '').slice(5, 10)
+                            }
+                          />
+                          <YAxis width={32} tick={{ fontSize: 10 }} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Line
+                            type='monotone'
+                            dataKey='value'
+                            stroke='#0ea5e9'
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </RLineChart>
+                      ) : (
+                        <div className='text-muted-foreground flex h-full w-full items-center justify-center text-center text-xs'>
+                          <div>
+                            <div className='mb-1 font-medium'>
+                              No trend data
+                            </div>
+                            <div>
+                              Try changing the period or generating more
+                              activity.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </ChartContainer>
                   </div>
                 </div>
                 <div className='rounded-lg border p-2'>
                   <div className='mb-2 text-sm font-semibold'>Breakdown</div>
-                  <div className='text-muted-foreground text-xs'>
-                    By partner, mode, or route — coming soon.
-                  </div>
+                  {Array.isArray(shipments) && shipments.length ? (
+                    <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+                      {[...shipments]
+                        .sort((a, b) =>
+                          String(b.created_at || '').localeCompare(
+                            String(a.created_at || '')
+                          )
+                        )
+                        .slice(0, 4)
+                        .map((s) => {
+                          const cargo = (s.cargo || {}) as any;
+                          const details = (s.details || {}) as any;
+                          const modeRaw =
+                            cargo.mode ||
+                            details.mode ||
+                            cargo.service ||
+                            details.service ||
+                            'unknown';
+                          const { label: modeLabel, Icon: ModeIcon } =
+                            resolveMode(cargo, details);
+                          const inc = String(
+                            s.incoterm ||
+                              details.incoterm ||
+                              details.incoterms ||
+                              '—'
+                          ).toUpperCase();
+                          const origin =
+                            cargo.origin ||
+                            details.origin ||
+                            cargo.origin_city ||
+                            details.origin_city ||
+                            cargo.origin_port ||
+                            details.origin_port ||
+                            '—';
+                          const destination =
+                            cargo.destination ||
+                            details.destination ||
+                            cargo.destination_city ||
+                            details.destination_city ||
+                            cargo.destination_port ||
+                            details.destination_port ||
+                            '—';
+                          const route = `${origin} → ${destination}`;
+                          const participants = Array.isArray(s.participants)
+                            ? s.participants.length
+                            : 0;
+                          const created = s.created_at
+                            ? new Date(s.created_at).toLocaleDateString()
+                            : '';
+                          const code = s.code ? `#${s.code}` : s.id.slice(0, 6);
+                          return (
+                            <div
+                              key={s.id}
+                              className='rounded-md border p-2 text-xs'
+                            >
+                              <div className='flex items-center justify-between'>
+                                <div className='flex items-center gap-1.5'>
+                                  <ModeIcon className='h-3.5 w-3.5' />
+                                  <div className='font-medium'>
+                                    {modeLabel} · {inc}
+                                  </div>
+                                </div>
+                                <div className='text-muted-foreground'>
+                                  {code}
+                                </div>
+                              </div>
+                              <div className='text-muted-foreground mt-1 flex items-center gap-1 truncate'>
+                                <MapPin className='h-3 w-3' />
+                                <span className='truncate'>{route}</span>
+                              </div>
+                              <div className='text-muted-foreground mt-1 flex items-center justify-between'>
+                                <span className='flex items-center gap-1'>
+                                  <Users className='h-3 w-3' /> {participants}
+                                </span>
+                                <span>{created}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <div className='text-muted-foreground flex flex-col items-center justify-center gap-2 py-6 text-center text-xs'>
+                      <div className='h-8 w-8 rounded-full border' />
+                      <div>No breakdown data</div>
+                      <div className='text-[11px]'>
+                        Try another period or create your first shipment.
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className='rounded-lg border p-2'>
                   <div className='mb-2 text-sm font-semibold'>Top Partner</div>
-                  <div className='text-sm'>
-                    Placeholder partner (improve with real data)
-                  </div>
+                  {topPartners.length ? (
+                    <div className='text-sm'>
+                      <div className='font-medium'>
+                        {fmtPartnerName(topPartners[0])}
+                      </div>
+                      <div className='text-muted-foreground text-xs'>
+                        {topPartners[0].count} shipments ·{' '}
+                        {fmtUSD(topPartners[0].total_net_cents / 100)} total{' '}
+                        <span className='ml-1 text-[10px]'>USD</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='text-muted-foreground text-xs'>
+                      {loadingPartners
+                        ? 'Finding top partners…'
+                        : 'No partners yet.'}
+                    </div>
+                  )}
                 </div>
                 <div className='rounded-lg border p-2'>
                   <div className='mb-2 text-sm font-semibold'>Average</div>
@@ -647,8 +954,12 @@ export function KpiDetailsPanel({
                 const { rows, columns } = buildDetailsData();
                 if (!rows.length) {
                   return (
-                    <div className='text-muted-foreground rounded-lg border p-3 text-sm'>
-                      No details for this KPI.
+                    <div className='text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-lg border p-6 text-center text-sm'>
+                      <div className='h-8 w-8 rounded-full border' />
+                      <div className='font-medium'>No details</div>
+                      <div className='text-xs'>
+                        Refine filters or choose another period.
+                      </div>
                     </div>
                   );
                 }
