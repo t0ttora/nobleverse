@@ -1054,6 +1054,25 @@ function SuiteFileRow({ item }: { item: SuiteFilesCardItem }) {
       window.open(href, '_blank', 'noopener,noreferrer');
       return;
     }
+    // Prefer in-app preview via a global event that inbox page listens to.
+    try {
+      const ev = new CustomEvent('noble:files:preview', {
+        cancelable: true,
+        detail: {
+          id: item.id,
+          name: item.name,
+          ext: item.ext,
+          mime_type: undefined as string | undefined,
+          storage_path: item.storage_path || null
+        }
+      });
+      const notHandled = !window.dispatchEvent(ev);
+      if (!notHandled) {
+        return;
+      }
+    } catch {}
+
+    // Fallback: open signed/public URL in a new tab
     if (!item.storage_path) {
       toast.error('File unavailable');
       return;

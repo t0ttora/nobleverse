@@ -15,6 +15,7 @@ import {
   HoverCardTrigger
 } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/ui/side-panel';
 import { Input } from '@/components/ui/input';
 import {
   Plus,
@@ -195,6 +196,17 @@ export default function InboxPage() {
     text: string;
   } | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  // In-app file preview (NobleFiles-style)
+  const [filePreview, setFilePreview] = useState<null | {
+    item: {
+      id: string;
+      name: string;
+      ext?: string | null;
+      mime_type?: string | null;
+      storage_path?: string | null;
+    };
+    url: string;
+  }>(null);
   // Collapsible states for sections
   const [dmsOpen, setDmsOpen] = useState(true);
   const [groupsOpen, setGroupsOpen] = useState(true);
@@ -273,6 +285,47 @@ export default function InboxPage() {
     return () => {
       stop = true;
     };
+  }, []);
+
+  // Listen to global preview requests from chat cards
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const cev = ev as CustomEvent<{
+        id: string;
+        name: string;
+        ext?: string | null;
+        mime_type?: string | null;
+        storage_path?: string | null;
+      }>;
+      const d = cev.detail;
+      if (!d) return;
+      try {
+        ev.preventDefault();
+      } catch {}
+      if (!d.storage_path) return;
+      (async () => {
+        try {
+          const bucket = process.env.NEXT_PUBLIC_FILES_BUCKET || 'files';
+          const { data: signed, error } = await supabase.storage
+            .from(bucket)
+            .createSignedUrl(d.storage_path!, 300);
+          if (error) throw error;
+          const fallback = supabase.storage
+            .from(bucket)
+            .getPublicUrl(d.storage_path!).data?.publicUrl;
+          const url = signed?.signedUrl || fallback;
+          if (!url) throw new Error('Link unavailable');
+          setFilePreview({ item: d, url });
+        } catch (e: any) {
+          toast.error('Unable to open file', {
+            description: e?.message || undefined
+          });
+        }
+      })();
+    };
+    window.addEventListener('noble:files:preview', handler as any);
+    return () =>
+      window.removeEventListener('noble:files:preview', handler as any);
   }, []);
 
   // Load starred list once
@@ -1434,6 +1487,76 @@ export default function InboxPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* SidePanel for file preview */}
+      <SidePanel
+        open={!!filePreview}
+        onClose={() => setFilePreview(null)}
+        title={
+          filePreview?.item ? (
+            <div className='flex min-w-0 items-center gap-2'>
+              <span className='truncate'>{filePreview.item.name}</span>
+            </div>
+          ) : (
+            'Preview'
+          )
+        }
+      >
+        {(() => {
+          const p = filePreview;
+          if (!p) return null;
+          const ext = (p.item.ext || '').toLowerCase();
+          const mime = (p.item.mime_type || '').toLowerCase();
+          const isImage =
+            /^image\//.test(mime) ||
+            ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
+          const isVideo =
+            /^video\//.test(mime) || ['mp4', 'webm', 'mov'].includes(ext);
+          const isAudio =
+            /^audio\//.test(mime) || ['mp3', 'wav', 'ogg'].includes(ext);
+          if (isImage)
+            return (
+              <img
+                src={p.url}
+                alt=''
+                className='max-h-[70vh] w-full object-contain'
+              />
+            );
+          if (isVideo)
+            return (
+              <video
+                src={p.url}
+                controls
+                className='h-[60vh] w-full bg-black'
+              />
+            );
+          if (isAudio)
+            return (
+              <div className='p-4'>
+                <audio src={p.url} controls className='w-full' />
+              </div>
+            );
+          if (ext === 'pdf' || mime === 'application/pdf')
+            return (
+              <iframe
+                src={`/api/noblesuite/files/preview?id=${filePreview.item.id}`}
+                className='h-full min-h-[60vh] w-full flex-1 rounded-lg border-0 shadow-sm'
+                title='PDF Preview'
+              />
+            );
+          return (
+            <div className='p-6 text-sm'>
+              <div className='text-muted-foreground mb-2'>
+                Preview not available for this file type.
+              </div>
+              <Button asChild size='sm' className='gap-1'>
+                <a href={p.url} target='_blank' rel='noreferrer noopener'>
+                  Open
+                </a>
+              </Button>
+            </div>
+          );
+        })()}
+      </SidePanel>
     </div>
   );
 }
