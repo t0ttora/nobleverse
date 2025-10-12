@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
+import UniverSheet from '@/features/cells/components/univer-sheet';
 
 // Lightweight grid placeholder (we can swap to glide-data-grid later)
 function SimpleGrid({ sheetId }: { sheetId: string }) {
@@ -102,7 +103,8 @@ export default function SheetEditorPage() {
       </div>
       <div className='flex items-center gap-2'>
         <Button size='sm' variant='outline' className='gap-1'>
-          <Icons.fileDescription className='size-4' /> CSV Export (soon)
+          {/* Embedded Excel-like editor (UniverJS) */}
+          <UniverSheet sheetId={sheetId} />
         </Button>
         <Button size='sm' variant='outline' className='gap-1'>
           <Icons.add className='size-4' /> Add Sheet (soon)
