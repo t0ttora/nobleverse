@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Univer, Workbook } from '@univerjs/core';
 import { UniverUIPlugin } from '@univerjs/ui';
-import { UniverEngineRender } from '@univerjs/engine-render';
+import { UniverRenderEnginePlugin } from '@univerjs/engine-render';
 import { UniverSheetsPlugin } from '@univerjs/sheets';
 import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 
@@ -49,7 +49,7 @@ export default function UniverSheet({ sheetId }: { sheetId: string }) {
       });
       univerRef.current = univer;
       univer.registerPlugin(UniverUIPlugin);
-      univer.registerPlugin(UniverEngineRender);
+      univer.registerPlugin(UniverRenderEnginePlugin);
       univer.registerPlugin(UniverSheetsPlugin);
       univer.registerPlugin(UniverSheetsUIPlugin);
       // Create or load workbook
