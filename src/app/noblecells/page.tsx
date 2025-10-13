@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
 export default function LegacyCellsRedirect() {
-  redirect('/noblesuite/cells');
+  // Cells removed — send users to NobleSuite root
+  redirect('/noblesuite');
 }
