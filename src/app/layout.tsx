@@ -10,9 +10,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import './globals.css';
 import './theme.css';
 // UniverJS styles (UI for Sheets/Docs)
-import '@univerjs/ui/lib/index.css';
-import '@univerjs/sheets-ui/lib/index.css';
-import '@univerjs/docs-ui/lib/index.css';
+// Cells/Docs UI styles removed
 import DashboardShell from '@/components/layout/dashboard-shell';
 import PlainLayout from '@/components/layout/plain-layout';
 import { getUserSession } from '@/../utils/supabase/server';

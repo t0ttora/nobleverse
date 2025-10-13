@@ -18,7 +18,7 @@ Current freight workflows are fragmented: siloed systems, late exception handlin
 | ------ | ----------- |
 | Live Operational Graph | Unified data model merging shipments, offers, negotiations, documents, chat, tasks, scans, milestones. |
 | NobleIntelligence | AI layer watching events, flagging risks, generating summaries, proposing next actions. |
-| NobleSuite (Docs & Data) | Secure encrypted repository (NobleFiles), collaborative text (NobleNotes), structured tables (NobleCells). |
+| NobleSuite (Docs & Data) | Secure encrypted repository (NobleFiles) and collaborative text (NobleNotes). |
 | Unified Inbox | Multi-party real-time messaging with role context, attachments, task extraction, and inline knowledge recall. |
 | Escrow & Ledger | Shipment financial state with fee calculation, refund/partial refund flows, ledger events. |
 | Offer & Request Engine | Structured request → multi-offer evaluation with negotiation lifecycle. |

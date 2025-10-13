@@ -17,11 +17,7 @@ export default function NobleSuiteLayout({
       label: 'Files',
       icon: <Icons.file className='size-3.5' />
     },
-    {
-      href: '/noblesuite/cells',
-      label: 'Cells',
-      icon: <Icons.grid className='size-3.5' />
-    },
+    // Cells removed
     {
       href: '/noblesuite/notes',
       label: 'Notes',
@@ -42,7 +38,7 @@ export default function NobleSuiteLayout({
             </h1>
           </div>
           <p className='text-muted-foreground text-[11px]'>
-            Files, cells & notes in one unified workspace.
+            Files & notes in one unified workspace.
           </p>
           <div className='relative mt-3 -mb-1 flex flex-wrap gap-1.5'>
             {tabs.map((t) => {
