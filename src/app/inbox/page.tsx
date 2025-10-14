@@ -1,11 +1,26 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Building2,
+  MapPin,
+  Globe2,
+  Phone,
+  Mail,
+  User as UserIcon,
+  ArrowUpRight,
+  Briefcase,
+  Filter,
+  AtSign,
+  Link2,
+  Package
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 // Card extraction helpers from chat-message
 import { extractMeta, extractAttachments } from '@/components/chat-message';
 import { extractCardsFromBody } from '@/components/chat-message';
+import type { NobleCard } from '@/components/chat-cards/card-renderer';
 import { useSearchParams } from 'next/navigation';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,18 +30,20 @@ import {
   HoverCardTrigger
 } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SidePanel } from '@/components/ui/side-panel';
 import { Input } from '@/components/ui/input';
 import {
   Plus,
   Search,
   ArrowLeft,
-  Info,
   Star,
-  StarOff,
   X,
+  Pencil,
+  Check,
   ChevronRight,
   ChevronDown,
+  PanelRightOpen,
   Folder as FolderIcon,
   File as FileIcon
 } from 'lucide-react';
@@ -110,12 +127,20 @@ function ProfileHoverDetails({
   initialAvatar?: string;
 }) {
   const [state, setState] = useState<{
-    display_name?: string | null;
     username?: string | null;
+    nobleid?: string | null;
     email?: string | null;
     role?: string | null;
     banner_url?: string | null;
     avatar_url?: string | null;
+    bio?: string | null;
+    company_name?: string | null;
+    website?: string | null;
+    location?: string | null;
+    phone?: string | null;
+    completed_requests?: number | null;
+    completed_shipments?: number | null;
+    noble_score?: number | null;
   } | null>(null);
   useEffect(() => {
     let alive = true;
@@ -123,17 +148,27 @@ function ProfileHoverDetails({
       if (!id) return;
       const { data } = await supabase
         .from('profiles')
-        .select('username,display_name,email,role,avatar_url,banner_url')
+        .select(
+          'username,nobleid,email,role,avatar_url,banner_url,bio,company_name,website,location,phone,completed_requests,completed_shipments,noble_score'
+        )
         .eq('id', id)
         .single();
       if (!alive) return;
       setState({
         username: (data?.username as string) || null,
-        display_name: (data?.display_name as string) || null,
+        nobleid: (data?.nobleid as string) || null,
         email: (data?.email as string) || null,
         role: ((data?.role as any) ?? null) as any,
         avatar_url: ((data?.avatar_url as string) || null) as any,
-        banner_url: ((data?.banner_url as string) || null) as any
+        banner_url: ((data?.banner_url as string) || null) as any,
+        bio: ((data?.bio as string) || null) as any,
+        company_name: (data?.company_name as string) || null,
+        website: (data?.website as string) || null,
+        location: (data?.location as string) || null,
+        phone: (data?.phone as string) || null,
+        completed_requests: (data?.completed_requests as number) ?? null,
+        completed_shipments: (data?.completed_shipments as number) ?? null,
+        noble_score: (data?.noble_score as number) ?? null
       });
     }
     void load();
@@ -141,13 +176,31 @@ function ProfileHoverDetails({
       alive = false;
     };
   }, [id]);
-  const name = state?.display_name || state?.username || fallbackName;
+  const name = state?.username || state?.nobleid || fallbackName;
   const banner = state?.banner_url || null;
   const avatar = state?.avatar_url || initialAvatar || undefined;
+  const stats = [
+    state?.noble_score != null && {
+      label: 'Score',
+      value: state.noble_score.toFixed(2)
+    },
+    state?.completed_requests != null && {
+      label: 'Req',
+      value: String(state.completed_requests)
+    },
+    state?.completed_shipments != null && {
+      label: 'Ship',
+      value: String(state.completed_shipments)
+    }
+  ].filter(Boolean) as { label: string; value: string }[];
+
   return (
-    <div>
+    <div className='bg-background/80 relative border shadow-sm backdrop-blur-sm'>
       <div
-        className='bg-muted h-16 w-full'
+        className={clsx(
+          'from-primary/20 to-primary/5 h-24 w-full bg-gradient-to-r',
+          banner && 'bg-none'
+        )}
         style={
           banner
             ? {
@@ -158,27 +211,45 @@ function ProfileHoverDetails({
             : undefined
         }
       />
-      <div className='-mt-6 flex items-start gap-3 p-3 pt-0'>
-        <Avatar className='ring-background size-14 ring-2'>
-          <AvatarImage src={avatar} />
-          <AvatarFallback>
-            {(name || 'U').slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div className='min-w-0 flex-1'>
-          <div className='flex items-center gap-2'>
-            <div className='truncate font-semibold'>{name}</div>
-            {state?.role && (
-              <span className='bg-muted rounded-full px-2 py-0.5 text-xs capitalize'>
-                {state.role}
-              </span>
+      <div className='px-4 pb-5'>
+        <div className='-mt-12 flex flex-col items-center'>
+          <div className='relative'>
+            <Avatar className='ring-background size-16 shadow-md ring-2'>
+              <AvatarImage src={avatar} />
+              <AvatarFallback className='text-base'>
+                {(name || 'U').slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {state?.nobleid && (
+              <Button
+                size='icon'
+                variant='secondary'
+                className='absolute -right-1 -bottom-1 h-6 w-6 rounded-full shadow'
+                onClick={() =>
+                  window.open(`/profile/${state.nobleid}`, '_self')
+                }
+                aria-label='Open profile'
+              >
+                <ArrowUpRight className='size-3' />
+              </Button>
             )}
           </div>
-          {state?.email && (
-            <div className='text-muted-foreground truncate text-xs'>
-              {state.email}
-            </div>
+          <div className='mt-3 w-full text-center'>
+            <h3 className='truncate text-sm leading-tight font-semibold'>
+              {name}
+            </h3>
+            {state?.nobleid && (
+              <div className='text-muted-foreground truncate text-[11px]'>
+                @{state.nobleid}
+              </div>
+            )}
+          </div>
+          {state?.bio && (
+            <p className='text-muted-foreground mt-2 line-clamp-4 max-w-[92%] text-center text-xs leading-relaxed'>
+              {state.bio}
+            </p>
           )}
+          {/* Company/Contact sections removed for a cleaner minimal card */}
         </div>
       </div>
     </div>
@@ -195,13 +266,45 @@ export default function InboxPage() {
   const [initialMessages, setInitialMessages] = useState<
     import('@/hooks/use-realtime-chat').ChatMessage[]
   >([]);
+  // Lightweight prefetch cache (hover-based)
+  const prefetchCache = useRef<
+    Record<string, import('@/hooks/use-realtime-chat').ChatMessage[]>
+  >({});
+  // (Removed per-room cache; reverting to original load behavior)
   const [sideOpen, setSideOpen] = useState(false);
   const [detailsQuery, setDetailsQuery] = useState('');
+  const [detailsSearchOpen, setDetailsSearchOpen] = useState(false);
   const [detailsPage, setDetailsPage] = useState(0);
   const pageSize = 100;
+  const [shipmentsOpen, setShipmentsOpen] = useState(true);
+  const [detailsMembers, setDetailsMembers] = useState<
+    Array<{
+      id: string;
+      username?: string | null;
+      nobleid?: string | null;
+      avatar_url?: string | null;
+      role?: string | null;
+    }>
+  >([]);
+  const [editingTitle, setEditingTitle] = useState<string>('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
   const [detailsRows, setDetailsRows] = useState<
     { id: string; content: string; created_at: string }[]
   >([]);
+  // Cached profile fields (first/last name etc.) keyed by user id for richer identity display
+  const [profileMap, setProfileMap] = useState<
+    Record<
+      string,
+      {
+        first_name?: string | null;
+        last_name?: string | null;
+        username?: string | null;
+        display_name?: string | null;
+        avatar_url?: string | null;
+      }
+    >
+  >({});
   const [confirm, setConfirm] = useState<{
     rid: string;
     type: 'leave' | 'deleteAll';
@@ -262,6 +365,99 @@ export default function InboxPage() {
     };
   }, [activeId, sideOpen, detailsPage]);
 
+  // Load members with roles for active room (used in details panel for groups/shipments)
+  useEffect(() => {
+    let alive = true;
+    async function loadMembers() {
+      if (!activeId) {
+        setDetailsMembers([]);
+        return;
+      }
+      try {
+        // Primary source: chat_rooms.participants (uuid[])
+        const { data: roomRow, error: roomErr } = await supabase
+          .from('chat_rooms')
+          .select('participants')
+          .eq('id', activeId)
+          .maybeSingle();
+        if (roomErr) {
+          // ignore and try fallback
+        }
+        const ids = ((roomRow as any)?.participants || []) as string[];
+        if (Array.isArray(ids) && ids.length) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id,username,nobleid,avatar_url,role')
+            .in('id', ids);
+          if (!alive) return;
+          setDetailsMembers(
+            (profs || []).map((p) => ({
+              id: p.id as string,
+              username: (p.username as string) || null,
+              nobleid: (p.nobleid as string) || null,
+              avatar_url: (p.avatar_url as string) || null,
+              role: (p.role as string) || null
+            }))
+          );
+          return;
+        }
+        // Fallback: legacy chat_members join (if available)
+        try {
+          const { data } = await supabase
+            .from('chat_members')
+            .select(
+              'profiles:profiles!inner(id,username,nobleid,avatar_url,role)'
+            )
+            .eq('room_id', activeId);
+          if (!alive) return;
+          setDetailsMembers((data || []).map((r: any) => r.profiles));
+        } catch {
+          if (!alive) return;
+          setDetailsMembers([]);
+        }
+        // Display-only fallback to current room members if nothing fetched
+        if (alive && (!detailsMembers || detailsMembers.length === 0)) {
+          const current = rooms.find((r) => r.id === activeId);
+          if (current) {
+            setDetailsMembers(
+              (current.members || []).map((m) => ({
+                id: m.id,
+                username: m.username || null,
+                nobleid: null,
+                avatar_url: m.avatar_url || null,
+                role: null
+              }))
+            );
+          }
+        }
+      } catch {
+        if (!alive) return;
+        setDetailsMembers([]);
+      }
+    }
+    void loadMembers();
+    return () => {
+      alive = false;
+    };
+  }, [activeId, rooms]);
+
+  // Helper to extract shipment label/id from a message content
+  function findShipmentLabel(content?: string | null): string | null {
+    if (!content) return null;
+    try {
+      const meta = extractMeta(content);
+      const { body } = extractAttachments(meta.body);
+      const { cards } = extractCardsFromBody(body);
+      const ship = (cards || []).find(
+        (c: any) => c.type === 'shipment_card'
+      ) as any;
+      if (ship) return ship.code || ship.title || ship.id || null;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
   // Auth + initial rooms
   useEffect(() => {
     let stop = false;
@@ -309,6 +505,45 @@ export default function InboxPage() {
       stop = true;
     };
   }, []);
+
+  // Fetch missing profile details (first_name, last_name) for room members
+  useEffect(() => {
+    const allIds = new Set<string>();
+    rooms.forEach((r) => r.members.forEach((m) => m.id && allIds.add(m.id)));
+    const missing = Array.from(allIds).filter((id) => {
+      const p = profileMap[id];
+      return !p || (p.first_name == null && p.last_name == null); // need enriched data
+    });
+    if (!missing.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id,first_name,last_name,username,display_name,avatar_url')
+          .in('id', missing);
+        if (cancelled || !Array.isArray(data)) return;
+        setProfileMap((prev) => {
+          const next = { ...prev };
+          (data || []).forEach((row: any) => {
+            next[row.id] = {
+              first_name: row.first_name,
+              last_name: row.last_name,
+              username: row.username,
+              display_name: row.display_name,
+              avatar_url: row.avatar_url
+            };
+          });
+          return next;
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rooms, profileMap]);
 
   // Listen to global preview requests from chat cards
   useEffect(() => {
@@ -615,7 +850,7 @@ export default function InboxPage() {
     };
   }, [me?.id]);
 
-  // Load initial messages for the selected room
+  // Load initial messages for the selected room (original behavior restored)
   useEffect(() => {
     let ignore = false;
     async function loadMessages(rid: string, type: RoomListItem['type']) {
@@ -635,7 +870,9 @@ export default function InboxPage() {
           p_size: 200
         });
         if (Array.isArray(rows) && rows.length) list = rows as any[];
-      } catch {}
+      } catch {
+        /* silent */
+      }
 
       // Fallback to direct select if RPC empty
       if (!list) {
@@ -679,52 +916,48 @@ export default function InboxPage() {
     };
   }, [activeId, rooms]);
 
-  // Realtime subscription for unified chat messages (current active room)
-  useEffect(() => {
-    if (!activeId) return;
-    const channel = supabase
-      .channel(`inbox:room:${activeId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `room_id=eq.${activeId}`
-        },
-        (payload: any) => {
-          setInitialMessages((cur) => {
-            if (cur.some((m) => m.id === payload.new.id)) return cur;
-            const rm = rooms.find((r) => r.id === activeId);
-            const nameMap = new Map<string, string>();
-            rm?.members.forEach((m) => {
-              const n = (m.display_name || m.username || 'User') as string;
-              if (m.id) nameMap.set(m.id, n);
-            });
-            const uid =
-              (payload?.new?.user_id as string) ||
-              (payload?.new?.sender_id as string) ||
-              '';
-            const msg = {
-              id: payload.new.id as string,
-              content: payload.new.content as string,
-              user: { id: uid, name: nameMap.get(uid) || 'User' },
-              createdAt: payload.new.created_at as string
-            };
-            return [...cur, msg];
-          });
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeId, rooms]);
+  // Removed per-room INSERT subscription to avoid duplicate messages;
+  // realtime handled by RealtimeChat hook.
 
   function handleOpenRoom(rid: string) {
+    // If prefetched, show immediately
+    const cached = prefetchCache.current[rid];
+    if (cached && cached.length) {
+      setInitialMessages(cached);
+    }
     setActiveId(rid);
     const isSmall = typeof window !== 'undefined' && window.innerWidth < 768;
     if (isSmall) setMobileView('chat');
+  }
+
+  // Unified name derivation similar to user-nav logic.
+  function deriveMemberName(member: {
+    id: string;
+    username?: string | null;
+    display_name?: string | null;
+  }): { first: string; last: string; full: string } {
+    const prof = profileMap[member.id];
+    const firstName = (prof?.first_name || '').trim();
+    const lastName = (prof?.last_name || '').trim();
+    if (firstName || lastName) {
+      const full = [firstName, lastName].filter(Boolean).join(' ').trim();
+      return { first: firstName, last: lastName, full };
+    }
+    const disp = (prof?.display_name || member.display_name || '').trim();
+    if (disp) {
+      const parts = disp.split(/\s+/).filter(Boolean);
+      const f = parts[0] || '';
+      const l = parts.slice(1).join(' ');
+      return {
+        first: f,
+        last: l,
+        full: [f, l].filter(Boolean).join(' ').trim()
+      };
+    }
+    // Fallback: nobleid (username) if present
+    const noble = (prof?.username || member.username || '').trim();
+    if (noble) return { first: noble, last: '', full: noble };
+    return { first: '', last: '', full: '' };
   }
 
   // List item renderer
@@ -738,10 +971,61 @@ export default function InboxPage() {
             'group hover:bg-accent/40 flex w-full items-start gap-3 p-3 transition-colors',
             isActive && 'bg-accent/40'
           )}
+          onMouseEnter={() => {
+            if (isActive || prefetchCache.current[r.id]) return;
+            (async () => {
+              try {
+                const { data: rows } = await supabase.rpc('get_room_messages', {
+                  p_room: r.id,
+                  p_page: 0,
+                  p_size: 200
+                });
+                let list: any[] | null = null;
+                if (Array.isArray(rows) && rows.length) list = rows as any[];
+                if (!list) {
+                  const { data: rows2 } = await supabase
+                    .from('chat_messages')
+                    .select('id, room_id, sender_id, content, created_at')
+                    .eq('room_id', r.id)
+                    .order('created_at', { ascending: true })
+                    .limit(200);
+                  list = Array.isArray(rows2) ? rows2 : [];
+                }
+                const nameMap = new Map<string, string>();
+                r.members.forEach((m) => {
+                  if (m.id)
+                    nameMap.set(
+                      m.id,
+                      (m.display_name || m.username || 'User') as string
+                    );
+                });
+                const mapped = (list || [])
+                  .slice()
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(a.created_at as string).getTime() -
+                      new Date(b.created_at as string).getTime()
+                  )
+                  .map((m: any) => {
+                    const uid =
+                      (m.sender_id as string) || (m.user_id as string) || '';
+                    return {
+                      id: m.id as string,
+                      content: (m.content as string) || '',
+                      user: { id: uid, name: nameMap.get(uid) || 'User' },
+                      createdAt: m.created_at as string
+                    };
+                  });
+                prefetchCache.current[r.id] = mapped;
+              } catch {
+                /* ignore */
+              }
+            })();
+          }}
         >
           {isShipment ? (
-            <div className='flex h-10 w-10 items-center justify-center rounded-md border bg-gradient-to-br from-orange-500/20 to-orange-600/10 text-xs font-semibold text-orange-600'>
-              S
+            <div className='flex h-10 w-10 items-center justify-center rounded-full border bg-orange-500/10 text-orange-600'>
+              <Package className='size-5' />
             </div>
           ) : r.type === 'group' ? (
             <div className='relative h-10 w-10'>
@@ -790,34 +1074,78 @@ export default function InboxPage() {
           >
             <div className='flex items-center gap-2'>
               <div className='truncate font-medium'>
-                {isShipment
-                  ? r.title || 'Shipment'
-                  : r.type === 'group'
-                    ? r.title ||
+                {(() => {
+                  if (isShipment) {
+                    if (r.title) return r.title;
+                    const guess = findShipmentLabel(
+                      r.lastMessage?.content || ''
+                    );
+                    return guess || '';
+                  }
+                  if (r.type === 'group') {
+                    return (
+                      r.title ||
                       r.members
                         .map((m) => m.username || m.display_name || 'user')
                         .slice(0, 3)
                         .join(', ') + (r.members.length > 3 ? ' and more' : '')
-                    : r.members.find((m) => m.id !== me?.id)?.username ||
-                      r.members.find((m) => m.id !== me?.id)?.display_name ||
-                      'Direct message'}
+                    );
+                  }
+                  const other =
+                    r.members.find((m) => m.id !== me?.id) || r.members[0];
+                  if (!other) return '';
+                  const { first, full } = deriveMemberName(other);
+                  if (!full) return first; // may still be ''
+                  return full.length > 22 ? first || full : full;
+                })()}
               </div>
               <time className='text-muted-foreground ml-auto shrink-0 text-[10px]'>
                 {formatListTime(r.lastMessage?.created_at)}
               </time>
             </div>
-            <div className='text-muted-foreground max-w-[240px] truncate text-xs'>
+            {/* Username line intentionally removed for DM list */}
+            <div
+              className='text-muted-foreground max-w-[240px] truncate text-xs'
+              title={(() => {
+                const raw = r.lastMessage?.content || '';
+                if (!raw) return '';
+                const meta = extractMeta(raw);
+                const { body, attachments } = extractAttachments(meta.body);
+                const { text } = extractCardsFromBody(body);
+                if (attachments.length) {
+                  const names = attachments.map((a) => a.name || 'file');
+                  return names.join(', ');
+                }
+                return text.trim();
+              })()}
+            >
               {(() => {
                 const raw = r.lastMessage?.content || '';
                 if (!raw) return 'No messages yet';
-                // Extract meta, attachments, cards
                 const meta = extractMeta(raw);
-                const { body } = extractAttachments(meta.body);
+                const { body, attachments } = extractAttachments(meta.body);
                 const { text, cards } = extractCardsFromBody(body);
-                // If card(s) exist, show a summary for the first card
+                if (!text.trim() && attachments.length) {
+                  const names = attachments.map((a) => a.name || 'file');
+                  const limit = 30;
+                  const shown: string[] = [];
+                  let used = 0;
+                  for (const n of names) {
+                    const add = (shown.length ? 2 : 0) + n.length;
+                    if (used + add > limit) break;
+                    shown.push(n);
+                    used += add;
+                  }
+                  const rest = names.length - shown.length;
+                  return (
+                    <span title={names.join(', ')}>
+                      📎 {shown.join(', ')}
+                      {rest > 0 ? ' +' + rest : ''}
+                    </span>
+                  );
+                }
                 if (cards && cards.length > 0) {
                   const card = cards[0];
-                  // Show a short label for the card type
                   let label = '';
                   switch (card.type) {
                     case 'shipment_card':
@@ -855,7 +1183,18 @@ export default function InboxPage() {
                   }
                   return label;
                 }
-                // Otherwise, render markdown preview (single line, truncated)
+                if (attachments.length) {
+                  return (
+                    <span
+                      title={attachments
+                        .map((a) => a.name || 'file')
+                        .join(', ')}
+                    >
+                      {text.replace(/\n/g, ' ').slice(0, 80)}{' '}
+                      <span className='opacity-70'>📎{attachments.length}</span>
+                    </span>
+                  );
+                }
                 return (
                   <span
                     style={{
@@ -936,15 +1275,15 @@ export default function InboxPage() {
   };
 
   return (
-    <div className='bg-background flex h-full min-h-0 w-full flex-1 overflow-hidden'>
+    <div className='bg-background md:bg-sidebar flex h-full min-h-0 w-full flex-1 overflow-hidden md:gap-3'>
       {/* Left list */}
       <div
         className={clsx(
-          'bg-card/30 w-full flex-col border-r md:max-w-[320px]',
+          'bg-card/50 md:ring-border/50 w-full flex-col md:max-w-[320px] md:overflow-hidden md:rounded-tr-2xl md:ring-1',
           mobileView === 'chat' ? 'hidden md:flex' : 'flex md:flex'
         )}
       >
-        <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex items-center gap-2 border-b p-3 backdrop-blur'>
+        <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex items-center gap-2 border-b p-3 backdrop-blur md:rounded-tr-2xl'>
           <div className='relative flex-1'>
             <Search className='text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2' />
             <Input
@@ -1041,18 +1380,34 @@ export default function InboxPage() {
                 )}
               </div>
               <div>
-                <div className='text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
-                  SHIPMENTS
+                <div className='text-muted-foreground flex items-center gap-2 px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide'>
+                  <span className='bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]'>
+                    {sections.shipments.length}
+                  </span>
+                  <button
+                    className='hover:text-foreground flex items-center gap-1'
+                    onClick={() => setShipmentsOpen((v) => !v)}
+                    aria-label='Toggle shipments'
+                  >
+                    {shipmentsOpen ? (
+                      <ChevronDown className='size-3' />
+                    ) : (
+                      <ChevronRight className='size-3' />
+                    )}
+                    <span>SHIPMENTS</span>
+                  </button>
                 </div>
-                <ul className='divide-border/60 divide-y'>
-                  {sections.shipments.length ? (
-                    sections.shipments.map(LeftItem)
-                  ) : (
-                    <li className='text-muted-foreground px-3 py-6 text-xs'>
-                      No shipments yet.
-                    </li>
-                  )}
-                </ul>
+                {shipmentsOpen && (
+                  <ul className='divide-border/60 divide-y'>
+                    {sections.shipments.length ? (
+                      sections.shipments.map(LeftItem)
+                    ) : (
+                      <li className='text-muted-foreground px-3 py-6 text-xs'>
+                        No shipments yet.
+                      </li>
+                    )}
+                  </ul>
+                )}
               </div>
             </div>
           )}
@@ -1062,14 +1417,14 @@ export default function InboxPage() {
       {/* Right chat */}
       <div
         className={clsx(
-          'bg-background min-w-0 flex-1 flex-col',
+          'bg-background md:ring-border/50 min-w-0 flex-1 flex-col md:overflow-hidden md:rounded-tl-2xl md:ring-1',
           mobileView === 'chat' ? 'flex md:flex' : 'hidden md:flex'
         )}
       >
         {active ? (
           <>
             {/* Header */}
-            <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex h-12 shrink-0 items-center justify-between border-b px-4 backdrop-blur'>
+            <div className='bg-background/60 supports-[backdrop-filter]:bg-background/50 flex h-14 shrink-0 items-center justify-between border-b px-4 backdrop-blur md:rounded-tl-2xl'>
               <div className='flex min-w-0 items-center gap-2'>
                 <Button
                   variant='ghost'
@@ -1081,8 +1436,8 @@ export default function InboxPage() {
                   <ArrowLeft className='size-4' />
                 </Button>
                 {active.type === 'shipment' ? (
-                  <div className='flex h-8 w-8 items-center justify-center rounded-md border bg-gradient-to-br from-orange-500/20 to-orange-600/10 text-[10px] font-semibold text-orange-600'>
-                    SHP
+                  <div className='flex h-8 w-8 items-center justify-center rounded-full border bg-orange-500/10 text-orange-600'>
+                    <Package className='size-4' />
                   </div>
                 ) : active.type === 'group' ? (
                   <div className='relative h-8 w-8'>
@@ -1128,8 +1483,42 @@ export default function InboxPage() {
                 )}
                 <div className='min-w-0'>
                   {active.type === 'shipment' ? (
-                    <div className='truncate font-medium'>
-                      {active.title || 'Shipment'}
+                    <div className='min-w-0'>
+                      <div className='truncate font-medium'>
+                        {active.title ||
+                          findShipmentLabel(initialMessages[0]?.content) ||
+                          ''}
+                      </div>
+                      <div className='mt-0.5 flex items-center gap-1'>
+                        {(() => {
+                          const others = active.members.filter(
+                            (m) => m.id !== me?.id
+                          );
+                          const shown = others.slice(0, 3);
+                          const rest = others.length - shown.length;
+                          return (
+                            <>
+                              {shown.map((m) => (
+                                <Avatar key={m.id} className='size-5'>
+                                  <AvatarImage
+                                    src={m.avatar_url || undefined}
+                                  />
+                                  <AvatarFallback className='text-[10px]'>
+                                    {(m.username || m.display_name || 'U')
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {rest > 0 && (
+                                <span className='bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]'>
+                                  +{rest}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                   ) : active.type === 'group' ? (
                     <div className='truncate font-medium'>
@@ -1143,15 +1532,16 @@ export default function InboxPage() {
                   ) : (
                     (() => {
                       const other = active.members.find((m) => m.id !== me?.id);
-                      const label =
-                        other?.username ||
-                        other?.display_name ||
-                        'Direct message';
+                      const { full: fullName } = other
+                        ? deriveMemberName(other)
+                        : ({ full: '' } as any);
                       return (
                         <HoverCard>
                           <HoverCardTrigger asChild>
-                            <div className='cursor-default truncate font-medium'>
-                              {label}
+                            <div className='min-w-0 cursor-default truncate'>
+                              <div className='truncate leading-tight font-semibold'>
+                                {fullName}
+                              </div>
                             </div>
                           </HoverCardTrigger>
                           <HoverCardContent
@@ -1160,7 +1550,7 @@ export default function InboxPage() {
                           >
                             <ProfileHoverDetails
                               id={other?.id || ''}
-                              fallbackName={label}
+                              fallbackName={fullName}
                               initialAvatar={other?.avatar_url || undefined}
                             />
                           </HoverCardContent>
@@ -1174,14 +1564,20 @@ export default function InboxPage() {
                 <Button
                   variant='ghost'
                   size='icon'
+                  aria-pressed={activeId ? starred.has(activeId) : false}
                   onClick={() => activeId && toggleStar(activeId)}
-                  aria-label='Star'
+                  aria-label={
+                    activeId && starred.has(activeId) ? 'Unstar' : 'Star'
+                  }
                 >
-                  {activeId && starred.has(activeId) ? (
-                    <Star className='size-4 fill-current' />
-                  ) : (
-                    <StarOff className='size-4' />
-                  )}
+                  <Star
+                    className={clsx(
+                      'size-4 transition-colors',
+                      activeId && starred.has(activeId)
+                        ? 'fill-yellow-400 text-yellow-500'
+                        : 'text-muted-foreground'
+                    )}
+                  />
                 </Button>
                 <Button
                   variant='ghost'
@@ -1189,10 +1585,7 @@ export default function InboxPage() {
                   onClick={() => setSideOpen((v) => !v)}
                   aria-label='Toggle details'
                 >
-                  <Info className='size-4' />
-                </Button>
-                <Button variant='ghost' size='icon' aria-label='More'>
-                  ⋯
+                  <PanelRightOpen className='size-4' />
                 </Button>
               </div>
             </div>
@@ -1201,10 +1594,13 @@ export default function InboxPage() {
             <div className='flex min-h-0 flex-1'>
               <div className='min-w-0 flex-1'>
                 <RealtimeChat
+                  key={active.id}
                   roomName={active.id}
                   nobleId={nobleId}
                   userId={me?.id}
-                  messages={initialMessages}
+                  messages={Array.from(
+                    new Map(initialMessages.map((m) => [m.id, m])).values()
+                  )}
                   roomTitle={roomDisplayName || undefined}
                   initialToSend={
                     pendingInitial?.roomId === active.id
@@ -1223,7 +1619,7 @@ export default function InboxPage() {
                 )}
               >
                 <div className='flex h-12 items-center justify-between border-b px-3'>
-                  <div className='font-medium'>Group info</div>
+                  <div className='font-medium'>Details</div>
                   <Button
                     variant='ghost'
                     size='icon'
@@ -1241,195 +1637,469 @@ export default function InboxPage() {
                         active.members[0];
                       if (!other) return null;
                       return (
-                        <div className='border-b'>
-                          <ProfileHoverDetails
-                            id={other.id}
-                            fallbackName={
-                              other.display_name || other.username || 'User'
-                            }
-                            initialAvatar={other.avatar_url || undefined}
-                          />
-                        </div>
+                        <ProfileHoverDetails
+                          id={other.id}
+                          fallbackName={
+                            other.display_name || other.username || 'User'
+                          }
+                          initialAvatar={other.avatar_url || undefined}
+                        />
                       );
                     })()}
-
-                  <div className='border-b p-3'>
-                    <div className='mb-2 flex items-center gap-2'>
-                      <ChevronRight className='text-muted-foreground size-4' />
-                      <div className='font-medium'>Members</div>
-                      <span className='text-muted-foreground ml-auto text-xs'>
-                        {active.members.length}
-                      </span>
-                    </div>
-                    <ul className='space-y-2'>
-                      {active.members.map((m) => (
-                        <li key={m.id} className='flex items-center gap-2'>
-                          <Avatar className='size-6'>
-                            <AvatarImage src={m.avatar_url || undefined} />
-                            <AvatarFallback className='text-[10px]'>
-                              {(m.display_name || m.username || 'U')
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className='min-w-0'>
-                            <div className='truncate text-sm'>
-                              {m.display_name || m.username || 'User'}
-                            </div>
+                  {active?.type === 'group' && (
+                    <div className='border-b p-3'>
+                      {/* Group card: avatar stack + inline title & edit */}
+                      <div className='rounded-md border p-3'>
+                        <div className='flex items-center gap-3'>
+                          <div className='relative h-10 w-16'>
+                            {detailsMembers.slice(0, 3).map((m, i) => (
+                              <Avatar
+                                key={m.id}
+                                className={clsx(
+                                  'border-background absolute size-7 border',
+                                  i === 0
+                                    ? 'top-0 left-0'
+                                    : i === 1
+                                      ? 'top-1 left-4'
+                                      : 'top-2 left-8'
+                                )}
+                              >
+                                <AvatarImage src={m.avatar_url || undefined} />
+                                <AvatarFallback className='text-[10px]'>
+                                  {(m.username || m.nobleid || 'U')
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className='border-b p-3'>
-                    <Input
-                      placeholder='Search in details…'
-                      value={detailsQuery}
-                      onChange={(e) => setDetailsQuery(e.target.value)}
-                    />
-                  </div>
-
-                  {(() => {
-                    const msgs = detailsRows.length
-                      ? detailsRows.map((r) => ({ content: r.content }))
-                      : initialMessages || [];
-                    const links = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /https?:\/\/\S+/g
-                        )
-                      ).map((x) => x[0])
-                    );
-                    const files = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /\[([^\]]+)]\(([^)]+)\)/g
-                        )
-                      ).map((x) => ({ name: x[1], url: x[2] }))
-                    );
-                    const mentions = msgs.flatMap((m: any) =>
-                      Array.from(
-                        ((m.content || '') as string).matchAll(
-                          /@([\w._-]{2,32})/g
-                        )
-                      ).map((x) => x[1])
-                    );
-                    const q = detailsQuery.trim().toLowerCase();
-                    const filter = (s: string) =>
-                      !q || s.toLowerCase().includes(q);
-                    const linksF = links.filter(filter);
-                    const filesF = files.filter(
-                      (f) => filter(f.name) || filter(f.url)
-                    );
-                    const mentionsF = mentions.filter(filter);
-                    return (
-                      <div className='space-y-4 p-3'>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Shared links</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {linksF.length}
-                            </span>
-                          </div>
-                          {linksF.length ? (
-                            <ul className='list-disc space-y-1 pl-5 text-sm'>
-                              {linksF.slice(0, 400).map((l, i) => (
-                                <li key={i} className='truncate'>
-                                  <a
-                                    className='text-primary hover:underline'
-                                    href={l}
-                                    target='_blank'
-                                    rel='noreferrer noopener'
-                                  >
-                                    {l}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No links
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Shared files</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {filesF.length}
-                            </span>
-                          </div>
-                          {filesF.length ? (
-                            <ul className='space-y-2 text-sm'>
-                              {filesF.slice(0, 400).map((f, i) => (
-                                <li key={i} className='truncate'>
-                                  <a
-                                    className='text-primary hover:underline'
-                                    href={f.url}
-                                    target='_blank'
-                                    rel='noreferrer noopener'
-                                  >
-                                    {f.name}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No files
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className='mb-2 flex items-center gap-2'>
-                            <ChevronRight className='text-muted-foreground size-4' />
-                            <div className='font-medium'>Mentions</div>
-                            <span className='text-muted-foreground ml-auto text-xs'>
-                              {mentionsF.length}
-                            </span>
-                          </div>
-                          {mentionsF.length ? (
-                            <div className='flex flex-wrap gap-1'>
-                              {mentionsF.slice(0, 400).map((u, i) => (
-                                <span
-                                  key={i}
-                                  className='bg-muted rounded px-2 py-0.5 text-xs'
+                          <div className='min-w-0 flex-1'>
+                            {!isEditingTitle ? (
+                              <div className='flex items-center gap-2'>
+                                <div className='flex-1 truncate font-medium'>
+                                  {active.title ||
+                                    active.members
+                                      .map(
+                                        (m) =>
+                                          m.username || m.display_name || 'user'
+                                      )
+                                      .slice(0, 3)
+                                      .join(', ') +
+                                      (active.members.length > 3
+                                        ? ' and more'
+                                        : '')}
+                                </div>
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  className='text-muted-foreground hover:text-foreground ml-auto h-7 w-7 opacity-60 transition-colors hover:opacity-100'
+                                  aria-label='Edit group name'
+                                  onClick={() => {
+                                    setIsEditingTitle(true);
+                                    setEditingTitle(active.title || '');
+                                  }}
                                 >
-                                  @{u}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className='text-muted-foreground text-xs'>
-                              No mentions
-                            </div>
-                          )}
+                                  <Pencil className='size-4' />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className='flex items-center gap-2'>
+                                <Input
+                                  value={editingTitle}
+                                  onChange={(e) =>
+                                    setEditingTitle(e.target.value)
+                                  }
+                                  placeholder='Group name'
+                                  className='h-8 text-xs'
+                                />
+                                <Button
+                                  size='icon'
+                                  className='h-8 w-8'
+                                  disabled={
+                                    savingTitle || !editingTitle?.trim()
+                                  }
+                                  aria-label='Save group name'
+                                  onClick={async () => {
+                                    try {
+                                      setSavingTitle(true);
+                                      const title = editingTitle.trim();
+                                      const { error } = await supabase
+                                        .from('chat_rooms')
+                                        .update({ title })
+                                        .eq('id', active.id);
+                                      if (!error) {
+                                        setRooms((prev) =>
+                                          prev.map((r) =>
+                                            r.id === active.id
+                                              ? { ...r, title }
+                                              : r
+                                          )
+                                        );
+                                        toast.success('Group name updated');
+                                        setIsEditingTitle(false);
+                                      } else {
+                                        toast.error('Could not update');
+                                      }
+                                    } catch {
+                                      toast.error('Could not update');
+                                    } finally {
+                                      setSavingTitle(false);
+                                    }
+                                  }}
+                                >
+                                  <Check className='size-4' />
+                                </Button>
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  className='h-8'
+                                  aria-label='Cancel edit'
+                                  onClick={() => setIsEditingTitle(false)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className='flex items-center gap-2 pt-2'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() => setDetailsPage((p) => p + 1)}
-                          >
-                            Load more
-                          </Button>
+                        {detailsMembers.length > 0 ? (
+                          <ul className='mt-3 space-y-2'>
+                            {detailsMembers.map((m) => (
+                              <li
+                                key={m.id}
+                                className='flex items-center gap-2'
+                              >
+                                <Avatar className='size-6'>
+                                  <AvatarImage
+                                    src={m.avatar_url || undefined}
+                                  />
+                                  <AvatarFallback className='text-[10px]'>
+                                    {(m.username || m.nobleid || 'U')
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className='truncate text-xs'>
+                                  {m.username || m.nobleid || 'User'}
+                                </span>
+                                <span className='bg-muted text-muted-foreground ml-auto rounded px-1.5 py-0.5 text-[10px]'>
+                                  {m.role || 'member'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className='text-muted-foreground mt-3 text-xs'>
+                            No members
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {active?.type === 'shipment' && (
+                    <div className='border-b p-3'>
+                      <div className='mb-2 text-xs font-medium'>
+                        Participants
+                      </div>
+                      {detailsMembers.length ? (
+                        <ul className='space-y-2'>
+                          {detailsMembers.map((m) => (
+                            <li key={m.id} className='flex items-center gap-2'>
+                              <Avatar className='size-6'>
+                                <AvatarImage src={m.avatar_url || undefined} />
+                                <AvatarFallback className='text-[10px]'>
+                                  {(m.username || m.nobleid || 'U')
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className='truncate text-xs'>
+                                {m.username || m.nobleid || 'User'}
+                              </span>
+                              <span className='bg-muted text-muted-foreground ml-auto rounded px-1.5 py-0.5 text-[10px]'>
+                                {m.role || 'member'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className='text-muted-foreground text-xs'>
+                          No participants
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Details Tabs: Links, Files, Mentions */}
+                  <div className='p-3'>
+                    <Tabs defaultValue='links' className='w-full'>
+                      <div className='flex items-center justify-between gap-2'>
+                        <TabsList className='scrollbar-thin max-w-full overflow-x-auto'>
+                          <TabsTrigger value='links' className='text-xs'>
+                            Links
+                          </TabsTrigger>
+                          <TabsTrigger value='files' className='text-xs'>
+                            Files
+                          </TabsTrigger>
+                          <TabsTrigger value='mentions' className='text-xs'>
+                            Mentions
+                          </TabsTrigger>
+                        </TabsList>
+                        <div className='ml-2 flex items-center gap-1'>
                           <Button
                             variant='ghost'
-                            size='sm'
-                            onClick={() => {
-                              setDetailsPage(0);
-                              setDetailsRows([]);
-                            }}
+                            size='icon'
+                            aria-label='Search'
+                            onClick={() => setDetailsSearchOpen((v) => !v)}
                           >
-                            Refresh
+                            <Filter className='size-4' />
                           </Button>
                         </div>
                       </div>
-                    );
-                  })()}
+                      {detailsSearchOpen && (
+                        <div className='mt-2'>
+                          <Input
+                            value={detailsQuery}
+                            onChange={(e) => setDetailsQuery(e.target.value)}
+                            placeholder='Search in details'
+                            className='h-8 w-full text-xs'
+                          />
+                        </div>
+                      )}
+                      {(() => {
+                        const msgPairs = (
+                          detailsRows.length
+                            ? detailsRows.map((r) => ({
+                                id: r.id,
+                                content: r.content,
+                                created_at: r.created_at
+                              }))
+                            : (initialMessages || []).map((m) => ({
+                                id: m.id,
+                                content: m.content,
+                                created_at: (m as any).createdAt
+                              }))
+                        ) as Array<{
+                          id: string;
+                          content: string;
+                          created_at?: string;
+                        }>;
+
+                        const q = detailsQuery.trim().toLowerCase();
+
+                        const links = msgPairs
+                          .flatMap((m) =>
+                            Array.from(
+                              ((m.content || '') as string).matchAll(
+                                /https?:\/\/\S+/g
+                              )
+                            ).map((x) => x[0] as string)
+                          )
+                          .filter((l, idx, arr) => arr.indexOf(l) === idx);
+
+                        const files = msgPairs
+                          .flatMap((m) =>
+                            Array.from(
+                              ((m.content || '') as string).matchAll(
+                                /\[([^\]]+)]\(([^)]+)\)/g
+                              )
+                            ).map((x) => ({
+                              name: x[1] as string,
+                              url: x[2] as string
+                            }))
+                          )
+                          .filter(
+                            (f, idx, arr) =>
+                              arr.findIndex(
+                                (y) => y.name === f.name && y.url === f.url
+                              ) === idx
+                          );
+
+                        // Mentions: list messages that contain at least one mention
+                        const mentionMsgs = msgPairs.reduce(
+                          (acc, m) => {
+                            const labels = Array.from(
+                              ((m.content || '') as string).matchAll(
+                                /(^|\s)@([\w._-]{2,32})/g
+                              )
+                            ).map((x) => x[2] as string);
+                            if (labels.length) {
+                              // Build a small snippet centered around first mention
+                              const idx = (m.content || '').indexOf(
+                                '@' + labels[0]
+                              );
+                              const start = Math.max(0, idx - 30);
+                              const end = Math.min(
+                                (m.content || '').length,
+                                idx + 60
+                              );
+                              const raw = (m.content || '').slice(start, end);
+                              acc.push({
+                                id: m.id,
+                                when: m.created_at,
+                                labels: Array.from(new Set(labels)),
+                                snippet: raw.replace(/\n/g, ' ')
+                              });
+                            }
+                            return acc;
+                          },
+                          [] as Array<{
+                            id: string;
+                            when?: string;
+                            labels: string[];
+                            snippet: string;
+                          }>
+                        );
+
+                        const linksF = q
+                          ? links.filter((l) => l.toLowerCase().includes(q))
+                          : links;
+                        const filesF = q
+                          ? files.filter(
+                              (f) =>
+                                f.name.toLowerCase().includes(q) ||
+                                f.url.toLowerCase().includes(q)
+                            )
+                          : files;
+                        const mentionsF = q
+                          ? mentionMsgs.filter(
+                              (m) =>
+                                m.labels.some((lb) =>
+                                  lb.toLowerCase().includes(q)
+                                ) || m.snippet.toLowerCase().includes(q)
+                            )
+                          : mentionMsgs;
+
+                        return (
+                          <>
+                            <TabsContent value='links' className='mt-3'>
+                              {linksF.length ? (
+                                <ul className='space-y-1'>
+                                  {linksF.slice(0, 400).map((l, i) => (
+                                    <li key={i} className='truncate text-xs'>
+                                      <a
+                                        className='text-primary hover:underline'
+                                        href={l}
+                                        target='_blank'
+                                        rel='noreferrer noopener'
+                                      >
+                                        {l}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <div className='text-muted-foreground flex flex-col items-center justify-center gap-2 py-8'>
+                                  <Link2 className='size-6 opacity-60' />
+                                  <div className='text-xs'>No links found</div>
+                                  <div className='text-[11px] opacity-70'>
+                                    Shared links in this chat will appear here.
+                                  </div>
+                                </div>
+                              )}
+                            </TabsContent>
+                            <TabsContent value='files' className='mt-3'>
+                              {filesF.length ? (
+                                <ul className='space-y-2'>
+                                  {filesF.slice(0, 400).map((f, i) => (
+                                    <li key={i} className='truncate text-xs'>
+                                      <a
+                                        className='text-primary hover:underline'
+                                        href={f.url}
+                                        target='_blank'
+                                        rel='noreferrer noopener'
+                                      >
+                                        {f.name}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <div className='text-muted-foreground flex flex-col items-center justify-center gap-2 py-8'>
+                                  <FileIcon className='size-6 opacity-60' />
+                                  <div className='text-xs'>No files found</div>
+                                  <div className='text-[11px] opacity-70'>
+                                    Files shared in this chat will show up here.
+                                  </div>
+                                </div>
+                              )}
+                            </TabsContent>
+                            <TabsContent value='mentions' className='mt-3'>
+                              {mentionsF.length ? (
+                                <ul className='space-y-2'>
+                                  {mentionsF.slice(0, 400).map((m) => (
+                                    <li key={m.id}>
+                                      <button
+                                        className='bg-card hover:bg-accent/50 w-full rounded-md border px-2 py-2 text-left text-xs shadow-sm transition-colors'
+                                        onClick={() => {
+                                          const el = document.getElementById(
+                                            `mid-${m.id}`
+                                          );
+                                          if (el) {
+                                            el.scrollIntoView({
+                                              behavior: 'smooth',
+                                              block: 'center'
+                                            });
+                                            try {
+                                              el.classList.add(
+                                                'bg-amber-100/60',
+                                                'dark:bg-amber-900/20',
+                                                'transition-colors'
+                                              );
+                                              setTimeout(() => {
+                                                el.classList.remove(
+                                                  'bg-amber-100/60',
+                                                  'dark:bg-amber-900/20',
+                                                  'transition-colors'
+                                                );
+                                              }, 1200);
+                                            } catch {
+                                              /* noop */
+                                            }
+                                          }
+                                        }}
+                                        title='Jump to message'
+                                      >
+                                        <div className='flex flex-wrap items-center gap-1'>
+                                          {m.labels.map((lb) => (
+                                            <span
+                                              key={lb}
+                                              className='bg-muted rounded px-2 py-0.5 text-[10px]'
+                                            >
+                                              <AtSign className='mr-1 inline size-3' />
+                                              {lb}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <div className='mt-1 line-clamp-2 text-[11px] opacity-80'>
+                                          {m.snippet}
+                                        </div>
+                                        {m.when && (
+                                          <div className='text-muted-foreground mt-1 text-[10px]'>
+                                            {new Date(m.when).toLocaleString()}
+                                          </div>
+                                        )}
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <div className='text-muted-foreground flex flex-col items-center justify-center gap-2 py-8'>
+                                  <AtSign className='size-6 opacity-60' />
+                                  <div className='text-xs'>
+                                    No mentions found
+                                  </div>
+                                  <div className='text-[11px] opacity-70'>
+                                    Messages with @mentions will be collected
+                                    here.
+                                  </div>
+                                </div>
+                              )}
+                            </TabsContent>
+                          </>
+                        );
+                      })()}
+                    </Tabs>
+                  </div>
                 </div>
               </div>
             </div>

@@ -880,32 +880,32 @@ function AttachmentChip({ att }: { att: Attachment }) {
   const icon = getAttachmentIcon(att);
   const typeLabel = att.provider === 'drive' ? 'Drive' : att.type.toUpperCase();
   return (
-    <div className='group/att bg-card text-card-foreground hover:bg-accent/30 inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-sm'>
-      <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
+    <div
+      className='group/att bg-card text-card-foreground hover:bg-accent/40 relative inline-flex max-w-[220px] items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-sm'
+      title={att.name}
+    >
+      <span className='bg-muted/70 text-muted-foreground inline-flex size-6 items-center justify-center rounded-md'>
         {icon}
       </span>
-      <div className='min-w-0'>
-        <div
-          className='max-w-[180px] truncate text-xs leading-tight font-medium'
-          title={att.name}
-        >
+      <div className='min-w-0 flex-1'>
+        <div className='truncate text-[11px] leading-tight font-medium'>
           {att.name}
         </div>
-        <div className='text-muted-foreground text-[10px] leading-tight'>
+        <div className='text-muted-foreground truncate text-[10px] leading-tight'>
           {typeLabel}
         </div>
       </div>
-      {att.url ? (
+      {att.url && (
         <a
           href={att.url}
           target='_blank'
           rel='noopener noreferrer'
-          className='text-primary ml-1 inline-flex items-center gap-1 text-xs hover:underline'
+          className='text-primary/60 hover:text-primary ml-1 inline-flex items-center'
+          aria-label='Download attachment'
         >
           <Download className='size-3' />
-          Download
         </a>
-      ) : null}
+      )}
     </div>
   );
 }

@@ -90,8 +90,10 @@ export default function DashboardShell({
         <AppSidebar />
         <SidebarInset className='flex h-screen max-h-screen flex-col'>
           <Header />
-          <div className='flex h-full min-h-0 w-full flex-1 flex-col'>
-            {children}
+          <div className='bg-sidebar flex h-full min-h-0 w-full flex-1 flex-col'>
+            <div className='bg-background ring-border/40 border-border/40 dark:ring-border/60 dark:border-border/60 flex-1 overflow-auto border ring-1 md:rounded-tl-2xl'>
+              {children}
+            </div>
           </div>
           {/* Hide Floating Action Button on Inbox page */}
           {!(pathname || '').startsWith('/inbox') && <FloatingActionButton />}

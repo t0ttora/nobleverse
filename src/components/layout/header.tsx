@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabaseClient';
 import React from 'react';
+// Removed SidebarTrigger & Breadcrumbs in favor of Notion-like history nav
 import { SidebarTrigger } from '../ui/sidebar';
-import { Breadcrumbs } from '../navigation/breadcrumbs';
+// import { Breadcrumbs } from '../navigation/breadcrumbs';
 import SearchInput from '../navigation/search-input';
 import { UserNav } from './user-nav';
 import { ModeToggle } from './ThemeToggle/theme-toggle';
@@ -41,6 +42,7 @@ import {
   SelectItem
 } from '@/components/ui/select';
 import type { FreightFormType } from '@/lib/freight-form-schema';
+import { HistoryNavButtons } from './history-nav-buttons';
 
 function HeaderContent() {
   const [search, setSearch] = React.useState('');
@@ -67,11 +69,56 @@ function HeaderContent() {
   }, []);
 
   return (
-    <header className='bg-sidebar text-sidebar-foreground border-sidebar-border sticky top-0 z-40 flex w-full flex-col border-b'>
+    <header className='bg-sidebar text-sidebar-foreground sticky top-0 z-40 flex w-full flex-col'>
       <div className='flex h-16 shrink-0 items-center justify-between gap-2 px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12'>
-        <div className='flex items-center gap-2'>
-          <SidebarTrigger />
-          <Breadcrumbs />
+        <div className='flex items-center gap-1'>
+          {/* Mobile: sidebar trigger */}
+          <div className='md:hidden'>
+            <SidebarTrigger />
+          </div>
+          {/* Desktop: history navigation */}
+          <div className='hidden items-center gap-1 md:flex'>
+            <HistoryNavButtons />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  aria-label='New'
+                  className='text-muted-foreground hover:text-foreground ml-2 h-7 w-7 rounded-sm'
+                >
+                  <Icons.add size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='start' side='bottom' className='w-44'>
+                <DropdownMenuItem disabled>
+                  <Icons.fileDescription size={14} className='mr-2' /> Item 1
+                  <span className='text-muted-foreground ml-auto text-xs'>
+                    Dev
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Icons.grid size={14} className='mr-2' /> Item 2
+                  <span className='text-muted-foreground ml-auto text-xs'>
+                    Dev
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Icons.folder size={14} className='mr-2' /> Item 3
+                  <span className='text-muted-foreground ml-auto text-xs'>
+                    Dev
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Icons.robot size={14} className='mr-2' /> Item 4
+                  <span className='text-muted-foreground ml-auto text-xs'>
+                    Dev
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <div className='flex items-center gap-2'>
           <div className='hidden md:flex'>

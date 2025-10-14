@@ -1089,12 +1089,12 @@ export const RealtimeChat = ({
         </div>
       </div>
 
-      {/* Go to latest button */}
+      {/* Go to latest button (positioned within chat container to avoid sidebar overlap) */}
       <button
         type='button'
         onClick={scrollToBottom}
         className={
-          'bg-muted/80 hover:bg-muted border-border fixed right-6 bottom-28 z-30 flex items-center gap-1 rounded-full border px-2 py-1 shadow transition-all duration-300 md:right-12 md:bottom-32 ' +
+          'bg-muted/80 hover:bg-muted border-border absolute right-3 bottom-24 z-30 flex items-center gap-1 rounded-full border px-2 py-1 shadow transition-all duration-300 sm:bottom-28 md:right-6 md:bottom-32 lg:right-8 lg:bottom-36 ' +
           (showGoToBottom
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-4 opacity-0')
@@ -1108,7 +1108,7 @@ export const RealtimeChat = ({
       {/* Composer */}
       <form
         onSubmit={handleSendMessage}
-        className='border-border bg-card absolute inset-x-0 bottom-0 space-y-1.5 border-t px-2 py-2'
+        className='border-border/40 bg-card/80 supports-[backdrop-filter]:bg-card/60 absolute inset-x-0 bottom-0 space-y-1.5 border-t px-3 py-2 backdrop-blur'
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -1208,329 +1208,331 @@ export const RealtimeChat = ({
           </div>
         )}
 
-        {/* Toolbar */}
-        <div className='text-muted-foreground flex items-center gap-1 text-[11px] md:text-xs'>
-          <ToolbarBtn
-            title='Bold'
-            onClick={() => surroundSelection('**', '**')}
-          >
-            <Bold className='size-4' />
-          </ToolbarBtn>
-          <ToolbarBtn
-            title='Italic'
-            onClick={() => surroundSelection('*', '*')}
-          >
-            <Italic className='size-4' />
-          </ToolbarBtn>
-          <ToolbarBtn
-            title='Inline code'
-            onClick={() => surroundSelection('`', '`')}
-          >
-            <Code className='size-4' />
-          </ToolbarBtn>
-          <ToolbarBtn title='Quote' onClick={() => prependLine('> ')}>
-            <Quote className='size-4' />
-          </ToolbarBtn>
-          <ToolbarBtn title='List' onClick={() => prependLine('- ')}>
-            <List className='size-4' />
-          </ToolbarBtn>
-          {/* Separator between formatting and insert */}
-          <div className='bg-border mx-1 h-4 w-px' />
-          {/* Attach files (paperclip) just left of plus dropdown */}
-          <button
-            type='button'
-            onClick={() => fileInputRef.current?.click()}
-            className='bg-background hover:bg-accent/60 inline-flex h-8 w-8 items-center justify-center rounded-md border transition'
-            aria-label='Attach files'
-            title='Attach files'
-          >
-            <Paperclip className='size-4' />
-          </button>
-          {/* Insert Card dropdown (grouped) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type='button'
-                title='Insert card'
-                className='inline-flex items-center rounded-md p-1.5 shadow-sm transition-shadow hover:shadow'
-                style={{
-                  backgroundColor: 'rgba(255, 90, 38, 0.2)',
-                  color: '#ff5a26'
-                }}
-              >
-                <Plus className='size-4' />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='start' className='w-64'>
-              {/* Shipment Cards group: include Shipment, Request, Negotiation */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className='flex items-start gap-2'>
-                    <Package className='mt-0.5 size-4' />
-                    <div className='-mt-0.5 flex flex-col'>
-                      <span>Shipment Cards</span>
-                      <span className='text-muted-foreground text-[11px]'>
-                        Plan, request & negotiate
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('shipment_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <Package className='mr-2 size-4' /> Shipment
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('request_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <ReceiptText className='mr-2 size-4' /> Request
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('negotiation_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <Handshake className='mr-2 size-4' /> Negotiation
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSeparator />
-
-              {/* Payment Cards */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className='flex items-start gap-2'>
-                    <Wallet className='mt-0.5 size-4' />
-                    <div className='-mt-0.5 flex flex-col'>
-                      <span>Payment Cards</span>
-                      <span className='text-muted-foreground text-[11px]'>
-                        Invoices & payment status
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('invoice_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <ReceiptText className='mr-2 size-4' /> Invoice
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('payment_status_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <Wallet className='mr-2 size-4' /> Payment Status
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              {/* Suite Cards */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className='flex items-start gap-2'>
-                    <LayoutGrid className='mt-0.5 size-4' />
-                    <div className='-mt-0.5 flex flex-col'>
-                      <span>Suite Cards</span>
-                      <span className='text-muted-foreground text-[11px]'>
-                        Share from NobleFiles
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSuiteDialogOpen(true);
-                    }}
-                  >
-                    <Folder className='mr-2 size-4' /> Files
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              {/* Task & Approval Cards */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className='flex items-start gap-2'>
-                    <ClipboardCheck className='mt-0.5 size-4' />
-                    <div className='-mt-0.5 flex flex-col'>
-                      <span>Task & Approval Cards</span>
-                      <span className='text-muted-foreground text-[11px]'>
-                        Assign work or request sign-off
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('task_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <CheckSquare className='mr-2 size-4' /> Task
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('approval_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <ClipboardCheck className='mr-2 size-4' /> Approval
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSeparator />
-
-              {/* Note Cards */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <div className='flex items-start gap-2'>
-                    <StickyNote className='mt-0.5 size-4' />
-                    <div className='-mt-0.5 flex flex-col'>
-                      <span>Note Cards</span>
-                      <span className='text-muted-foreground text-[11px]'>
-                        Quick annotations
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setPendingInsertType('note_card');
-                      setCardBuilderOpen(true);
-                    }}
-                  >
-                    <StickyNote className='mr-2 size-4' /> Note
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className='text-muted-foreground ml-auto text-[10px] md:text-xs'>
-            Ctrl+Enter
-          </div>
-        </div>
-
-        <div
-          className={cn(
-            'bg-background flex items-end gap-1.5 rounded-lg px-2 py-1.5',
-            dragging ? 'ring-primary/60 ring-2' : 'border-border/60 border'
-          )}
-        >
-          <Textarea
-            ref={textareaRef}
-            className={cn(
-              'resize-none bg-transparent text-[12px] leading-5 md:text-xs',
-              'max-h-36 min-h-8'
-            )}
-            value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
-              detectSuggest();
-            }}
-            onKeyDown={(e) => {
-              if (suggestOpen) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSuggestIndex((i) =>
-                    Math.min(i + 1, Math.max(0, suggestItems.length - 1))
-                  );
-                  return;
-                }
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setSuggestIndex((i) => Math.max(i - 1, 0));
-                  return;
-                }
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault();
-                  if (suggestItems[suggestIndex])
-                    applySuggestion(suggestItems[suggestIndex]);
-                  return;
-                }
-                if (e.key === 'Escape') {
-                  setSuggestOpen(false);
-                  return;
-                }
-              }
-              // If user just typed a trigger, schedule detection after the input applies
-              if (e.key === '@' || e.key === '#') {
-                requestAnimationFrame(() => detectSuggest());
-              }
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                void handleSendMessage(e as unknown as React.FormEvent);
-              }
-            }}
-            placeholder={
-              roomTitle ? `Messages #${roomTitle}...` : 'Type a message...'
-            }
-            disabled={!isConnected}
-            rows={3}
-            onCompositionEnd={() => detectSuggest()}
-            onPaste={(e) => {
-              const fs = e.clipboardData?.files;
-              if (fs && fs.length) {
-                e.preventDefault();
-                onFilesAdd(fs);
-              }
-            }}
-            onInput={() => detectSuggest()}
-          />
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type='button'
-                variant='ghost'
-                className='shrink-0'
-                aria-label='Emoji picker'
-              >
-                <Smile className='size-5' />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className='p-0' align='end'>
-              <div className='w-[320px]'>
-                <EmojiPicker
-                  onPick={(emoji) => {
-                    insertAtCursorStrict(textareaRef, setNewMessage, emoji);
-                    pushRecentEmoji(emoji);
+        {/* Unified composer capsule */}
+        <div className='flex flex-col gap-1'>
+          {/* Toolbar */}
+          <div className='text-muted-foreground flex items-center gap-1 px-2 text-[11px] md:text-xs'>
+            <ToolbarBtn
+              title='Bold'
+              onClick={() => surroundSelection('**', '**')}
+            >
+              <Bold className='size-4' />
+            </ToolbarBtn>
+            <ToolbarBtn
+              title='Italic'
+              onClick={() => surroundSelection('*', '*')}
+            >
+              <Italic className='size-4' />
+            </ToolbarBtn>
+            <ToolbarBtn
+              title='Inline code'
+              onClick={() => surroundSelection('`', '`')}
+            >
+              <Code className='size-4' />
+            </ToolbarBtn>
+            <ToolbarBtn title='Quote' onClick={() => prependLine('> ')}>
+              <Quote className='size-4' />
+            </ToolbarBtn>
+            <ToolbarBtn title='List' onClick={() => prependLine('- ')}>
+              <List className='size-4' />
+            </ToolbarBtn>
+            {/* Separator between formatting and insert */}
+            <div className='bg-border mx-1 h-4 w-px' />
+            {/* Attach files (paperclip) just left of plus dropdown */}
+            <button
+              type='button'
+              onClick={() => fileInputRef.current?.click()}
+              className='bg-background hover:bg-accent/60 inline-flex h-8 w-8 items-center justify-center rounded-md border transition'
+              aria-label='Attach files'
+              title='Attach files'
+            >
+              <Paperclip className='size-4' />
+            </button>
+            {/* Insert Card dropdown (grouped) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type='button'
+                  title='Insert card'
+                  className='inline-flex items-center rounded-md p-1.5 shadow-sm transition-shadow hover:shadow'
+                  style={{
+                    backgroundColor: 'rgba(255, 90, 38, 0.2)',
+                    color: '#ff5a26'
                   }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+                >
+                  <Plus className='size-4' />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='start' className='w-64'>
+                {/* Shipment Cards group: include Shipment, Request, Negotiation */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <div className='flex items-start gap-2'>
+                      <Package className='mt-0.5 size-4' />
+                      <div className='-mt-0.5 flex flex-col'>
+                        <span>Shipment Cards</span>
+                        <span className='text-muted-foreground text-[11px]'>
+                          Plan, request & negotiate
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('shipment_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <Package className='mr-2 size-4' /> Shipment
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('request_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <ReceiptText className='mr-2 size-4' /> Request
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('negotiation_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <Handshake className='mr-2 size-4' /> Negotiation
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
 
-          <Button
-            className='h-8 shrink-0 px-3'
-            type='submit'
-            disabled={
-              !newMessage.trim() &&
-              files.length === 0 &&
-              pendingCards.length === 0
-            }
-            aria-label='Send'
-            size='sm'
+                <DropdownMenuSeparator />
+
+                {/* Payment Cards */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <div className='flex items-start gap-2'>
+                      <Wallet className='mt-0.5 size-4' />
+                      <div className='-mt-0.5 flex flex-col'>
+                        <span>Payment Cards</span>
+                        <span className='text-muted-foreground text-[11px]'>
+                          Invoices & payment status
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('invoice_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <ReceiptText className='mr-2 size-4' /> Invoice
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('payment_status_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <Wallet className='mr-2 size-4' /> Payment Status
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* Suite Cards */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <div className='flex items-start gap-2'>
+                      <LayoutGrid className='mt-0.5 size-4' />
+                      <div className='-mt-0.5 flex flex-col'>
+                        <span>Suite Cards</span>
+                        <span className='text-muted-foreground text-[11px]'>
+                          Share from NobleFiles
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSuiteDialogOpen(true);
+                      }}
+                    >
+                      <Folder className='mr-2 size-4' /> Files
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                {/* Task & Approval Cards */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <div className='flex items-start gap-2'>
+                      <ClipboardCheck className='mt-0.5 size-4' />
+                      <div className='-mt-0.5 flex flex-col'>
+                        <span>Task & Approval Cards</span>
+                        <span className='text-muted-foreground text-[11px]'>
+                          Assign work or request sign-off
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('task_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <CheckSquare className='mr-2 size-4' /> Task
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('approval_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <ClipboardCheck className='mr-2 size-4' /> Approval
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+
+                <DropdownMenuSeparator />
+
+                {/* Note Cards */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <div className='flex items-start gap-2'>
+                      <StickyNote className='mt-0.5 size-4' />
+                      <div className='-mt-0.5 flex flex-col'>
+                        <span>Note Cards</span>
+                        <span className='text-muted-foreground text-[11px]'>
+                          Quick annotations
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPendingInsertType('note_card');
+                        setCardBuilderOpen(true);
+                      }}
+                    >
+                      <StickyNote className='mr-2 size-4' /> Note
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className='text-muted-foreground ml-auto text-[10px] md:text-xs'>
+              Ctrl+Enter
+            </div>
+          </div>
+          <div
+            className={cn(
+              'bg-background flex items-end gap-1.5 rounded-xl px-2 py-1.5 shadow-sm',
+              dragging ? 'ring-primary/60 ring-2' : 'border-border/60 border'
+            )}
           >
-            <Send className='size-3' />
-          </Button>
+            <Textarea
+              ref={textareaRef}
+              className={cn(
+                'no-scrollbar resize-none bg-transparent text-[12px] leading-5 md:text-xs',
+                'max-h-36 min-h-8'
+              )}
+              value={newMessage}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                detectSuggest();
+              }}
+              onKeyDown={(e) => {
+                if (suggestOpen) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSuggestIndex((i) =>
+                      Math.min(i + 1, Math.max(0, suggestItems.length - 1))
+                    );
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSuggestIndex((i) => Math.max(i - 1, 0));
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    if (suggestItems[suggestIndex])
+                      applySuggestion(suggestItems[suggestIndex]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setSuggestOpen(false);
+                    return;
+                  }
+                }
+                // If user just typed a trigger, schedule detection after the input applies
+                if (e.key === '@' || e.key === '#') {
+                  requestAnimationFrame(() => detectSuggest());
+                }
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void handleSendMessage(e as unknown as React.FormEvent);
+                }
+              }}
+              placeholder={
+                roomTitle ? `Messages #${roomTitle}...` : 'Type a message...'
+              }
+              disabled={!isConnected}
+              rows={3}
+              onCompositionEnd={() => detectSuggest()}
+              onPaste={(e) => {
+                const fs = e.clipboardData?.files;
+                if (fs && fs.length) {
+                  e.preventDefault();
+                  onFilesAdd(fs);
+                }
+              }}
+              onInput={() => detectSuggest()}
+            />
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  className='shrink-0'
+                  aria-label='Emoji picker'
+                >
+                  <Smile className='size-5' />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className='p-0' align='end'>
+                <div className='w-[320px]'>
+                  <EmojiPicker
+                    onPick={(emoji) => {
+                      insertAtCursorStrict(textareaRef, setNewMessage, emoji);
+                      pushRecentEmoji(emoji);
+                    }}
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button
+              className='h-8 shrink-0 px-3'
+              type='submit'
+              disabled={
+                !newMessage.trim() &&
+                files.length === 0 &&
+                pendingCards.length === 0
+              }
+              aria-label='Send'
+              size='sm'
+            >
+              <Send className='size-3' />
+            </Button>
+          </div>
         </div>
 
         {/* (Removed bottom attach button as requested) */}
