@@ -234,24 +234,24 @@ export default function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
-                tooltip='NobleSuite'
-                isActive={pathname === '/noblesuite'}
-              >
-                <Link href='/noblesuite'>
-                  <Icons.grid />
-                  <span>NobleSuite</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
                 tooltip='NobleFiles'
                 isActive={pathname.startsWith('/noblefiles')}
               >
                 <Link href='/noblefiles'>
                   <Icons.folder />
                   <span>NobleFiles</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                tooltip='NobleSuite'
+                isActive={pathname === '/noblesuite'}
+              >
+                <Link href='/noblesuite'>
+                  <Icons.apps />
+                  <span>NobleSuite</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

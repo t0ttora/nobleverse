@@ -32,13 +32,19 @@ export interface UploadDialogProps {
   ) => Promise<void>;
   // Optional: max size in bytes for soft validation (default 50MB)
   maxSizeBytes?: number;
+  // Optional: input accept string (e.g. ".xls,.xlsx,.csv,.doc,.docx,.ppt,.pptx")
+  accept?: string;
+  // Optional: description text under the drop area
+  description?: string;
 }
 
 export default function UploadDialog({
   open,
   onOpenChange,
   uploadOne,
-  maxSizeBytes = 50 * 1024 * 1024
+  maxSizeBytes = 50 * 1024 * 1024,
+  accept,
+  description
 }: UploadDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -69,12 +75,22 @@ export default function UploadDialog({
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
     const arr = Array.from(fileList);
+    const allowedExts = (accept || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.startsWith('.'));
+    const isAllowed = (f: File) => {
+      if (!allowedExts.length) return true;
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      return allowedExts.includes(`.${ext}`);
+    };
     const next = arr.map((f) => ({
       id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2)}`,
       file: f,
       status: 'pending' as FileStatus
     }));
-    setItems((prev) => [...prev, ...next]);
+    const filtered = next.filter((n) => isAllowed(n.file));
+    setItems((prev) => [...prev, ...filtered]);
     // Do not auto-start; wait for user to click Upload.
   }, []);
 
@@ -162,8 +178,8 @@ export default function UploadDialog({
         <DialogHeader className='px-6 pt-5'>
           <DialogTitle>Upload files</DialogTitle>
           <DialogDescription>
-            Choose a file or drag & drop it here. JPEG, PNG, PDF, and MP4
-            formats, up to 50 MB.
+            {description ||
+              'Choose a file or drag & drop it here. JPEG, PNG, PDF, and MP4 formats, up to 50 MB.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -209,8 +225,7 @@ export default function UploadDialog({
               ref={inputRef}
               type='file'
               multiple
-              // Do not restrict accept to avoid any functionality loss; backend can validate
-              accept='*/*'
+              accept={accept || '*/*'}
               className='hidden'
               onChange={(e) => e.target.files && addFiles(e.target.files)}
             />

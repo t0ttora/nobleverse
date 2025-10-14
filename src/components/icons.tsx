@@ -61,7 +61,9 @@ import {
   IconSearch,
   IconFilter,
   IconFolderFilled,
-  IconCalendar
+  IconCalendar,
+  IconTable,
+  IconApps
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -131,5 +133,8 @@ export const Icons = {
   external: IconExternalLink,
   filter: IconFilter,
   search: IconSearch,
-  calendar: IconCalendar
+  calendar: IconCalendar,
+  // Extras
+  sheet: IconTable,
+  apps: IconApps
 };
