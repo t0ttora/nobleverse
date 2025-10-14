@@ -1,34 +1,431 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Download,
+  File,
+  FileText,
+  FileArchive,
+  Image as ImageIcon,
+  Video,
+  Eye,
+  Trash
+} from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
 
-export default function DocumentsTab({ shipmentId }: { shipmentId: string }) {
+type DocType =
+  | 'commercial_invoice'
+  | 'packing_list'
+  | 'bill_of_lading'
+  | 'certificate_of_origin'
+  | 'insurance'
+  | 'import_license'
+  | 'custom';
+
+const COMMON_DOCS: Array<{ key: DocType; label: string }> = [
+  { key: 'commercial_invoice', label: 'Commercial Invoice' },
+  { key: 'packing_list', label: 'Packing List' },
+  { key: 'bill_of_lading', label: 'Bill of Lading' },
+  { key: 'certificate_of_origin', label: 'Certificate of Origin' },
+  { key: 'insurance', label: 'Insurance Certificate' },
+  { key: 'import_license', label: 'Import License' }
+];
+
+export default function DocumentsTab({ shipment }: { shipment: any }) {
+  const shipmentId: string = shipment?.id;
   const [files, setFiles] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [me, setMe] = useState<string>('');
+  const [selected, setSelected] = useState<Record<DocType, boolean>>({
+    commercial_invoice: false,
+    packing_list: false,
+    bill_of_lading: false,
+    certificate_of_origin: false,
+    insurance: false,
+    import_license: false,
+    custom: false
+  });
+  // Custom document ask: enter a name and add to a list; stored as type 'custom' with label in note field when inserting
+  const [customDocName, setCustomDocName] = useState('');
+  const [customDocs, setCustomDocs] = useState<string[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null
+  );
+  // Persisted user templates (from settings.profile.doc_templates)
+  const [templates, setTemplates] = useState<string[]>([]);
+  const [selectedTemplates, setSelectedTemplates] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMe(data.user?.id || ''));
+  }, []);
+
+  // Load user templates once user is known
+  useEffect(() => {
+    (async () => {
+      if (!me) return;
+      const { data } = await supabase
+        .from('settings')
+        .select('profile')
+        .eq('user_id', me)
+        .maybeSingle();
+      const arr = (data?.profile?.doc_templates as string[]) || [];
+      setTemplates(arr);
+      // ensure selected map keys exist
+      const map: Record<string, boolean> = {};
+      arr.forEach((t) => (map[t] = false));
+      setSelectedTemplates(map);
+    })();
+  }, [me]);
 
   async function refresh() {
-    const { data } = await supabase.storage
-      .from('shipments')
-      .list(shipmentId, { limit: 100 });
-    setFiles(data || []);
+    try {
+      const { data, error } = await supabase.storage
+        .from('shipments')
+        .list(shipmentId, {
+          limit: 200,
+          sortBy: { column: 'name', order: 'asc' } as any
+        });
+      if (error) throw error;
+      setFiles(data || []);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load documents');
+      setFiles([]);
+    }
   }
   useEffect(() => {
     refresh();
   }, [shipmentId]);
 
+  async function refreshRequests() {
+    if (!shipmentId || !me) return;
+    try {
+      const { data } = await supabase
+        .from('document_requests')
+        .select('*')
+        .eq('shipment_id', shipmentId)
+        .order('created_at', { ascending: false });
+      setRequests((data as any) || []);
+    } catch {
+      setRequests([]);
+    }
+  }
+  useEffect(() => {
+    void refreshRequests();
+  }, [shipmentId, me]);
+
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setUploading(true);
-    const path = `${shipmentId}/${Date.now()}_${f.name}`;
-    await supabase.storage.from('shipments').upload(path, f);
+    // Prefix filename with short uploader id so we can group by participant without changing folder layout
+    const short = me ? String(me).slice(0, 8) : 'anon';
+    const path = `${shipmentId}/u_${short}_${Date.now()}_${f.name}`;
+    const { error } = await supabase.storage.from('shipments').upload(path, f);
     setUploading(false);
-    refresh();
+    // Clear input so selecting the same file again triggers onChange
+    try {
+      (e.target as HTMLInputElement).value = '';
+    } catch {}
+    if (error) {
+      setError(error.message || 'Upload failed');
+      return;
+    }
+    setError(null);
+    await refresh();
   }
 
+  async function onFulfillUpload(req: any, file: File) {
+    try {
+      setUploadingFor(req.id);
+      const path = `docs/requests/${req.id}/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage
+        .from('shipments')
+        .upload(path, file);
+      if (error) throw error;
+      await supabase
+        .from('document_requests')
+        .update({ status: 'fulfilled', file_path: path })
+        .eq('id', req.id);
+      void refreshRequests();
+    } catch {
+      /* ignore */
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
+  const counterpartyId: string | null = useMemo(() => {
+    if (!me || !shipment) return null;
+    if (shipment.owner_id === me) return shipment.forwarder_id || null;
+    if (shipment.forwarder_id === me) return shipment.owner_id || null;
+    // Fallback: first participant that isn't me
+    if (Array.isArray(shipment.participants))
+      return shipment.participants.find((p: string) => p !== me) || null;
+    return null;
+  }, [me, shipment]);
+
+  function toggle(key: DocType) {
+    setSelected((cur) => ({ ...cur, [key]: !cur[key] }));
+  }
+
+  function addCustom() {
+    const label = customDocName.trim();
+    if (!label) return;
+    setCustomDocs((arr) => (arr.includes(label) ? arr : [...arr, label]));
+    // Persist into user templates for next time
+    (async () => {
+      if (!me) return;
+      const next = Array.from(new Set([...(templates || []), label]));
+      setTemplates(next);
+      setSelectedTemplates((m) => ({ ...m, [label]: false }));
+      // upsert settings row
+      const { data } = await supabase
+        .from('settings')
+        .select('user_id')
+        .eq('user_id', me)
+        .maybeSingle();
+      if (data) {
+        await supabase
+          .from('settings')
+          .update({ profile: { doc_templates: next } as any })
+          .eq('user_id', me);
+      } else {
+        await supabase
+          .from('settings')
+          .insert({ user_id: me, profile: { doc_templates: next } });
+      }
+    })();
+    setCustomDocName('');
+  }
+
+  function removeCustom(label: string) {
+    setCustomDocs((arr) => arr.filter((x) => x !== label));
+  }
+
+  async function submitRequest() {
+    const keys = (Object.keys(selected) as DocType[]).filter(
+      (k) => selected[k]
+    );
+    const chosenTemplates = Object.keys(selectedTemplates).filter(
+      (k) => selectedTemplates[k]
+    );
+    if (
+      (!keys.length &&
+        customDocs.length === 0 &&
+        chosenTemplates.length === 0) ||
+      !me ||
+      !counterpartyId
+    )
+      return;
+    try {
+      const baseRows = keys
+        .filter((k) => k !== 'custom')
+        .map((k) => ({
+          requester_id: me,
+          receiver_id: counterpartyId,
+          shipment_id: shipmentId,
+          type: k,
+          note: null,
+          status: 'pending' as const
+        }));
+      const customRows = customDocs.map((label) => ({
+        requester_id: me,
+        receiver_id: counterpartyId,
+        shipment_id: shipmentId,
+        type: 'custom' as const,
+        note: label,
+        status: 'pending' as const
+      }));
+      const templateRows = chosenTemplates.map((label) => ({
+        requester_id: me,
+        receiver_id: counterpartyId,
+        shipment_id: shipmentId,
+        type: 'custom' as const,
+        note: label,
+        status: 'pending' as const
+      }));
+      const rows = [...baseRows, ...customRows, ...templateRows];
+      const { data: inserted, error: insertErr } = await supabase
+        .from('document_requests')
+        .insert(rows)
+        .select('*');
+      if (insertErr) throw insertErr;
+      // Optimistic: merge inserted into local list so Outgoing shows immediately
+      if (Array.isArray(inserted)) {
+        setRequests((prev) => [...inserted, ...prev]);
+      }
+      setSelected({
+        commercial_invoice: false,
+        packing_list: false,
+        bill_of_lading: false,
+        certificate_of_origin: false,
+        insurance: false,
+        import_license: false,
+        custom: false
+      });
+      setCustomDocs([]);
+      setSelectedTemplates((m) =>
+        Object.fromEntries(Object.keys(m).map((k) => [k, false]))
+      );
+      void refreshRequests();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create requests');
+    }
+  }
+
+  function iconFor(name: string) {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (!ext) return <File className='size-4' />;
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext))
+      return <ImageIcon className='size-4' />;
+    if (['mp4', 'mov', 'webm', 'avi'].includes(ext))
+      return <Video className='size-4' />;
+    if (['pdf'].includes(ext)) return <FileText className='size-4' />;
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext))
+      return <FileArchive className='size-4' />;
+    return <File className='size-4' />;
+  }
+
+  const publicBase = useMemo(() => {
+    try {
+      // Base URL for the bucket; getPublicUrl will handle full path per file
+      return supabase.storage.from('shipments');
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Derive per-participant file groupings by parsing the uploader prefix.
+  const shortMe = useMemo(() => (me ? String(me).slice(0, 8) : ''), [me]);
+  const shortCounter = useMemo(
+    () => (counterpartyId ? String(counterpartyId).slice(0, 8) : ''),
+    [counterpartyId]
+  );
+  const mine = useMemo(() => {
+    return files.filter(
+      (f) => typeof f.name === 'string' && f.name.startsWith(`u_${shortMe}_`)
+    );
+  }, [files, shortMe]);
+  const theirs = useMemo(() => {
+    return files.filter(
+      (f) =>
+        typeof f.name === 'string' &&
+        shortCounter &&
+        f.name.startsWith(`u_${shortCounter}_`)
+    );
+  }, [files, shortCounter]);
+
   return (
-    <div className='space-y-4'>
+    <div className='space-y-6'>
+      {/* Request Documents (scoped to this shipment) */}
+      <div className='rounded-2xl border p-4'>
+        <div className='mb-2 text-sm font-medium'>
+          Request documents from your counterparty
+        </div>
+        <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+          {COMMON_DOCS.map((d) => (
+            <label
+              key={d.key}
+              className='hover:bg-accent/40 flex items-center gap-2 rounded-xl border p-2'
+            >
+              <Checkbox
+                checked={!!selected[d.key]}
+                onCheckedChange={() => toggle(d.key)}
+              />
+              <span className='text-sm'>{d.label}</span>
+            </label>
+          ))}
+        </div>
+        {templates.length > 0 && (
+          <div className='mt-3'>
+            <div className='text-muted-foreground mb-1 text-xs'>
+              Your templates
+            </div>
+            <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+              {templates.map((t) => (
+                <label
+                  key={t}
+                  className='hover:bg-accent/40 flex items-center gap-2 rounded-xl border p-2'
+                >
+                  <Checkbox
+                    checked={!!selectedTemplates[t]}
+                    onCheckedChange={() =>
+                      setSelectedTemplates((m) => ({ ...m, [t]: !m[t] }))
+                    }
+                  />
+                  <span className='text-sm'>{t}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className='mt-3'>
+          <div className='text-muted-foreground mb-1 text-xs'>
+            Ask a specific document (custom name)
+          </div>
+          <div className='flex items-center gap-2'>
+            <Input
+              placeholder='e.g. SGS Inspection Report'
+              value={customDocName}
+              onChange={(e) => setCustomDocName(e.target.value)}
+              className='max-w-sm'
+            />
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={addCustom}
+              disabled={!customDocName.trim()}
+            >
+              Add
+            </Button>
+          </div>
+          {customDocs.length > 0 && (
+            <div className='mt-2 flex flex-wrap gap-2'>
+              {customDocs.map((label) => (
+                <span
+                  key={label}
+                  className='bg-accent/50 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs'
+                >
+                  {label}
+                  <button
+                    onClick={() => removeCustom(label)}
+                    className='text-muted-foreground hover:text-foreground rounded bg-transparent px-1'
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className='mt-3 flex items-center gap-2'>
+          <Button size='sm' onClick={submitRequest} disabled={!counterpartyId}>
+            Request Selected
+          </Button>
+          {!counterpartyId && (
+            <span className='text-muted-foreground text-xs'>
+              Counterparty not detected
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className='flex items-center gap-2'>
         <input
           id='doc_upload'
@@ -41,22 +438,368 @@ export default function DocumentsTab({ shipmentId }: { shipmentId: string }) {
           onClick={() => document.getElementById('doc_upload')?.click()}
           disabled={uploading}
         >
-          Upload
+          {uploading ? 'Uploading…' : 'Upload'}
         </Button>
       </div>
-      <ul className='space-y-1 text-xs'>
-        {files.map((f) => (
-          <li
-            key={f.name}
-            className='bg-card/40 flex items-center justify-between rounded border px-2 py-1'
-          >
-            <span>{f.name}</span>
-          </li>
-        ))}
-        {files.length === 0 && (
-          <li className='text-muted-foreground'>No documents.</li>
-        )}
-      </ul>
+      {error && <div className='text-destructive text-xs'>{error}</div>}
+      {/* Section 1: All files (current view) */}
+      <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+        {files.map((f) => {
+          const url = publicBase
+            ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data.publicUrl
+            : '#';
+          return (
+            <Card key={f.name} className='bg-card/50 rounded-2xl border p-3'>
+              <div className='flex items-start justify-between gap-3'>
+                <div className='flex min-w-0 items-center gap-2'>
+                  <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
+                    {iconFor(f.name)}
+                  </span>
+                  <div className='min-w-0'>
+                    <div
+                      className='truncate text-sm font-medium'
+                      title={f.name}
+                    >
+                      {f.name}
+                    </div>
+                    <div className='text-muted-foreground text-[11px]'>
+                      {f.updated_at
+                        ? new Date(f.updated_at).toLocaleString()
+                        : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className='flex items-center gap-2'>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='h-7 px-2 text-xs'
+                    onClick={() => setPreview({ url, name: f.name })}
+                  >
+                    <Eye className='mr-1 size-3' /> Preview
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='text-destructive h-7 px-2 text-xs'
+                    onClick={async () => {
+                      await supabase.storage
+                        .from('shipments')
+                        .remove([`${shipmentId}/${f.name}`]);
+                      await refresh();
+                    }}
+                  >
+                    <Trash className='mr-1 size-3' /> Delete
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+      {files.length === 0 && !error && (
+        <div className='text-muted-foreground text-sm'>No documents.</div>
+      )}
+
+      {/* Section 2: My uploads vs Counterparty uploads */}
+      <div className='space-y-2'>
+        <div className='text-sm font-medium'>Uploads by participant</div>
+        <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
+          <Card className='bg-card/50 rounded-2xl border p-3'>
+            <div className='mb-2 text-xs font-semibold'>My uploads</div>
+            <div className='space-y-2'>
+              {mine.map((f) => {
+                const url = publicBase
+                  ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data
+                      .publicUrl
+                  : '#';
+                return (
+                  <div
+                    key={f.name}
+                    className='flex items-center justify-between gap-2 text-sm'
+                  >
+                    <div className='flex min-w-0 items-center gap-2'>
+                      <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
+                        {iconFor(f.name)}
+                      </span>
+                      <div className='truncate'>{f.name}</div>
+                    </div>
+                    <a
+                      href={url}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='text-primary text-xs hover:underline'
+                    >
+                      View
+                    </a>
+                  </div>
+                );
+              })}
+              {mine.length === 0 && (
+                <div className='text-muted-foreground text-xs'>
+                  No uploads yet.
+                </div>
+              )}
+            </div>
+          </Card>
+          <Card className='bg-card/50 rounded-2xl border p-3'>
+            <div className='mb-2 text-xs font-semibold'>
+              Counterparty uploads
+            </div>
+            <div className='space-y-2'>
+              {theirs.map((f) => {
+                const url = publicBase
+                  ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data
+                      .publicUrl
+                  : '#';
+                return (
+                  <div
+                    key={f.name}
+                    className='flex items-center justify-between gap-2 text-sm'
+                  >
+                    <div className='flex min-w-0 items-center gap-2'>
+                      <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
+                        {iconFor(f.name)}
+                      </span>
+                      <div className='truncate'>{f.name}</div>
+                    </div>
+                    <a
+                      href={url}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='text-primary text-xs hover:underline'
+                    >
+                      View
+                    </a>
+                  </div>
+                );
+              })}
+              {theirs.length === 0 && (
+                <div className='text-muted-foreground text-xs'>
+                  No uploads yet.
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Requests for this shipment */}
+      <div className='space-y-2'>
+        <div className='text-sm font-medium'>Requests for this shipment</div>
+        <Tabs defaultValue='incoming'>
+          <TabsList>
+            <TabsTrigger value='incoming'>Incoming</TabsTrigger>
+            <TabsTrigger value='outgoing'>Outgoing</TabsTrigger>
+          </TabsList>
+          <TabsContent value='incoming'>
+            <div className='space-y-2'>
+              {requests
+                .filter((r) => r.receiver_id === me)
+                .map((r) => (
+                  <div
+                    key={r.id}
+                    className='bg-card/50 rounded-2xl border p-3 text-sm'
+                  >
+                    <div className='flex items-center justify-between gap-2'>
+                      <div>
+                        <div className='font-medium'>
+                          {r.type === 'custom'
+                            ? r.note || 'Custom document'
+                            : COMMON_DOCS.find((d) => d.key === r.type)
+                                ?.label || r.type}
+                        </div>
+                        <div className='text-muted-foreground text-xs'>
+                          From: {String(r.requester_id).slice(0, 8)} •{' '}
+                          {new Date(r.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        {r.status !== 'fulfilled' ? (
+                          <label className='hover:bg-accent/50 inline-flex cursor-pointer items-center rounded-full border px-2 py-1 text-xs'>
+                            <input
+                              type='file'
+                              className='hidden'
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) void onFulfillUpload(r, f);
+                              }}
+                            />
+                            <span>
+                              {uploadingFor === r.id ? 'Uploading…' : 'Upload'}
+                            </span>
+                          </label>
+                        ) : (
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              size='sm'
+                              variant='ghost'
+                              className='h-7 px-2 text-xs'
+                              onClick={() => {
+                                const url = r.file_path
+                                  ? supabase.storage
+                                      .from('shipments')
+                                      .getPublicUrl(r.file_path).data.publicUrl
+                                  : '#';
+                                setPreview({
+                                  url,
+                                  name: r.file_path || 'file'
+                                });
+                              }}
+                            >
+                              <Eye className='mr-1 size-3' /> Preview
+                            </Button>
+                            <Button
+                              size='sm'
+                              variant='ghost'
+                              className='text-destructive h-7 px-2 text-xs'
+                              onClick={async () => {
+                                if (r.file_path) {
+                                  await supabase.storage
+                                    .from('shipments')
+                                    .remove([r.file_path]);
+                                }
+                                await supabase
+                                  .from('document_requests')
+                                  .update({
+                                    status: 'pending',
+                                    file_path: null
+                                  })
+                                  .eq('id', r.id);
+                                void refreshRequests();
+                              }}
+                            >
+                              <Trash className='mr-1 size-3' /> Delete
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              {requests.filter((r) => r.receiver_id === me).length === 0 && (
+                <div className='text-muted-foreground text-sm'>
+                  No incoming requests.
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value='outgoing'>
+            <div className='space-y-2'>
+              {requests
+                .filter((r) => r.requester_id === me)
+                .map((r) => (
+                  <div
+                    key={r.id}
+                    className='bg-card/50 rounded-2xl border p-3 text-sm'
+                  >
+                    <div className='flex items-center justify-between gap-2'>
+                      <div>
+                        <div className='font-medium'>
+                          {r.type === 'custom'
+                            ? r.note || 'Custom document'
+                            : COMMON_DOCS.find((d) => d.key === r.type)
+                                ?.label || r.type}
+                        </div>
+                        <div className='text-muted-foreground text-xs'>
+                          To: {String(r.receiver_id || '—').slice(0, 8)} •{' '}
+                          {new Date(r.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        {r.status === 'pending' ? (
+                          <Button
+                            size='sm'
+                            variant='ghost'
+                            className='text-destructive h-7 px-2 text-xs'
+                            onClick={async () => {
+                              if (!confirm('Withdraw this request?')) return;
+                              await supabase
+                                .from('document_requests')
+                                .delete()
+                                .eq('id', r.id);
+                              setRequests((prev) =>
+                                prev.filter((x) => x.id !== r.id)
+                              );
+                            }}
+                          >
+                            Withdraw
+                          </Button>
+                        ) : (
+                          <span className='text-xs'>{r.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              {requests.filter((r) => r.requester_id === me).length === 0 && (
+                <div className='text-muted-foreground text-sm'>
+                  No outgoing requests.
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+      <Dialog
+        open={!!preview}
+        onOpenChange={(open) => !open && setPreview(null)}
+      >
+        <DialogContent className='sm:max-w-4xl'>
+          <DialogHeader>
+            <DialogTitle className='truncate'>
+              {preview?.name || 'Preview'}
+            </DialogTitle>
+          </DialogHeader>
+          {preview?.url && (
+            <div className='mt-2 h-[70vh] w-full'>
+              {(() => {
+                const name = preview.name.toLowerCase();
+                const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/.test(name);
+                const isPdf = /\.(pdf)$/.test(name);
+                const isVideo = /\.(mp4|webm|mov|avi)$/.test(name);
+                if (isImage)
+                  return (
+                    <img
+                      src={preview.url}
+                      alt='preview'
+                      className='h-full w-full rounded-md object-contain'
+                    />
+                  );
+                if (isPdf)
+                  return (
+                    <iframe
+                      src={preview.url}
+                      className='h-full w-full rounded-md'
+                      title='PDF preview'
+                    />
+                  );
+                if (isVideo)
+                  return (
+                    <video
+                      src={preview.url}
+                      controls
+                      className='h-full w-full rounded-md'
+                    />
+                  );
+                return (
+                  <div className='text-sm'>
+                    Preview not available.{' '}
+                    <a
+                      className='text-primary underline'
+                      href={preview.url}
+                      target='_blank'
+                      rel='noreferrer'
+                    >
+                      Open
+                    </a>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

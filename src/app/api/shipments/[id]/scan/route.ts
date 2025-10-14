@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import { hmacLabelToken } from '@/lib/shipment-label';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(req: Request, context: RouteContext | any) {
-  const { params } = context as RouteContext;
+  const { id } = await (context as RouteContext).params;
   const body = await req.json().catch(() => ({}));
   const token = body.token as string | undefined;
   if (!token) return NextResponse.json({ error: 'NO_TOKEN' }, { status: 400 });
@@ -13,7 +13,7 @@ export async function POST(req: Request, context: RouteContext | any) {
   const { data: shipment } = await supabase
     .from('shipments')
     .select('id,label_hmac')
-    .eq('id', params.id)
+    .eq('id', id)
     .maybeSingle();
   if (!shipment)
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });

@@ -67,6 +67,7 @@ export function ShipperDashboard({ userId }: { userId: string }) {
         {/* Left column: Recent Requests card */}
         <div className='flex flex-col gap-2'>
           <RecentRequestsCard userId={userId} />
+          {/** DocsRequestPanel removed per request; docs handled within Shipment view */}
         </div>
         {/* Right column: Invoices & Favorites */}
         <div className='flex flex-col gap-4'>
@@ -154,6 +155,7 @@ export function ForwarderDashboard() {
           />
         </Section>
         <div className='flex flex-col gap-4'>
+          {/** DocsRequestPanel removed per request; docs handled within Shipment view */}
           <Section title='Recent Offers'>
             <RecentOffersCard
               forwarderId={me}

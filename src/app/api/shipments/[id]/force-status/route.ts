@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient as createSupabaseServerClient } from '@/../utils/supabase/server';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 // PATCH body: { status: 'delivered' | 'in_transit' | 'cancelled' }
 // Only participants or admins (role check) may force status.
 export async function PATCH(req: NextRequest, context: RouteContext | any) {
-  const { params } = context as RouteContext;
+  const { id } = await (context as RouteContext).params;
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient(cookieStore);
   const { status } = (await req.json().catch(() => ({}))) as {
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, context: RouteContext | any) {
   const { data: shipment, error: shipErr } = await supabase
     .from('shipments')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single();
   if (shipErr || !shipment)
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

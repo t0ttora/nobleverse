@@ -60,6 +60,8 @@ interface ProfileMini {
   avatar_url: string | null;
 }
 
+import Link from 'next/link';
+
 function AvatarStack({ participantIds }: { participantIds: string[] }) {
   const [profiles, setProfiles] = useState<ProfileMini[]>([]);
   const [roles, setRoles] = useState<Record<string, string>>({});
@@ -70,7 +72,8 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
       const { data } = await supabase
         .from('profiles')
         .select('id,display_name,username,avatar_url')
-        .in('id', participantIds.slice(0, 8));
+        // Fetch up to 20 to show full hover list while keeping it light
+        .in('id', participantIds.slice(0, 20));
       if (active) setProfiles(data || []);
       const roleMap: Record<string, string> = {};
       data?.forEach((p) => {
@@ -82,8 +85,10 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
       active = false;
     };
   }, [participantIds.join('|')]);
+  // Always compute counts from unique IDs passed in
+  const uniqueIds = Array.from(new Set(participantIds));
   const shown = profiles.slice(0, 4);
-  const extra = participantIds.length - shown.length;
+  const extra = Math.max(0, uniqueIds.length - shown.length);
   return (
     <HoverCard openDelay={80} closeDelay={60}>
       <HoverCardTrigger asChild>
@@ -96,20 +101,23 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
               .join('')
               .toUpperCase();
             return (
-              <Avatar
+              <Link
                 key={p.id}
-                className='ring-background bg-muted/30 h-9 w-9 border shadow-sm ring-2 backdrop-blur'
+                href={`/profile/${p.id}`}
+                title={p.display_name || p.username || p.id}
               >
-                {p.avatar_url && (
-                  <AvatarImage
-                    src={p.avatar_url}
-                    alt={p.display_name || p.username || ''}
-                  />
-                )}
-                <AvatarFallback className='text-[10px] font-medium'>
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+                <Avatar className='ring-background bg-muted/30 h-9 w-9 border shadow-sm ring-2 backdrop-blur'>
+                  {p.avatar_url && (
+                    <AvatarImage
+                      src={p.avatar_url}
+                      alt={p.display_name || p.username || ''}
+                    />
+                  )}
+                  <AvatarFallback className='text-[10px] font-medium'>
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </Link>
             );
           })}
           {extra > 0 && (
@@ -124,24 +132,32 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
         <ul className='space-y-1 text-xs'>
           {profiles.map((p) => (
             <li key={p.id} className='flex items-center gap-2'>
-              <Avatar className='bg-muted/40 h-6 w-6 border'>
-                {p.avatar_url && (
-                  <AvatarImage src={p.avatar_url} alt={p.display_name || ''} />
-                )}
-                <AvatarFallback className='text-[10px]'>
-                  {(p.display_name || p.username || p.id)
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className='min-w-0 flex-1'>
-                <div className='truncate text-[11px] font-medium'>
-                  {p.display_name || p.username || p.id.slice(0, 8)}
+              <Link
+                href={`/profile/${p.id}`}
+                className='flex items-center gap-2 hover:opacity-90'
+              >
+                <Avatar className='bg-muted/40 h-6 w-6 border'>
+                  {p.avatar_url && (
+                    <AvatarImage
+                      src={p.avatar_url}
+                      alt={p.display_name || ''}
+                    />
+                  )}
+                  <AvatarFallback className='text-[10px]'>
+                    {(p.display_name || p.username || p.id)
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className='min-w-0 flex-1'>
+                  <div className='truncate text-[11px] font-medium'>
+                    {p.display_name || p.username || p.id.slice(0, 8)}
+                  </div>
+                  <div className='text-muted-foreground text-[10px]'>
+                    {roles[p.id] || 'participant'}
+                  </div>
                 </div>
-                <div className='text-muted-foreground text-[10px]'>
-                  {roles[p.id] || 'participant'}
-                </div>
-              </div>
+              </Link>
             </li>
           ))}
           {profiles.length === 0 && (
@@ -179,9 +195,18 @@ export default function ShipmentHeader({
   const created = shipment.created_at
     ? format(new Date(shipment.created_at), 'MMM d, yyyy')
     : '—';
-  const participants: string[] = Array.isArray(shipment.participants)
-    ? shipment.participants
-    : [];
+  // Build participant list: always include owner/forwarder as baseline
+  const baseIds = [shipment.owner_id, shipment.forwarder_id].filter(
+    Boolean
+  ) as string[];
+  const participants: string[] = Array.from(
+    new Set(
+      (Array.isArray(shipment.participants)
+        ? shipment.participants
+        : []
+      ).concat(baseIds)
+    )
+  );
 
   const handleGenerateLabel = () => {
     startLabel(async () => {

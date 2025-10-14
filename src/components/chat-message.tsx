@@ -289,7 +289,7 @@ export const ChatMessageItem = ({
   // Kenar boşluğu (her iki taraf için aynı değişken)
   const edgePadding = 'px-1 sm:px-1 md:px-1'; // Buradan ayar çekebilirsiniz
   // Balon padding (her iki taraf için aynı değişken)
-  const balloonPadding = 'px-3.5 py-2.5'; // Buradan ayar çekebilirsiniz
+  const balloonPadding = 'px-4 py-2.5'; // Slightly larger padding for more pill-like bubbles
 
   // Mesajlar arası mesafe için değişken
   const messageSpacing = 'mb-0.5 md:mb-0.5'; // Buradan ayar çekebilirsiniz
@@ -486,7 +486,8 @@ export const ChatMessageItem = ({
               <div
                 className={cn(
                   balloonPadding,
-                  'w-fit rounded-2xl border text-sm break-words whitespace-pre-wrap shadow-sm',
+                  // More oval edges for chat bubbles
+                  'w-fit rounded-[18px] border text-sm break-words whitespace-pre-wrap shadow-sm md:rounded-[22px]',
                   'bg-card text-foreground border-border/50'
                 )}
               >

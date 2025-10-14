@@ -1,0 +1,1 @@
+This component was intentionally removed from dashboards. Document requests and uploads now live in the Shipment page under the Docs tab (shipment-scoped). If you need a global dashboard view later, restore `docs-request-panel.tsx` and wire it back into `role-dashboards.tsx`.

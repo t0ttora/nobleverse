@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import { generateLabelToken, hmacLabelToken } from '@/lib/shipment-label';
 
-export async function POST(_req: Request, context: any) {
-  const { params } = context || {};
+type RouteContext = { params: Promise<{ id: string }> };
+export async function POST(_req: Request, context: RouteContext | any) {
+  const { id } = await (context as RouteContext).params;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -11,7 +12,7 @@ export async function POST(_req: Request, context: any) {
   const { data: shipment, error } = await supabase
     .from('shipments')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .maybeSingle();
   if (error || !shipment)
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });

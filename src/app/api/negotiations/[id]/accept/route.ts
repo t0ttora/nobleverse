@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 
 // Accept a negotiation: create shipment, mark negotiation accepted, reject others, convert request
-// NOTE: Loosen the param typing to sidestep Next.js 15 route generic constraint issue during build.
-// The runtime shape we rely on is params.id (string).
-type RouteContext = { params: { id: string } };
+// Next.js 15 dynamic route params are async – await before use
+type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(_req: Request, context: RouteContext | any) {
-  const { params } = context as RouteContext;
+  const { id } = await (context as RouteContext).params;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -15,7 +14,7 @@ export async function POST(_req: Request, context: RouteContext | any) {
   const { data: negotiation, error: negErr } = await supabase
     .from('negotiations')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .maybeSingle();
   if (negErr || !negotiation)
     return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });

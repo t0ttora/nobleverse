@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/server';
 import crypto from 'crypto';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 // POST -> create share link, DELETE -> revoke all
 export async function POST(_req: Request, context: RouteContext | any) {
-  const { params } = context as RouteContext;
+  const { id } = await (context as RouteContext).params;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
@@ -16,7 +16,7 @@ export async function POST(_req: Request, context: RouteContext | any) {
   const { data: s } = await supabase
     .from('shipments')
     .select('id, code')
-    .eq('id', params.id)
+    .eq('id', id)
     .maybeSingle();
   if (!s) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
@@ -35,16 +35,13 @@ export async function POST(_req: Request, context: RouteContext | any) {
 }
 
 export async function DELETE(_req: Request, context: RouteContext | any) {
-  const { params } = context as RouteContext;
+  const { id } = await (context as RouteContext).params;
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  await supabase
-    .from('shipment_share_tokens')
-    .delete()
-    .eq('shipment_id', params.id);
+  await supabase.from('shipment_share_tokens').delete().eq('shipment_id', id);
   return NextResponse.json({ ok: true });
 }
 

@@ -1,5 +1,6 @@
 'use client';
 import { ShipmentHeader, MilestonesPanel, EscrowPanel } from './';
+import { DocumentsTab } from './tabs';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -462,23 +463,7 @@ function TrackingTab({ shipment }: { shipment: any }) {
   );
 }
 
-function DocumentsTab({ shipment }: { shipment: any }) {
-  return (
-    <div className='space-y-4'>
-      <div className='flex items-center justify-between'>
-        <h3 className='text-sm font-medium'>Documents</h3>
-        <Button size='sm' variant='outline'>
-          Upload
-        </Button>
-      </div>
-      <Card>
-        <CardContent className='text-muted-foreground p-4 text-xs'>
-          No documents yet.
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+// DocumentsTab is now imported from './tabs/documents-tab'
 
 function FinancialTab({
   shipment,
