@@ -72,23 +72,24 @@ export function CreateRequestDropdown({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end'>
-          {FREIGHT_TYPES.map((freight) => (
-            <DropdownMenuItem
-              key={freight.type}
-              onClick={() => handleOpenDrawer(freight.type)}
-            >
-              <span className='flex items-center gap-2'>
-                <span className='bg-muted text-muted-foreground flex h-5 w-5 items-center justify-center rounded-full'>
-                  {Icons[freight.icon] &&
-                    React.createElement(Icons[freight.icon], {
-                      size: 16,
-                      stroke: 1.7
-                    })}
+          {FREIGHT_TYPES.map((freight) => {
+            const IconCmp = Icons[freight.icon] as
+              | React.ComponentType<any>
+              | undefined;
+            return (
+              <DropdownMenuItem
+                key={freight.type}
+                onClick={() => handleOpenDrawer(freight.type)}
+              >
+                <span className='flex items-center gap-2'>
+                  <span className='bg-muted text-muted-foreground flex h-5 w-5 items-center justify-center rounded-full'>
+                    {IconCmp ? <IconCmp size={16} className='' /> : null}
+                  </span>
+                  {freight.label}
                 </span>
-                {freight.label}
-              </span>
-            </DropdownMenuItem>
-          ))}
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
       <SidePanel
@@ -97,11 +98,12 @@ export function CreateRequestDropdown({
           drawerType && selectedFreight ? (
             <span className='flex items-center gap-2'>
               <span className='bg-muted text-muted-foreground flex h-6 w-6 items-center justify-center rounded-full'>
-                {Icons[selectedFreight.icon] &&
-                  React.createElement(Icons[selectedFreight.icon], {
-                    size: 18,
-                    stroke: 1.7
-                  })}
+                {(() => {
+                  const IconCmp = Icons[selectedFreight.icon] as
+                    | React.ComponentType<any>
+                    | undefined;
+                  return IconCmp ? <IconCmp size={18} className='' /> : null;
+                })()}
               </span>
               <span>{selectedFreight.label} Request</span>
             </span>

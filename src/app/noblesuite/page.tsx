@@ -1,5 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTabs } from '@/components/layout/tabs-context';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -53,6 +54,7 @@ const OFFICE_EXTS = new Set([
 ]);
 
 export default function NobleSuiteHomePage() {
+  const { openTab } = useTabs();
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -457,7 +459,13 @@ export default function NobleSuiteHomePage() {
       <div className='mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3'>
         <button
           className='group hover:ring-offset-background relative overflow-hidden rounded-xl border p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 hover:ring-1 hover:ring-emerald-400/40 hover:ring-offset-1 dark:hover:bg-emerald-950/25 dark:hover:ring-emerald-300/40'
-          onClick={() => alert('NobleCells (Excel) is coming soon.')}
+          onClick={() => {
+            openTab({
+              kind: 'cells',
+              title: 'Untitled Cells',
+              icon: Icons.sheet
+            });
+          }}
         >
           {/* Decorative Excel-like corner (no clipping; expands on hover) */}
           <div className='pointer-events-none absolute -top-2 -right-2 h-20 w-24 opacity-60 transition-all duration-300 [mask-image:linear-gradient(to_left,black,transparent)] group-hover:opacity-90'>
@@ -483,7 +491,9 @@ export default function NobleSuiteHomePage() {
         </button>
         <button
           className='group hover:ring-offset-background relative overflow-hidden rounded-xl border p-4 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 hover:ring-1 hover:ring-indigo-400/40 hover:ring-offset-1 dark:hover:bg-indigo-950/25 dark:hover:ring-indigo-300/40'
-          onClick={() => alert('NobleDocs (Word) is coming soon.')}
+          onClick={() => {
+            openTab({ kind: 'docs', title: 'Untitled Doc', icon: Icons.doc });
+          }}
         >
           {/* Decorative Word-like corner (hover flare) */}
           <div className='pointer-events-none absolute -top-2 -right-2 h-20 w-24 opacity-60 transition-all duration-300 [mask-image:linear-gradient(to_left,black,transparent)] group-hover:opacity-90'>

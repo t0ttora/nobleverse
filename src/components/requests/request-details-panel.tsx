@@ -363,7 +363,7 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
     const iconKey = map[abbr] || 'box';
     const IconComp = Icons[iconKey];
     return IconComp ? (
-      <IconComp size={16} stroke={1.7} className='text-primary mr-1' />
+      <IconComp size={16} className='text-primary mr-1' />
     ) : null;
   })();
 

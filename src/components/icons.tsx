@@ -65,6 +65,12 @@ import {
   IconTable,
   IconApps
 } from '@tabler/icons-react';
+import {
+  IconLayoutColumns,
+  IconHomeFilled,
+  IconColumns2
+} from '@tabler/icons-react';
+import { House } from 'lucide-react';
 
 export type Icon = React.ComponentType<IconProps>;
 
@@ -136,5 +142,13 @@ export const Icons = {
   calendar: IconCalendar,
   // Extras
   sheet: IconTable,
-  apps: IconApps
+  apps: IconApps,
+  layoutSplit: IconColumns2,
+  home: House,
+  homeFilled: IconHomeFilled
+};
+
+// Extras (additional names not grouped above)
+export const ExtraIcons = {
+  layoutSplit: IconLayoutColumns
 };

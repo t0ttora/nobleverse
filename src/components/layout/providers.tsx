@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { ActiveThemeProvider } from '../navigation/active-theme';
+import { TabsProvider } from './tabs-context';
 
 export default function Providers({
   activeThemeValue,
@@ -11,7 +12,7 @@ export default function Providers({
 }) {
   return (
     <ActiveThemeProvider initialTheme={activeThemeValue}>
-      {children}
+      <TabsProvider>{children}</TabsProvider>
     </ActiveThemeProvider>
   );
 }

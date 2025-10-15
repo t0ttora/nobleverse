@@ -43,8 +43,11 @@ import {
 } from '@/components/ui/select';
 import type { FreightFormType } from '@/lib/freight-form-schema';
 import { HistoryNavButtons } from './history-nav-buttons';
+import TabsBar, { ColoredIcon } from './tabs-bar';
+import { useTabs } from './tabs-context';
 
 function HeaderContent() {
+  const { activateNone, activeTabId, openTab } = useTabs();
   const [search, setSearch] = React.useState('');
   const [viewMode, setViewMode] = React.useState<'table' | 'grid'>('grid');
   const [currentUserId, setCurrentUserId] = React.useState<string>('');
@@ -77,47 +80,118 @@ function HeaderContent() {
             <SidebarTrigger />
           </div>
           {/* Desktop: history navigation */}
-          <div className='hidden items-center gap-1 md:flex'>
+          <div className='hidden items-center gap-2 md:flex'>
             <HistoryNavButtons />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  aria-label='New'
-                  className='text-muted-foreground hover:text-foreground ml-2 h-7 w-7 rounded-sm'
+            {/* Home button to exit tab view */}
+            <div className='relative -mr-2 flex items-center gap-1'>
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                aria-label='Home'
+                onClick={() => activateNone()}
+                className='text-muted-foreground hover:text-foreground data-[active=true]:bg-muted/60 data-[active=true]:ring-border data-[active=true]:text-foreground h-7 w-7 rounded-sm data-[active=true]:ring-1'
+                data-active={String(activeTabId === null)}
+              >
+                <Icons.home size={16} />
+              </Button>
+            </div>
+            <div className='bg-border/80 mx-2 h-5 w-px' />
+            {/* Tabs + New grouped for tighter inner spacing */}
+            <div className='-ml-2 flex items-center gap-1'>
+              <TabsBar className='ml-0' />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    aria-label='New'
+                    className='text-muted-foreground hover:text-foreground h-7 w-7 rounded-sm'
+                  >
+                    <Icons.add size={16} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align='start'
+                  side='bottom'
+                  className='w-52'
                 >
-                  <Icons.add size={16} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align='start' side='bottom' className='w-44'>
-                <DropdownMenuItem disabled>
-                  <Icons.fileDescription size={14} className='mr-2' /> Item 1
-                  <span className='text-muted-foreground ml-auto text-xs'>
-                    Dev
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Icons.grid size={14} className='mr-2' /> Item 2
-                  <span className='text-muted-foreground ml-auto text-xs'>
-                    Dev
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Icons.folder size={14} className='mr-2' /> Item 3
-                  <span className='text-muted-foreground ml-auto text-xs'>
-                    Dev
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Icons.robot size={14} className='mr-2' /> Item 4
-                  <span className='text-muted-foreground ml-auto text-xs'>
-                    Dev
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      openTab({
+                        kind: 'cells',
+                        title: 'Untitled Cells',
+                        icon: Icons.sheet
+                      });
+                    }}
+                    className='flex items-center gap-2'
+                  >
+                    <ColoredIcon
+                      icon={Icons.sheet}
+                      kind='cells'
+                      className='size-4'
+                    />
+                    <span>New Cells</span>
+                    <span className='text-muted-foreground ml-auto text-xs'>
+                      C
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      openTab({
+                        kind: 'docs',
+                        title: 'Untitled Doc',
+                        icon: Icons.doc
+                      });
+                    }}
+                    className='flex items-center gap-2'
+                  >
+                    <ColoredIcon
+                      icon={Icons.doc}
+                      kind='docs'
+                      className='size-4'
+                    />
+                    <span>New Document</span>
+                    <span className='text-muted-foreground ml-auto text-xs'>
+                      D
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className='text-muted-foreground text-xs font-medium'>
+                    More
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className='flex items-center gap-2'
+                    disabled
+                  >
+                    <Icons.layoutSplit className='text-foreground/80 size-4' />
+                    <span>Open in Split View</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled
+                    className='flex items-center gap-2'
+                  >
+                    <Icons.apps className='text-foreground/80 size-4' />
+                    <span>Browse Templates</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled
+                    className='flex items-center gap-2'
+                  >
+                    <Icons.folder className='text-foreground/80 size-4' />
+                    <span>New Folder</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled
+                    className='flex items-center gap-2'
+                  >
+                    <Icons.download className='text-foreground/80 size-4' />
+                    <span>Import…</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
         <div className='flex items-center gap-2'>

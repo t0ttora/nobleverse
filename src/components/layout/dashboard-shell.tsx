@@ -3,6 +3,9 @@
 import KBar from '@/components/kbar';
 import AppSidebar from '@/components/layout/app-sidebar';
 import Header from '@/components/layout/header';
+import TabContentHost from '@/components/layout/tab-content-host';
+import SplitView from '@/components/layout/split-view';
+import { useTabs } from '@/components/layout/tabs-context';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import React, { useEffect, useState } from 'react';
 import OnboardingModal from '@/components/modal/OnboardingModal';
@@ -15,6 +18,7 @@ export default function DashboardShell({
 }: {
   children: React.ReactNode;
 }) {
+  const { activeTabId, split, splitRatio, setSplitRatio } = useTabs();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [checked, setChecked] = useState(false);
   const pathname = usePathname();
@@ -91,8 +95,22 @@ export default function DashboardShell({
         <SidebarInset className='flex h-screen max-h-screen flex-col'>
           <Header />
           <div className='bg-sidebar flex h-full min-h-0 w-full flex-1 flex-col'>
-            <div className='bg-background ring-border/40 border-border/40 dark:ring-border/60 dark:border-border/60 flex-1 overflow-auto border ring-1 md:rounded-tl-2xl'>
-              {children}
+            <div className='bg-background ring-border/40 border-border/40 dark:ring-border/60 dark:border-border/60 relative flex-1 overflow-auto border ring-1 md:rounded-tl-2xl'>
+              {activeTabId ? (
+                split ? (
+                  <SplitView
+                    className='bg-sidebar'
+                    ratio={splitRatio}
+                    onRatioChange={setSplitRatio}
+                    left={<TabContentHost className='h-full' />}
+                    right={<TabContentHost className='h-full' />}
+                  />
+                ) : (
+                  <TabContentHost className='h-full' />
+                )
+              ) : (
+                children
+              )}
             </div>
           </div>
           {/* Hide Floating Action Button on Inbox page */}
