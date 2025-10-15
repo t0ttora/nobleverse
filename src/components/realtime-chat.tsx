@@ -7,44 +7,14 @@ import { useChatScroll } from '@/hooks/use-chat-scroll';
 import { type ChatMessage, useRealtimeChat } from '@/hooks/use-realtime-chat';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Bold,
-  Code,
-  Italic,
-  List,
-  Paperclip,
-  Plus,
-  Quote,
-  Send,
-  Smile,
-  X,
-  Package,
-  Handshake,
-  ReceiptText,
-  Wallet,
-  ClipboardCheck,
-  CheckSquare,
-  StickyNote,
-  LayoutGrid,
-  Folder
-} from 'lucide-react';
+import { Paperclip, Send, Smile, X } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger
 } from '@/components/ui/popover';
 import EmojiPicker from '@/components/ui/emoji-picker';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+// Dropdown menu removed from composer toolbar
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CardBuilderDialog from '@/components/chat-cards/card-builder-dialog';
@@ -1210,228 +1180,9 @@ export const RealtimeChat = ({
 
         {/* Unified composer capsule */}
         <div className='flex flex-col gap-1'>
-          {/* Toolbar */}
-          <div className='text-muted-foreground flex items-center gap-1 px-2 text-[11px] md:text-xs'>
-            <ToolbarBtn
-              title='Bold'
-              onClick={() => surroundSelection('**', '**')}
-            >
-              <Bold className='size-4' />
-            </ToolbarBtn>
-            <ToolbarBtn
-              title='Italic'
-              onClick={() => surroundSelection('*', '*')}
-            >
-              <Italic className='size-4' />
-            </ToolbarBtn>
-            <ToolbarBtn
-              title='Inline code'
-              onClick={() => surroundSelection('`', '`')}
-            >
-              <Code className='size-4' />
-            </ToolbarBtn>
-            <ToolbarBtn title='Quote' onClick={() => prependLine('> ')}>
-              <Quote className='size-4' />
-            </ToolbarBtn>
-            <ToolbarBtn title='List' onClick={() => prependLine('- ')}>
-              <List className='size-4' />
-            </ToolbarBtn>
-            {/* Separator between formatting and insert */}
-            <div className='bg-border mx-1 h-4 w-px' />
-            {/* Attach files (paperclip) just left of plus dropdown */}
-            <button
-              type='button'
-              onClick={() => fileInputRef.current?.click()}
-              className='bg-background hover:bg-accent/60 inline-flex h-8 w-8 items-center justify-center rounded-md border transition'
-              aria-label='Attach files'
-              title='Attach files'
-            >
-              <Paperclip className='size-4' />
-            </button>
-            {/* Insert Card dropdown (grouped) */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type='button'
-                  title='Insert card'
-                  className='inline-flex items-center rounded-md p-1.5 shadow-sm transition-shadow hover:shadow'
-                  style={{
-                    backgroundColor: 'rgba(255, 90, 38, 0.2)',
-                    color: '#ff5a26'
-                  }}
-                >
-                  <Plus className='size-4' />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align='start' className='w-64'>
-                {/* Shipment Cards group: include Shipment, Request, Negotiation */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <div className='flex items-start gap-2'>
-                      <Package className='mt-0.5 size-4' />
-                      <div className='-mt-0.5 flex flex-col'>
-                        <span>Shipment Cards</span>
-                        <span className='text-muted-foreground text-[11px]'>
-                          Plan, request & negotiate
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('shipment_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <Package className='mr-2 size-4' /> Shipment
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('request_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <ReceiptText className='mr-2 size-4' /> Request
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('negotiation_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <Handshake className='mr-2 size-4' /> Negotiation
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                <DropdownMenuSeparator />
-
-                {/* Payment Cards */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <div className='flex items-start gap-2'>
-                      <Wallet className='mt-0.5 size-4' />
-                      <div className='-mt-0.5 flex flex-col'>
-                        <span>Payment Cards</span>
-                        <span className='text-muted-foreground text-[11px]'>
-                          Invoices & payment status
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('invoice_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <ReceiptText className='mr-2 size-4' /> Invoice
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('payment_status_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <Wallet className='mr-2 size-4' /> Payment Status
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                {/* Suite Cards */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <div className='flex items-start gap-2'>
-                      <LayoutGrid className='mt-0.5 size-4' />
-                      <div className='-mt-0.5 flex flex-col'>
-                        <span>Suite Cards</span>
-                        <span className='text-muted-foreground text-[11px]'>
-                          Share from NobleFiles
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setSuiteDialogOpen(true);
-                      }}
-                    >
-                      <Folder className='mr-2 size-4' /> Files
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                {/* Task & Approval Cards */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <div className='flex items-start gap-2'>
-                      <ClipboardCheck className='mt-0.5 size-4' />
-                      <div className='-mt-0.5 flex flex-col'>
-                        <span>Task & Approval Cards</span>
-                        <span className='text-muted-foreground text-[11px]'>
-                          Assign work or request sign-off
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('task_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <CheckSquare className='mr-2 size-4' /> Task
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('approval_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <ClipboardCheck className='mr-2 size-4' /> Approval
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                <DropdownMenuSeparator />
-
-                {/* Note Cards */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <div className='flex items-start gap-2'>
-                      <StickyNote className='mt-0.5 size-4' />
-                      <div className='-mt-0.5 flex flex-col'>
-                        <span>Note Cards</span>
-                        <span className='text-muted-foreground text-[11px]'>
-                          Quick annotations
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPendingInsertType('note_card');
-                        setCardBuilderOpen(true);
-                      }}
-                    >
-                      <StickyNote className='mr-2 size-4' /> Note
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <div className='text-muted-foreground ml-auto text-[10px] md:text-xs'>
-              Ctrl+Enter
-            </div>
-          </div>
           <div
             className={cn(
-              'bg-background flex items-end gap-1.5 rounded-xl px-2 py-1.5 shadow-sm',
+              'bg-background flex items-end gap-1.5 rounded-2xl px-2.5 py-2 shadow-sm',
               dragging ? 'ring-primary/60 ring-2' : 'border-border/60 border'
             )}
           >
@@ -1447,6 +1198,14 @@ export const RealtimeChat = ({
                 detectSuggest();
               }}
               onKeyDown={(e) => {
+                // Avoid sending while input method editor (IME) is composing
+                // e.g., Turkish, Japanese, Chinese input
+                if (
+                  (e as any).isComposing ||
+                  (e as any).nativeEvent?.isComposing
+                ) {
+                  return;
+                }
                 if (suggestOpen) {
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -1475,9 +1234,11 @@ export const RealtimeChat = ({
                 if (e.key === '@' || e.key === '#') {
                   requestAnimationFrame(() => detectSuggest());
                 }
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                // Enter to send; Shift+Enter for newline
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   void handleSendMessage(e as unknown as React.FormEvent);
+                  return;
                 }
               }}
               placeholder={
@@ -1496,6 +1257,7 @@ export const RealtimeChat = ({
               onInput={() => detectSuggest()}
             />
 
+            {/* Keep emoji optional; removing extra toolbar clutter */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -1638,62 +1400,7 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function ToolbarBtn({
-  children,
-  onClick,
-  title
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      type='button'
-      title={title}
-      onClick={onClick}
-      className='hover:bg-accent text-muted-foreground hover:text-foreground rounded p-1.5'
-    >
-      {children}
-    </button>
-  );
-}
-
-// Helpers
-function surroundSelection(prefix: string, suffix: string) {
-  const ta =
-    document.activeElement?.tagName === 'TEXTAREA'
-      ? (document.activeElement as HTMLTextAreaElement)
-      : (document.querySelector('textarea') as HTMLTextAreaElement | null);
-  if (!ta) return;
-  const start = ta.selectionStart ?? 0;
-  const end = ta.selectionEnd ?? 0;
-  const value = ta.value;
-  const before = value.slice(0, start);
-  const selected = value.slice(start, end) || 'text';
-  const after = value.slice(end);
-  const next = `${before}${prefix}${selected}${suffix}${after}`;
-  ta.value = next;
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
-  const pos = before.length + prefix.length + selected.length + suffix.length;
-  ta.setSelectionRange(pos, pos);
-}
-
-function prependLine(prefix: string) {
-  const ta =
-    document.activeElement?.tagName === 'TEXTAREA'
-      ? (document.activeElement as HTMLTextAreaElement)
-      : (document.querySelector('textarea') as HTMLTextAreaElement | null);
-  if (!ta) return;
-  const pos = ta.selectionStart ?? 0;
-  const value = ta.value;
-  const lineStart = value.lastIndexOf('\n', Math.max(0, pos - 1)) + 1;
-  const next = `${value.slice(0, lineStart)}${prefix}${value.slice(lineStart)}`;
-  ta.value = next;
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
-  const newPos = pos + prefix.length;
-  ta.setSelectionRange(newPos, newPos);
-}
+// Simplified composer: removed formatting toolbar helpers
 
 function insertAtCursorStrict(
   ref: React.RefObject<HTMLTextAreaElement | null>,

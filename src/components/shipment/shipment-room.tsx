@@ -1,6 +1,6 @@
 'use client';
 import { ShipmentHeader, MilestonesPanel, EscrowPanel } from './';
-import { DocumentsTab } from './tabs';
+import { DocumentsTab, TrackingTab } from './tabs';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/hover-card';
 import {
   IconFile,
-  IconMap,
   IconCash,
   IconFolder,
   IconBarcode,
@@ -198,7 +197,7 @@ export default function ShipmentRoom({
         )}
       >
         <div
-          className='bg-card/30 hidden flex-col overflow-hidden border-r backdrop-blur md:flex'
+          className='bg-card/30 hidden flex-col overflow-hidden rounded-l-2xl border-r shadow-sm backdrop-blur md:flex'
           style={{ width: leftWidth }}
         >
           <div className='flex h-full flex-col'>
@@ -250,7 +249,7 @@ export default function ShipmentRoom({
                 value='tracking'
                 className='flex-1 space-y-6 overflow-auto p-4'
               >
-                <TrackingTab shipment={shipment} />
+                <TrackingTab shipmentId={shipment.id} />
               </TabsContent>
               <TabsContent
                 value='docs'
@@ -330,7 +329,7 @@ export default function ShipmentRoom({
                   value='tracking'
                   className='flex-1 space-y-4 overflow-auto p-3'
                 >
-                  <TrackingTab shipment={shipment} />
+                  <TrackingTab shipmentId={shipment.id} />
                 </TabsContent>
                 <TabsContent
                   value='docs'
@@ -438,30 +437,7 @@ function OverviewTab({
   );
 }
 
-function TrackingTab({ shipment }: { shipment: any }) {
-  return (
-    <div className='space-y-4'>
-      <Card>
-        <CardHeader className='pb-2'>
-          <CardTitle className='flex items-center gap-2 text-sm'>
-            <IconMap className='h-4 w-4' /> Route Map
-          </CardTitle>
-        </CardHeader>
-        <CardContent className='text-muted-foreground flex h-52 items-center justify-center text-xs'>
-          Map widget TBD
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className='pb-2'>
-          <CardTitle className='text-sm'>Milestone Timeline</CardTitle>
-        </CardHeader>
-        <CardContent className='text-muted-foreground space-y-2 text-xs'>
-          Vertical timeline TBD
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+// TrackingTab UI is implemented in ./tabs/tracking-tab
 
 // DocumentsTab is now imported from './tabs/documents-tab'
 
