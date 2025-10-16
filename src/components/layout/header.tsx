@@ -162,13 +162,6 @@ function HeaderContent() {
                     More
                   </DropdownMenuLabel>
                   <DropdownMenuItem
-                    className='flex items-center gap-2'
-                    disabled
-                  >
-                    <Icons.layoutSplit className='text-foreground/80 size-4' />
-                    <span>Open in Split View</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
                     disabled
                     className='flex items-center gap-2'
                   >

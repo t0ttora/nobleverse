@@ -4,9 +4,16 @@ import { useTabs } from './tabs-context';
 import { cn } from '@/lib/utils';
 import { Icons, type Icon } from '@/components/icons';
 
-export default function TabContentHost({ className }: { className?: string }) {
+export default function TabContentHost({
+  className,
+  activeId
+}: {
+  className?: string;
+  activeId?: string | null;
+}) {
   const { tabs, activeTabId } = useTabs();
-  const active = tabs.find((t) => t.id === activeTabId);
+  const id = activeId ?? activeTabId;
+  const active = tabs.find((t) => t.id === id);
 
   if (!active) return null;
 
@@ -21,11 +28,11 @@ export default function TabContentHost({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'animate-in fade-in-0 zoom-in-95 flex h-full flex-col items-center justify-center p-6',
+        'animate-in fade-in-0 zoom-in-95 flex h-full min-h-0 flex-col overflow-auto',
         className
       )}
     >
-      <div className='mx-auto max-w-[720px] text-center'>
+      <div className='mx-auto my-auto max-w-[720px] p-6 text-center'>
         <div
           className={cn(
             'mb-3 inline-flex items-center justify-center',

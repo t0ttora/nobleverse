@@ -19,6 +19,8 @@ export default function TabsBar({ className }: { className?: string }) {
   const {
     tabs,
     activeTabId,
+    focusedPane,
+    rightActiveTabId,
     activateTab,
     closeTab,
     togglePin,
@@ -26,7 +28,10 @@ export default function TabsBar({ className }: { className?: string }) {
     collapseMode,
     collapseBar,
     collapseNone,
-    collapseOthers
+    collapseOthers,
+    split,
+    setSplit,
+    activateRightTab
   } = useTabs();
   const router = useRouter();
   const pathname = usePathname();
@@ -204,6 +209,7 @@ export default function TabsBar({ className }: { className?: string }) {
             >
               <Icons.chevronLeft className='size-4' />
             </button>
+            {/* Removed split view toggle */}
             <div className='bg-border/70 h-4 w-px' />
             {/* 2. Collapse others (only active expanded) */}
             <button
@@ -212,7 +218,7 @@ export default function TabsBar({ className }: { className?: string }) {
               className='text-muted-foreground hover:text-foreground inline-flex h-7 w-7 items-center justify-center rounded'
               onClick={collapseOthers}
             >
-              <Icons.layoutSplit className='size-4' />
+              <Icons.grid className='size-4' />
             </button>
             <div className='bg-border/70 h-4 w-px' />
             {/* 3. Expand all (reset) */}
@@ -255,6 +261,19 @@ export default function TabsBar({ className }: { className?: string }) {
             >
               <ColoredIcon icon={t.icon} kind={t.kind} className='size-4' />
               <span className='truncate'>{t.title}</span>
+              {split && (
+                <button
+                  type='button'
+                  className='hover:bg-muted ml-auto inline-flex h-5 w-5 items-center justify-center rounded'
+                  title='Open on right'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    activateRightTab(t.id);
+                  }}
+                >
+                  <Icons.layoutSplit className='size-3.5 opacity-80' />
+                </button>
+              )}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -330,19 +349,10 @@ const TabItem = React.memo(function TabItem({
             className='size-3.5 opacity-90'
           />
         </span>
-        {/* Hover split icon only visible on hover */}
-        <span className='hidden group-hover/tab:inline-flex'>
-          <Icons.layoutSplit className='size-3.5 opacity-80' />
-        </span>
-      </span>
-      {!collapsed && <span className='truncate'>{title}</span>}
-      {!collapsed && (
+        {/* Hover star icon (pin toggle) */}
         <button
-          className={cn(
-            'pointer-events-none ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100',
-            pinned ? 'text-foreground' : 'text-muted-foreground hover:bg-muted'
-          )}
-          aria-label={pinned ? 'Unpin tab' : 'Pin tab'}
+          type='button'
+          className='hidden group-hover/tab:inline-flex'
           title={pinned ? 'Unpin' : 'Pin'}
           onClick={(e) => {
             e.stopPropagation();
@@ -350,12 +360,14 @@ const TabItem = React.memo(function TabItem({
           }}
         >
           {pinned ? (
-            <Icons.starFilled className='size-3.5' />
+            <Icons.starFilled className='size-3.5 opacity-90' />
           ) : (
-            <Icons.star className='size-3.5' />
+            <Icons.star className='size-3.5 opacity-90' />
           )}
         </button>
-      )}
+      </span>
+      {!collapsed && <span className='truncate'>{title}</span>}
+      {/* Removed inline pin button to avoid duplicate star controls on hover */}
       <button
         className={cn(
           'hover:bg-muted inline-flex h-4 w-4 items-center justify-center rounded',

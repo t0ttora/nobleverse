@@ -22,9 +22,11 @@ export type AppTab = {
 type TabsContextValue = {
   tabs: AppTab[];
   activeTabId: string | null;
+  rightActiveTabId: string | null;
   openTab: (tab: Omit<AppTab, 'id'> & { id?: string }) => string; // returns id
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
+  activateRightTab: (id: string | null) => void;
   activateNone: () => void; // go Home (no active tab)
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
@@ -40,6 +42,9 @@ type TabsContextValue = {
   splitRatio: number; // 0.2 - 0.8
   setSplit: (v: boolean) => void;
   setSplitRatio: (r: number) => void;
+  // which pane is focused for tab highlighting
+  focusedPane: 'left' | 'right';
+  setFocusedPane: (p: 'left' | 'right') => void;
   // future: pin/unpin, move, split
 };
 
@@ -48,11 +53,13 @@ const TabsContext = createContext<TabsContextValue | null>(null);
 export function TabsProvider({ children }: { children: React.ReactNode }) {
   const [tabs, setTabs] = useState<AppTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [split, setSplit] = useState<boolean>(false);
+  const [rightActiveTabId, setRightActiveTabId] = useState<string | null>(null);
+  const [split, _setSplit] = useState<boolean>(false);
   const [splitRatio, setSplitRatio] = useState<number>(0.5);
   const [collapseMode, setCollapseMode] = useState<'none' | 'others' | 'bar'>(
     'none'
   );
+  const [focusedPane, setFocusedPane] = useState<'left' | 'right'>('left');
 
   // Load persisted tabs from profiles.ui_tabs
   useEffect(() => {
@@ -66,6 +73,10 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
         const payload = json?.ui_tabs as {
           tabs?: AppTab[];
           active?: string | null;
+          rightActive?: string | null;
+          split?: boolean;
+          splitRatio?: number;
+          collapseMode?: 'none' | 'others' | 'bar';
         } | null;
         if (payload && Array.isArray(payload.tabs)) {
           // Resolve icons from iconName
@@ -80,6 +91,13 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
           }));
           setTabs(resolved);
           setActiveTabId(payload.active ?? (payload.tabs[0]?.id || null));
+          setRightActiveTabId(payload.rightActive ?? null);
+          if (typeof payload.split === 'boolean') _setSplit(payload.split);
+          if (typeof payload.splitRatio === 'number')
+            setSplitRatio(
+              Math.min(0.8, Math.max(0.2, Number(payload.splitRatio) || 0.5))
+            );
+          if (payload.collapseMode) setCollapseMode(payload.collapseMode);
         }
       } catch {}
     }
@@ -107,6 +125,17 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
               if (ui_tabs && Array.isArray(ui_tabs.tabs)) {
                 setTabs(ui_tabs.tabs);
                 setActiveTabId(ui_tabs.active ?? (ui_tabs.tabs[0]?.id || null));
+                setRightActiveTabId(ui_tabs.rightActive ?? null);
+                if (typeof ui_tabs.split === 'boolean')
+                  _setSplit(ui_tabs.split);
+                if (typeof ui_tabs.splitRatio === 'number')
+                  setSplitRatio(
+                    Math.min(
+                      0.8,
+                      Math.max(0.2, Number(ui_tabs.splitRatio) || 0.5)
+                    )
+                  );
+                if (ui_tabs.collapseMode) setCollapseMode(ui_tabs.collapseMode);
               }
             }
           )
@@ -137,7 +166,14 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ui_tabs: { tabs: serializable, active: activeTabId }
+            ui_tabs: {
+              tabs: serializable,
+              active: activeTabId,
+              rightActive: rightActiveTabId,
+              split,
+              splitRatio,
+              collapseMode
+            }
           }),
           signal: controller.signal
         });
@@ -147,7 +183,14 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [JSON.stringify(tabs), activeTabId]);
+  }, [
+    JSON.stringify(tabs),
+    activeTabId,
+    rightActiveTabId,
+    split,
+    splitRatio,
+    collapseMode
+  ]);
 
   const openTab = useCallback((tab: Omit<AppTab, 'id'> & { id?: string }) => {
     const id =
@@ -159,13 +202,41 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       // if tab with same id exists, just activate
       const exists = prev.some((t) => t.id === id);
       if (exists) return prev;
+      // auto-number untitled cells/docs
+      let title = tab.title;
+      const baseTitle =
+        tab.kind === 'cells'
+          ? 'Untitled Cells'
+          : tab.kind === 'docs'
+            ? 'Untitled Doc'
+            : null;
+      if (baseTitle && title === baseTitle) {
+        // collect existing numbers for same base (unnumbered counts as 0)
+        const nums = prev
+          .filter(
+            (t) =>
+              t.kind === tab.kind &&
+              (t.title === baseTitle || t.title.startsWith(baseTitle + ' '))
+          )
+          .map((t) => {
+            const m = t.title.match(/^(.*?)(\s+(\d+))$/);
+            const n = m ? Number(m[3]) : t.title === baseTitle ? 0 : 0;
+            return Number.isFinite(n) ? n : 0;
+          });
+        if (nums.length === 0) {
+          // first one stays as baseTitle (implicit 0, not shown)
+        } else {
+          const nextNum = Math.max(...nums) + 1;
+          title = `${baseTitle} ${nextNum}`;
+        }
+      }
       // insert just before end to keep order; new tabs at end by default
       return [
         ...prev,
         {
           id,
           kind: tab.kind,
-          title: tab.title,
+          title,
           icon: tab.icon,
           pinned: tab.pinned
         }
@@ -187,12 +258,29 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
           next[Math.min(Math.max(0, idx - 1), next.length - 1)]?.id;
         return fallback || next.at(-1)?.id || null;
       });
+      // if closing right active, fallback to left active or neighbor
+      setRightActiveTabId((prevRight) => {
+        if (prevRight !== id) return prevRight;
+        // prefer the (new) active left tab
+        if (next.length === 0) return null;
+        const newLeft =
+          next[Math.min(Math.max(0, idx - 1), next.length - 1)]?.id ||
+          next.at(-1)?.id ||
+          null;
+        return newLeft;
+      });
       return next;
     });
   }, []);
 
   const activateTab = useCallback((id: string) => {
     setActiveTabId(id);
+    setFocusedPane('left');
+  }, []);
+
+  const activateRightTab = useCallback((id: string | null) => {
+    setRightActiveTabId(id);
+    if (id) setFocusedPane('right');
   }, []);
 
   const activateNone = useCallback(() => {
@@ -244,9 +332,11 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     () => ({
       tabs,
       activeTabId,
+      rightActiveTabId,
       openTab,
       closeTab,
       activateTab,
+      activateRightTab,
       activateNone,
       pinTab,
       unpinTab,
@@ -258,15 +348,31 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       collapseOthers,
       split,
       splitRatio,
-      setSplit,
-      setSplitRatio
+      setSplit: (v: boolean) => {
+        _setSplit(v);
+        if (v) {
+          // If Home (no active left tab), default to 60/40 split
+          if (!activeTabId) setSplitRatio(0.6);
+          // choose a default right tab different than left if possible
+          if (!rightActiveTabId) {
+            const right = tabs.find((t) => t.id !== activeTabId)?.id || null;
+            setRightActiveTabId(right);
+          }
+          setFocusedPane('left');
+        }
+      },
+      setSplitRatio,
+      focusedPane,
+      setFocusedPane
     }),
     [
       tabs,
       activeTabId,
+      rightActiveTabId,
       openTab,
       closeTab,
       activateTab,
+      activateRightTab,
       activateNone,
       pinTab,
       unpinTab,
@@ -277,7 +383,8 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       collapseNone,
       collapseOthers,
       split,
-      splitRatio
+      splitRatio,
+      focusedPane
     ]
   );
 
