@@ -107,8 +107,7 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
           Color.configure({ types: ['textStyle'] }),
           TextStyle,
           StarterKit.configure({
-            heading: { levels: [1, 2, 3] },
-            history: true
+            heading: { levels: [1, 2, 3] }
           }),
           Underline,
           Link.configure({
