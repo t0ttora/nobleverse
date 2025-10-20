@@ -47,6 +47,7 @@ const OFFICE_EXTS = new Set([
   'xls',
   'xlsx',
   'csv',
+  'cells',
   'doc',
   'docx',
   'ppt',
@@ -116,33 +117,67 @@ export default function NobleSuiteHomePage() {
     };
   }, []);
 
-  const openFile = useCallback(async (it: FileItem, forceDownload = false) => {
-    if (it.type === 'folder' || !it.storage_path) return;
-    try {
-      const { data: signed } = await supabase.storage
-        .from(FILES_BUCKET)
-        .createSignedUrl(it.storage_path, 300);
-      const url =
-        signed?.signedUrl ||
-        supabase.storage.from(FILES_BUCKET).getPublicUrl(it.storage_path).data
-          ?.publicUrl ||
-        '';
-      if (!url) throw new Error('FILE_URL_UNAVAILABLE');
-      if (forceDownload) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = it.name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
+  const openFile = useCallback(
+    async (it: FileItem, forceDownload = false) => {
+      if (it.type === 'folder' || !it.storage_path) return;
+      const ext = (it.ext || it.name.split('.').pop() || '').toLowerCase();
+      const isSheet =
+        ext === 'xls' || ext === 'xlsx' || ext === 'csv' || ext === 'cells';
+      // If it's a sheet and not forced to download, open in Cells tab
+      if (isSheet && !forceDownload) {
+        // If this is a native cells file, storage_path is cells:<sheetId>
+        let sheetId: string | null = null;
+        let importUrl: string | undefined;
+        if (it.storage_path?.startsWith('cells:')) {
+          sheetId = it.storage_path.slice('cells:'.length);
+        } else {
+          try {
+            const { data: signed } = await supabase.storage
+              .from(FILES_BUCKET)
+              .createSignedUrl(it.storage_path, 300);
+            importUrl = signed?.signedUrl || undefined;
+          } catch {}
+          if (!importUrl) {
+            // Robust fallback through API proxy
+            importUrl = `/api/noblesuite/files/preview?id=${encodeURIComponent(it.id)}`;
+          }
+        }
+        openTab({
+          kind: 'cells',
+          title: it.name.replace(/\.(xlsx|xls|csv|cells)$/i, ''),
+          icon: Icons.sheet,
+          // @ts-ignore: payload is supported
+          payload: { sheetId, fileName: it.name, importUrl }
+        });
+        return;
       }
-    } catch (e) {
-      console.error(e);
-      setError((e as any)?.message || 'OPEN_FAILED');
-    }
-  }, []);
+      try {
+        const { data: signed } = await supabase.storage
+          .from(FILES_BUCKET)
+          .createSignedUrl(it.storage_path, 300);
+        const url =
+          signed?.signedUrl ||
+          supabase.storage.from(FILES_BUCKET).getPublicUrl(it.storage_path).data
+            ?.publicUrl ||
+          '';
+        if (!url) throw new Error('FILE_URL_UNAVAILABLE');
+        if (forceDownload) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = it.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      } catch (e) {
+        console.error(e);
+        setError((e as any)?.message || 'OPEN_FAILED');
+      }
+    },
+    [openTab]
+  );
 
   // Load folders for Move popover (rooted at selected destination)
   useEffect(() => {
@@ -265,7 +300,7 @@ export default function NobleSuiteHomePage() {
       const ext = (it.ext || it.name.split('.').pop() || '').toLowerCase();
       if (
         filter === 'sheets' &&
-        !(ext === 'xls' || ext === 'xlsx' || ext === 'csv')
+        !(ext === 'xls' || ext === 'xlsx' || ext === 'csv' || ext === 'cells')
       )
         return false;
       if (
@@ -712,7 +747,11 @@ export default function NobleSuiteHomePage() {
               it.name.split('.').pop() ||
               ''
             ).toLowerCase();
-            const isSheet = ext === 'xls' || ext === 'xlsx' || ext === 'csv';
+            const isSheet =
+              ext === 'xls' ||
+              ext === 'xlsx' ||
+              ext === 'csv' ||
+              ext === 'cells';
             const selected = selectedIds.has(it.id);
             return (
               <ContextMenu key={it.id}>
@@ -963,7 +1002,11 @@ export default function NobleSuiteHomePage() {
                 it.name.split('.').pop() ||
                 ''
               ).toLowerCase();
-              const isSheet = ext === 'xls' || ext === 'xlsx' || ext === 'csv';
+              const isSheet =
+                ext === 'xls' ||
+                ext === 'xlsx' ||
+                ext === 'csv' ||
+                ext === 'cells';
               const selected = selectedIds.has(it.id);
               return (
                 <ContextMenu key={`row-${it.id}`}>

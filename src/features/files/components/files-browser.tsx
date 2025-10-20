@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import FileUploader from '@/components/file-uploader';
 import UploadDialog from '@/features/files/components/upload-dialog';
 import ShareDialog from '@/features/files/components/share-dialog';
+import { useTabs } from '@/components/layout/tabs-context';
 import { supabase } from '@/lib/supabaseClient';
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -95,6 +96,7 @@ function isUuid(s: string): boolean {
 }
 
 export default function FilesBrowser() {
+  const { openTab } = useTabs();
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -588,6 +590,64 @@ export default function FilesBrowser() {
   async function openFile(f: FileItem, forceDownload: boolean) {
     if (f.type === 'folder') return;
     if (!f.storage_path) return;
+    const ext = (f.ext || extension(f.name)).toLowerCase();
+    const isSheet = ['xls', 'xlsx', 'csv', 'cells'].includes(ext);
+    const isDoc = ['docs', 'docx', 'md', 'doc'].includes(ext);
+    if (isSheet && !forceDownload) {
+      let sheetId: string | null = null;
+      let importUrl: string | undefined;
+      if (f.storage_path.startsWith('cells:')) {
+        sheetId = f.storage_path.slice('cells:'.length);
+      } else {
+        try {
+          const { data: signed } = await supabase.storage
+            .from(FILES_BUCKET)
+            .createSignedUrl(f.storage_path, 300);
+          importUrl = signed?.signedUrl || undefined;
+        } catch {
+          importUrl = undefined;
+        }
+        // Prefer server proxy as robust fallback
+        if (!importUrl) {
+          importUrl = `/api/noblesuite/files/preview?id=${encodeURIComponent(f.id)}`;
+        }
+      }
+      openTab({
+        kind: 'cells',
+        title: baseName(f.name) || 'Untitled Cells',
+        icon: Icons.sheet,
+        // @ts-ignore payload supported at runtime
+        payload: { sheetId, fileName: f.name, importUrl }
+      });
+      return;
+    }
+    if (isDoc && !forceDownload) {
+      let docId: string | null = null;
+      let importUrl: string | undefined;
+      if (f.storage_path.startsWith('docs:')) {
+        docId = f.storage_path.slice('docs:'.length);
+      } else {
+        try {
+          const { data: signed } = await supabase.storage
+            .from(FILES_BUCKET)
+            .createSignedUrl(f.storage_path, 300);
+          importUrl = signed?.signedUrl || undefined;
+        } catch {
+          importUrl = undefined;
+        }
+        if (!importUrl) {
+          importUrl = `/api/noblesuite/files/preview?id=${encodeURIComponent(f.id)}`;
+        }
+      }
+      openTab({
+        kind: 'docs',
+        title: baseName(f.name) || 'Untitled Doc',
+        icon: Icons.doc,
+        // @ts-ignore payload at runtime
+        payload: { docId, fileName: f.name, importUrl }
+      });
+      return;
+    }
     try {
       const { data: signed } = await supabase.storage
         .from(FILES_BUCKET)

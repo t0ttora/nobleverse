@@ -3,6 +3,15 @@ import React from 'react';
 import { useTabs } from './tabs-context';
 import { cn } from '@/lib/utils';
 import { Icons, type Icon } from '@/components/icons';
+import dynamic from 'next/dynamic';
+
+// Lazy-load CellsEditor to keep bundle slim
+const CellsEditor = dynamic(() => import('@/features/cells/cells-editor'), {
+  ssr: false
+});
+const DocsEditor = dynamic(() => import('@/features/docs/docs-editor'), {
+  ssr: false
+});
 
 export default function TabContentHost({
   className,
@@ -24,6 +33,48 @@ export default function TabContentHost({
       : active.kind === 'docs'
         ? 'text-indigo-600 dark:text-indigo-400'
         : 'text-foreground/80';
+
+  // Special render for Cells tabs
+  if (active.kind === 'cells') {
+    const payload = (active as any).payload || {};
+    return (
+      <div
+        className={cn(
+          'flex h-full min-h-0 flex-col overflow-hidden',
+          className
+        )}
+      >
+        <CellsEditor
+          tabId={active.id}
+          sheetId={payload.sheetId || null}
+          title={active.title}
+          fileName={payload.fileName}
+          importUrl={payload.importUrl}
+        />
+      </div>
+    );
+  }
+
+  // Special render for Docs tabs
+  if (active.kind === 'docs') {
+    const payload = (active as any).payload || {};
+    return (
+      <div
+        className={cn(
+          'flex h-full min-h-0 flex-col overflow-hidden',
+          className
+        )}
+      >
+        <DocsEditor
+          tabId={active.id}
+          docId={payload.docId || null}
+          title={active.title}
+          fileName={payload.fileName}
+          importUrl={payload.importUrl}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

@@ -17,6 +17,8 @@ export type AppTab = {
   icon?: Icon;
   iconName?: 'sheet' | 'doc' | 'file';
   pinned?: boolean;
+  // Optional arbitrary payload for the tab content (e.g., sheetId, file info)
+  payload?: any;
 };
 
 type TabsContextValue = {
@@ -32,6 +34,8 @@ type TabsContextValue = {
   unpinTab: (id: string) => void;
   togglePin: (id: string) => void;
   reorderTab: (dragId: string, targetId: string) => void;
+  // update
+  updateTabTitle: (id: string, title: string) => void;
   // collapse modes for tabs display
   collapseMode: 'none' | 'others' | 'bar';
   collapseBar: () => void; // whole bar collapses to single icon trigger
@@ -238,7 +242,9 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
           kind: tab.kind,
           title,
           icon: tab.icon,
-          pinned: tab.pinned
+          pinned: tab.pinned,
+          // @ts-ignore allow arbitrary payload for tab content
+          payload: (tab as any).payload
         }
       ];
     });
@@ -324,6 +330,10 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const updateTabTitle = useCallback((id: string, title: string) => {
+    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+  }, []);
+
   const collapseBar = useCallback(() => setCollapseMode('bar'), []);
   const collapseNone = useCallback(() => setCollapseMode('none'), []);
   const collapseOthers = useCallback(() => setCollapseMode('others'), []);
@@ -342,6 +352,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       unpinTab,
       togglePin,
       reorderTab,
+      updateTabTitle,
       collapseMode,
       collapseBar,
       collapseNone,
@@ -379,6 +390,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       togglePin,
       reorderTab,
       collapseMode,
+      updateTabTitle,
       collapseBar,
       collapseNone,
       collapseOthers,
