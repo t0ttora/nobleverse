@@ -70,7 +70,7 @@ import {
   IconHomeFilled,
   IconColumns2
 } from '@tabler/icons-react';
-import { House } from 'lucide-react';
+import { House, History } from 'lucide-react';
 
 export type Icon = React.ComponentType<IconProps>;
 
@@ -127,6 +127,7 @@ export const Icons = {
   star: IconStar,
   starFilled: IconStarFilled,
   share: IconShare,
+  history: History,
   // File type specific
   video: IconVideo,
   audio: IconMusic,

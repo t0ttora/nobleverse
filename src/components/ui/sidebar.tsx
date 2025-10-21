@@ -96,6 +96,20 @@ function SidebarProvider({
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore when typing in inputs, textareas, selects or any contenteditable (e.g., Tiptap editor)
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName?.toLowerCase();
+        const inFormField =
+          tag === 'input' ||
+          tag === 'textarea' ||
+          tag === 'select' ||
+          !!target.closest('input, textarea, select, [role="textbox"]');
+        const inContentEditable = !!target.closest('[contenteditable="true"]');
+        if (inFormField || inContentEditable) {
+          return; // let editor/browser handle shortcuts like Ctrl+B
+        }
+      }
       if (
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
         (event.metaKey || event.ctrlKey)

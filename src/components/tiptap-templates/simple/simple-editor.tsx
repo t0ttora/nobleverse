@@ -3,58 +3,74 @@ import React, {
   forwardRef,
   useCallback,
   useImperativeHandle,
-  useRef
+  useMemo,
+  useRef,
+  useState,
+  useEffect
 } from 'react';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import TextAlign from '@tiptap/extension-text-align';
-import Highlight from '@tiptap/extension-highlight';
-import { TextStyle } from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
 import Placeholder from '@tiptap/extension-placeholder';
+import Heading from '@tiptap/extension-heading';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Table } from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { ResizableImage } from './extensions/resizable-image';
+// Page format is handled by PagesView UI; no editor extension needed
 import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 import {
-  IconBold,
-  IconItalic,
-  IconUnderline,
-  IconStrikethrough,
-  IconList,
-  IconListNumbers,
-  IconListCheck,
-  IconQuote,
-  IconAlignLeft,
-  IconAlignCenter,
-  IconAlignRight,
-  IconLetterT,
-  IconPhoto,
-  IconLink,
-  IconUnlink,
-  IconHistory,
-  IconHistoryToggle
-} from '@tabler/icons-react';
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabaseClient';
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Code as CodeIcon,
+  Heading1,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListChecks,
+  ListOrdered,
+  Quote,
+  Redo2,
+  Strikethrough,
+  Underline as UnderlineIcon,
+  Undo2,
+  Table as TableIcon
+} from 'lucide-react';
 
 export type SimpleEditorHandle = {
   setContent: (html: string) => void;
   insertHTML: (html: string) => void;
   getHTML: () => string;
   getText: () => string;
-  getEditor: () => Editor | null;
+  getEditor: () => ReturnType<typeof useEditor> | null;
 };
 
 export type SimpleEditorProps = {
@@ -62,339 +78,564 @@ export type SimpleEditorProps = {
   initialHtml?: string;
   placeholder?: string;
   onChange?: (html: string) => void;
-  onImageUpload?: (file: File) => Promise<string> | string; // returns URL
+  onImageUpload?: (file: File) => Promise<string> | string;
+  contentMaxWidthClass?: string; // tailwind max-w-* class to constrain content; toolbar remains full width
 };
 
-const headings = [
-  {
-    label: 'Paragraph',
-    action: (e: Editor) => e.chain().focus().setParagraph().run(),
-    isActive: (e: Editor) => e.isActive('paragraph')
-  },
-  {
-    label: 'Heading 1',
-    action: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run(),
-    isActive: (e: Editor) => e.isActive('heading', { level: 1 })
-  },
-  {
-    label: 'Heading 2',
-    action: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run(),
-    isActive: (e: Editor) => e.isActive('heading', { level: 2 })
-  },
-  {
-    label: 'Heading 3',
-    action: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run(),
-    isActive: (e: Editor) => e.isActive('heading', { level: 3 })
-  }
-];
+const DEFAULT_PLACEHOLDER = 'Start typing, use the toolbar for formatting…';
 
 export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
-  function SimpleEditor(
-    {
+  function SimpleEditor(props, ref) {
+    const {
       className,
       initialHtml,
-      placeholder = 'Start typing…',
+      placeholder = DEFAULT_PLACEHOLDER,
       onChange,
-      onImageUpload
-    }: SimpleEditorProps,
-    ref
-  ) {
-    const fileInputRef = useRef<HTMLInputElement>(null);
+      onImageUpload,
+      contentMaxWidthClass = 'max-w-3xl'
+    } = props;
 
-    const editor = useEditor(
-      {
-        extensions: [
-          Color.configure({ types: ['textStyle'] }),
-          TextStyle,
-          StarterKit.configure({
-            heading: { levels: [1, 2, 3] }
-          }),
-          Underline,
-          Link.configure({
-            openOnClick: true,
-            autolink: true,
-            linkOnPaste: true
-          }),
-          Image.configure({ allowBase64: true }),
-          TextAlign.configure({ types: ['heading', 'paragraph'] }),
-          Highlight,
-          TaskList,
-          TaskItem.configure({ nested: true }),
-          Table.configure({ resizable: true }),
-          TableRow,
-          TableHeader,
-          TableCell,
-          Placeholder.configure({ placeholder })
-        ],
-        content: initialHtml || '<p></p>',
-        editorProps: {
-          attributes: {
-            class: 'min-h-[640px] outline-none prose dark:prose-invert'
-          }
-        },
-        onUpdate: ({ editor }) => {
-          onChange?.(editor.getHTML());
-        },
-        immediatelyRender: false
+    const [linkOpen, setLinkOpen] = useState(false);
+    const [linkUrl, setLinkUrl] = useState('');
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const [_, setForceFlag] = useState(0);
+
+    const editor = useEditor({
+      extensions: [
+        Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+        StarterKit.configure({
+          heading: false
+        }),
+        Underline,
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          protocols: ['http', 'https', 'mailto']
+        }),
+        // Use resizable image node view (falls back if NodeView not available)
+        (ResizableImage || Image).configure({ inline: false }),
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        Table.configure({
+          resizable: true,
+          lastColumnResizable: true,
+          allowTableNodeSelection: true
+        }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        TextAlign.configure({ types: ['heading', 'paragraph'] }),
+        Placeholder.configure({ placeholder })
+      ],
+      content: initialHtml || '<p></p>',
+      // Prevent SSR/hydration mismatches per Tiptap guidance in SSR frameworks
+      immediatelyRender: false,
+      autofocus: 'start',
+      editorProps: {
+        attributes: {
+          class:
+            'prose dark:prose-invert prose-sm sm:prose-base focus:outline-none max-w-none'
+        }
       },
-      [initialHtml, placeholder]
-    );
+      onUpdate({ editor }) {
+        onChange?.(editor.getHTML());
+      }
+    });
+
+    // Force re-render on editor updates/transactions so toolbar active states update immediately
+    useEffect(() => {
+      if (!editor) return;
+      const rerender = () => setForceFlag((v) => v + 1);
+      editor.on('selectionUpdate', rerender);
+      editor.on('transaction', rerender);
+      editor.on('update', rerender);
+      return () => {
+        editor.off('selectionUpdate', rerender);
+        editor.off('transaction', rerender);
+        editor.off('update', rerender);
+      };
+    }, [editor, setForceFlag]);
 
     useImperativeHandle(
       ref,
       (): SimpleEditorHandle => ({
-        setContent: (html: string) =>
-          editor?.commands.setContent(html || '<p></p>') ?? undefined,
+        setContent: (html: string) => editor?.commands.setContent(html ?? ''),
         insertHTML: (html: string) =>
-          editor?.commands.insertContent(html) ?? undefined,
-        getHTML: () => editor?.getHTML() || '',
-        getText: () => editor?.getText() || '',
-        getEditor: () => editor ?? null
+          editor?.commands.insertContent(html ?? ''),
+        getHTML: () => editor?.getHTML() ?? '',
+        getText: () => editor?.getText() ?? '',
+        getEditor: () => editor
       }),
       [editor]
     );
 
-    const insertImage = useCallback(
-      async (file: File) => {
+    const setLink = useCallback(() => {
+      if (!editor) return;
+      // Empty -> unset link
+      if (!linkUrl) {
+        editor.chain().focus().extendMarkRange('link').unsetLink().run();
+        setLinkOpen(false);
+        return;
+      }
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange('link')
+        .setLink({ href: linkUrl, target: '_blank' })
+        .run();
+      setLinkOpen(false);
+    }, [editor, linkUrl]);
+
+    const triggerImageSelect = useCallback(() => {
+      fileInputRef.current?.click();
+    }, []);
+
+    const handleFileChange = useCallback(
+      async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !editor) return;
         try {
-          const res = onImageUpload ? await onImageUpload(file) : '';
-          const url = typeof res === 'string' ? res : '';
-          if (url)
-            editor
-              ?.chain()
-              .focus()
-              .setImage({ src: url, alt: file.name })
-              .run();
-        } catch {}
+          let url: string;
+          if (onImageUpload) {
+            const res = await onImageUpload(file);
+            url = typeof res === 'string' ? res : String(res);
+          } else {
+            // Default: upload to Supabase Storage 'noblefiles' (or env files bucket)
+            const FILES_BUCKET =
+              process.env.NEXT_PUBLIC_FILES_BUCKET || 'noblefiles';
+            const ext = file.name.split('.').pop() || 'png';
+            const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const path = `docs-assets/public/${fileName}`;
+            const { error: upErr } = await supabase.storage
+              .from(FILES_BUCKET)
+              .upload(path, file, { contentType: file.type, upsert: true });
+            if (upErr) {
+              // Fallback: inline Data URL to avoid bucket errors
+              url = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(upErr);
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.readAsDataURL(file);
+              });
+            } else {
+              const { data } = supabase.storage
+                .from(FILES_BUCKET)
+                .getPublicUrl(path);
+              url = data.publicUrl;
+            }
+          }
+          editor.chain().focus().setImage({ src: url, alt: '' }).run();
+        } catch (err) {
+          console.error('Image upload failed:', err);
+        } finally {
+          // Reset input so onChange triggers for the same file name
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
       },
       [editor, onImageUpload]
     );
 
-    const onChooseImage = () => fileInputRef.current?.click();
+    const isActive = useCallback(
+      (name: string, attrs?: any) =>
+        editor?.isActive(name as any, attrs) ?? false,
+      [editor]
+    );
 
-    if (!editor) return null;
+    const can = useMemo(() => editor?.can() ?? null, [editor]);
 
     return (
-      <div className={cn('flex h-full min-h-0 flex-col', className)}>
-        <div className='flex flex-wrap items-center gap-1 border-b px-3 py-2 text-sm'>
+      <div className={cn('w-full', className)}>
+        {/* Toolbar - Cells-like style: flat, subtle border, small padding, icon-only */}
+        <div className='z-10 flex w-full flex-wrap items-center gap-1 border-y border-[#d4d4d4] bg-[#fafafc] p-1 shadow-none'>
           {/* Undo / Redo */}
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            onClick={() => editor.chain().focus().undo().run()}
-            title='Undo'
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().undo().run()}
+            disabled={!(editor?.can().chain().focus().undo().run() ?? false)}
+            aria-label='Undo'
           >
-            <IconHistory className='size-4' />
+            <Undo2 className='size-4' />
           </Button>
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            onClick={() => editor.chain().focus().redo().run()}
-            title='Redo'
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().redo().run()}
+            disabled={!(editor?.can().chain().focus().redo().run() ?? false)}
+            aria-label='Redo'
           >
-            <IconHistoryToggle className='size-4' />
+            <Redo2 className='size-4' />
           </Button>
 
-          <div className='bg-border mx-1 h-6 w-px' />
+          <Separator orientation='vertical' className='mx-1 h-6' />
 
           {/* Headings */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size='sm' variant='outline'>
-                <IconLetterT className='mr-1 size-4' /> Headings
+              <Button
+                size='icon'
+                variant={
+                  [1, 2, 3].some((lvl) => isActive('heading', { level: lvl }))
+                    ? 'secondary'
+                    : 'ghost'
+                }
+                className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+                aria-label='Heading'
+              >
+                <Heading1 className='size-4' />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align='start'>
-              {headings.map((h) => (
-                <DropdownMenuItem
-                  key={h.label}
-                  onClick={() => h.action(editor)}
-                  className={cn(
-                    h.isActive(editor) && 'text-primary font-medium'
-                  )}
-                >
-                  {h.label}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().setParagraph().run()}
+              >
+                Paragraph
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor?.chain().focus().toggleHeading({ level: 1 }).run()
+                }
+                className={cn(isActive('heading', { level: 1 }) && 'bg-accent')}
+              >
+                H1
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor?.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+                className={cn(isActive('heading', { level: 2 }) && 'bg-accent')}
+              >
+                H2
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor?.chain().focus().toggleHeading({ level: 3 }).run()
+                }
+                className={cn(isActive('heading', { level: 3 }) && 'bg-accent')}
+              >
+                H3
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className='bg-border mx-1 h-6 w-px' />
-
           {/* Marks */}
-          <Button
+          <Toggle
             size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            aria-pressed={editor.isActive('bold')}
-            title='Bold'
+            className='data-[state=on]:text-foreground text-[#525c6f]'
+            pressed={isActive('bold')}
+            onPressedChange={() => editor?.chain().focus().toggleBold().run()}
+            aria-label='Bold'
           >
-            <IconBold className='size-4' />
-          </Button>
-          <Button
+            <Bold className='size-4' />
+          </Toggle>
+          <Toggle
             size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            aria-pressed={editor.isActive('italic')}
-            title='Italic'
+            className='data-[state=on]:text-foreground text-[#525c6f]'
+            pressed={isActive('italic')}
+            onPressedChange={() => editor?.chain().focus().toggleItalic().run()}
+            aria-label='Italic'
           >
-            <IconItalic className='size-4' />
-          </Button>
-          <Button
+            <Italic className='size-4' />
+          </Toggle>
+          <Toggle
             size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            aria-pressed={editor.isActive('underline')}
-            title='Underline'
+            className='data-[state=on]:text-foreground text-[#525c6f]'
+            pressed={isActive('underline')}
+            onPressedChange={() =>
+              editor?.chain().focus().toggleUnderline().run()
+            }
+            aria-label='Underline'
           >
-            <IconUnderline className='size-4' />
-          </Button>
-          <Button
+            <UnderlineIcon className='size-4' />
+          </Toggle>
+          <Toggle
             size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            aria-pressed={editor.isActive('strike')}
-            title='Strikethrough'
+            className='data-[state=on]:text-foreground text-[#525c6f]'
+            pressed={isActive('strike')}
+            onPressedChange={() => editor?.chain().focus().toggleStrike().run()}
+            aria-label='Strikethrough'
           >
-            <IconStrikethrough className='size-4' />
-          </Button>
+            <Strikethrough className='size-4' />
+          </Toggle>
+          <Toggle
+            size='sm'
+            className='data-[state=on]:text-foreground text-[#525c6f]'
+            pressed={isActive('code')}
+            onPressedChange={() => editor?.chain().focus().toggleCode().run()}
+            aria-label='Code'
+          >
+            <CodeIcon className='size-4' />
+          </Toggle>
 
-          <div className='bg-border mx-1 h-6 w-px' />
+          <Separator orientation='vertical' className='mx-1 h-6' />
 
           {/* Lists */}
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            aria-pressed={editor.isActive('bulletList')}
-            title='Bullet list'
+            size='icon'
+            variant={isActive('bulletList') ? 'secondary' : 'ghost'}
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().toggleBulletList().run()}
+            aria-label='Bullet list'
           >
-            <IconList className='size-4' />
+            <List className='size-4' />
           </Button>
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            aria-pressed={editor.isActive('orderedList')}
-            title='Ordered list'
+            size='icon'
+            variant={isActive('orderedList') ? 'secondary' : 'ghost'}
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+            aria-label='Ordered list'
           >
-            <IconListNumbers className='size-4' />
+            <ListOrdered className='size-4' />
           </Button>
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            aria-pressed={editor.isActive('taskList')}
-            title='Task list'
+            size='icon'
+            variant={isActive('taskList') ? 'secondary' : 'ghost'}
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().toggleTaskList().run()}
+            aria-label='Task list'
           >
-            <IconListCheck className='size-4' />
+            <ListChecks className='size-4' />
           </Button>
 
-          <div className='bg-border mx-1 h-6 w-px' />
+          <Separator orientation='vertical' className='mx-1 h-6' />
 
           {/* Alignment */}
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            aria-pressed={editor.isActive({ textAlign: 'left' })}
-            title='Align left'
+            size='icon'
+            variant={
+              isActive({ textAlign: 'left' } as any) ? 'secondary' : 'ghost'
+            }
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().setTextAlign('left').run()}
+            aria-label='Align left'
           >
-            <IconAlignLeft className='size-4' />
+            <AlignLeft className='size-4' />
           </Button>
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            aria-pressed={editor.isActive({ textAlign: 'center' })}
-            title='Align center'
+            size='icon'
+            variant={
+              isActive({ textAlign: 'center' } as any) ? 'secondary' : 'ghost'
+            }
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().setTextAlign('center').run()}
+            aria-label='Align center'
           >
-            <IconAlignCenter className='size-4' />
+            <AlignCenter className='size-4' />
           </Button>
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            aria-pressed={editor.isActive({ textAlign: 'right' })}
-            title='Align right'
+            size='icon'
+            variant={
+              isActive({ textAlign: 'right' } as any) ? 'secondary' : 'ghost'
+            }
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().setTextAlign('right').run()}
+            aria-label='Align right'
           >
-            <IconAlignRight className='size-4' />
+            <AlignRight className='size-4' />
           </Button>
-
-          <div className='bg-border mx-1 h-6 w-px' />
-
-          {/* Quote */}
           <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            aria-pressed={editor.isActive('blockquote')}
-            title='Blockquote'
+            size='icon'
+            variant={
+              isActive({ textAlign: 'justify' } as any) ? 'secondary' : 'ghost'
+            }
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() =>
+              editor?.chain().focus().setTextAlign('justify').run()
+            }
+            aria-label='Justify'
           >
-            <IconQuote className='size-4' />
+            <AlignJustify className='size-4' />
           </Button>
 
-          <div className='bg-border mx-1 h-6 w-px' />
+          <Separator orientation='vertical' className='mx-1 h-6' />
+
+          {/* Blocks */}
+          <Button
+            size='icon'
+            variant={isActive('blockquote') ? 'secondary' : 'ghost'}
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+            aria-label='Blockquote'
+          >
+            <Quote className='size-4' />
+          </Button>
+          <Button
+            size='icon'
+            variant={isActive('codeBlock') ? 'secondary' : 'ghost'}
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+            aria-label='Code block'
+          >
+            <CodeIcon className='size-4' />
+          </Button>
+
+          <Separator orientation='vertical' className='mx-1 h-6' />
 
           {/* Link */}
-          <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => {
-              const prev = editor.getAttributes('link').href as
-                | string
-                | undefined;
-              const url = window.prompt('Enter URL', prev || 'https://');
-              if (url === null) return;
-              if (url === '') return editor.chain().focus().unsetLink().run();
-              editor
-                .chain()
-                .focus()
-                .setLink({ href: url, target: '_blank' })
-                .run();
-            }}
-            aria-pressed={editor.isActive('link')}
-            title='Link'
-          >
-            <IconLink className='size-4' />
-          </Button>
-          <Button
-            size='sm'
-            variant='ghost'
-            onClick={() => editor.chain().focus().unsetLink().run()}
-            title='Remove link'
-          >
-            <IconUnlink className='size-4' />
-          </Button>
-
-          <div className='bg-border mx-1 h-6 w-px' />
+          <Popover open={linkOpen} onOpenChange={setLinkOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size='icon'
+                variant={isActive('link') ? 'secondary' : 'ghost'}
+                className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+                aria-label='Link'
+                onClick={() => {
+                  setLinkUrl(editor?.getAttributes('link')?.href ?? '');
+                }}
+              >
+                <LinkIcon className='size-4' />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className='w-80' align='start'>
+              <div className='flex items-center gap-2'>
+                <Input
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder='https://example.com'
+                />
+                <Button size='sm' onClick={setLink}>
+                  Apply
+                </Button>
+                <Button
+                  size='sm'
+                  variant='secondary'
+                  onClick={() => {
+                    editor?.chain().focus().unsetLink().run();
+                    setLinkOpen(false);
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Image */}
+          <Button
+            size='icon'
+            variant='ghost'
+            className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+            onClick={triggerImageSelect}
+            aria-label='Insert image'
+          >
+            <ImageIcon className='size-4' />
+          </Button>
           <input
             ref={fileInputRef}
             type='file'
-            className='hidden'
             accept='image/*'
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void insertImage(f);
-              if (fileInputRef.current) fileInputRef.current.value = '';
-            }}
+            className='hidden'
+            onChange={handleFileChange}
           />
-          <Button
-            size='sm'
-            variant='ghost'
-            onClick={onChooseImage}
-            title='Insert image'
-          >
-            <IconPhoto className='size-4' />
-          </Button>
+
+          <Separator orientation='vertical' className='mx-1 h-6' />
+
+          {/* Table */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size='icon'
+                variant={isActive('table') ? 'secondary' : 'ghost'}
+                className='h-8 w-8 text-[#525c6f] hover:text-[#525c6f]'
+                aria-label='Table'
+              >
+                <TableIcon className='size-4' />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='start'>
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                    .run()
+                }
+              >
+                Insert 3×3
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().addRowBefore().run()}
+              >
+                Add row before
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().addRowAfter().run()}
+              >
+                Add row after
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().addColumnBefore().run()}
+              >
+                Add column before
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().addColumnAfter().run()}
+              >
+                Add column after
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().toggleHeaderRow().run()}
+              >
+                Toggle header row
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  editor?.chain().focus().toggleHeaderColumn().run()
+                }
+              >
+                Toggle header column
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().mergeOrSplit().run()}
+              >
+                Merge or split
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().deleteRow().run()}
+              >
+                Delete row
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().deleteColumn().run()}
+              >
+                Delete column
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => editor?.chain().focus().deleteTable().run()}
+              >
+                Delete table
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* trailing spacer keeps layout consistent */}
+          <div className='ml-auto' />
         </div>
 
-        <div className='min-h-0 flex-1 overflow-auto'>
-          <div className='mx-auto max-w-[820px] px-4 py-4'>
-            <EditorContent editor={editor} />
-          </div>
+        {/* Editor */}
+        <div
+          className={cn(
+            'mx-auto w-full rounded-md p-2 sm:p-3',
+            contentMaxWidthClass
+          )}
+        >
+          <EditorContent
+            editor={editor}
+            // Keyboard shortcuts
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setLinkUrl(editor?.getAttributes('link')?.href ?? '');
+                setLinkOpen(true);
+              }
+            }}
+          />
         </div>
       </div>
     );

@@ -4,6 +4,7 @@ import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
+import SuiteHeader from '@/components/suite/suite-header';
 import { supabase } from '@/lib/supabaseClient';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
@@ -60,9 +61,7 @@ export default function CellsEditor({
   const [baseTitle, setBaseTitle] = useState<string>(() =>
     fileName ? stripExt(fileName) : title || 'Untitled Cells'
   );
-  const [renaming, setRenaming] = useState(false);
   const [nameInput, setNameInput] = useState(baseTitle);
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const [starred, setStarred] = useState<boolean>(false);
 
   // Load existing sheet content if sheetId provided
@@ -458,7 +457,6 @@ export default function CellsEditor({
         ? await ensureUniqueBase(newBase, currentUserId)
         : newBase;
       setBaseTitle(uniqueBase);
-      setRenaming(false);
       if (tabId && updateTabTitle) updateTabTitle(tabId, uniqueBase);
       return;
     }
@@ -474,7 +472,6 @@ export default function CellsEditor({
       const json = await res.json();
       if (json?.ok) {
         setBaseTitle(uniqueBase);
-        setRenaming(false);
         if (tabId && updateTabTitle) updateTabTitle(tabId, uniqueBase);
       } else if (json?.error === 'NAME_CONFLICT') {
         // As a fallback, try one more time with suffix
@@ -489,12 +486,11 @@ export default function CellsEditor({
           setBaseTitle(unique2);
           if (tabId && updateTabTitle) updateTabTitle(tabId, unique2);
         }
-        setRenaming(false);
       } else {
-        setRenaming(false);
+        // no-op
       }
     } catch {
-      setRenaming(false);
+      // no-op
     }
   }
 
@@ -511,93 +507,26 @@ export default function CellsEditor({
     } catch {}
   }
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   return (
     <div className='flex h-full min-h-0 flex-col'>
-      <div className='flex items-center gap-2 border-b px-3 py-2 text-sm'>
-        {/* Editable title with hover border */}
-        <div className='flex items-center gap-2'>
-          {renaming ? (
-            <input
-              ref={nameInputRef}
-              className='bg-background h-7 rounded border px-2 text-sm outline-none'
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void submitRename();
-                if (e.key === 'Escape') {
-                  setRenaming(false);
-                  setNameInput(baseTitle);
-                }
-              }}
-              onBlur={() => void submitRename()}
-            />
-          ) : (
-            <button
-              className={cn(
-                'rounded px-1.5 py-0.5 font-medium',
-                'hover:ring-border hover:ring-1'
-              )}
-              title='Rename'
-              onClick={() => {
-                setRenaming(true);
-                setTimeout(() => nameInputRef.current?.focus(), 0);
-              }}
-            >
-              {titleLabel}
-            </button>
-          )}
-          {/* Star toggle */}
-          <button
-            className={cn(
-              'rounded p-1',
-              starred
-                ? 'text-yellow-500'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            title={starred ? 'Unstar' : 'Star'}
-            onClick={toggleStar}
-          >
-            {starred ? (
-              <Icons.starFilled className='size-4' />
-            ) : (
-              <Icons.star className='size-4' />
-            )}
-          </button>
-        </div>
-
-        {/* Status */}
-        {loading ? (
-          <span className='text-muted-foreground text-xs'>(loading…)</span>
-        ) : saving ? (
-          <span className='text-muted-foreground text-xs'>(saving…)</span>
-        ) : loadedSheetId ? (
-          <span className='text-muted-foreground text-xs'>(saved)</span>
-        ) : null}
-
-        <div className='ml-auto flex items-center gap-2'>
-          <input
-            ref={fileInputRef}
-            type='file'
-            className='hidden'
-            accept='.xlsx,.xls,.csv'
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void handleImport(f);
-              // reset value to allow import same file twice
-              if (fileInputRef.current) fileInputRef.current.value = '';
-            }}
-          />
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Icons.download className='mr-1 size-3.5' /> Import
-          </Button>
-        </div>
-      </div>
+      <SuiteHeader
+        title={nameInput}
+        onTitleChange={setNameInput}
+        onTitleSubmit={() => void submitRename()}
+        app='cells'
+        showStar
+        starred={starred}
+        onToggleStar={toggleStar}
+        rightSlot={
+          loading ? (
+            <span className='text-muted-foreground text-xs'>(loading…)</span>
+          ) : saving ? (
+            <span className='text-muted-foreground text-xs'>(saving…)</span>
+          ) : loadedSheetId ? (
+            <span className='text-muted-foreground text-xs'>(saved)</span>
+          ) : null
+        }
+      />
       <div ref={hostRef} className='min-h-0 flex-1 overflow-hidden'>
         {/* Keep Workbook full-height */}
         <div
