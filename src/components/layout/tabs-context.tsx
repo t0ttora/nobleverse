@@ -71,7 +71,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     async function load() {
       try {
         const res = await fetch('/api/tabs', { cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error('TABS_API_UNAVAILABLE');
         const json = await res.json();
         if (cancelled) return;
         const payload = json?.ui_tabs as {
@@ -102,6 +102,37 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
               Math.min(0.8, Math.max(0.2, Number(payload.splitRatio) || 0.5))
             );
           if (payload.collapseMode) setCollapseMode(payload.collapseMode);
+        } else {
+          // Fallback: try localStorage backup when server has no data yet
+          try {
+            const raw =
+              typeof window !== 'undefined'
+                ? localStorage.getItem('nv_ui_tabs')
+                : null;
+            if (raw) {
+              const ls = JSON.parse(raw);
+              if (ls && Array.isArray(ls.tabs)) {
+                const resolved = ls.tabs.map((t: AppTab) => ({
+                  ...t,
+                  icon:
+                    (t as any).iconName === 'sheet'
+                      ? (Icons.sheet as unknown as Icon)
+                      : (t as any).iconName === 'doc'
+                        ? (Icons.doc as unknown as Icon)
+                        : (t as any).icon || (Icons.file as unknown as Icon)
+                }));
+                setTabs(resolved);
+                setActiveTabId(ls.active ?? (resolved[0]?.id || null));
+                setRightActiveTabId(ls.rightActive ?? null);
+                if (typeof ls.split === 'boolean') _setSplit(ls.split);
+                if (typeof ls.splitRatio === 'number')
+                  setSplitRatio(
+                    Math.min(0.8, Math.max(0.2, Number(ls.splitRatio) || 0.5))
+                  );
+                if (ls.collapseMode) setCollapseMode(ls.collapseMode);
+              }
+            }
+          } catch {}
         }
       } catch {}
     }
@@ -166,6 +197,22 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
             t.iconName ||
             (t.kind === 'cells' ? 'sheet' : t.kind === 'docs' ? 'doc' : 'file')
         }));
+        // Persist to localStorage as best-effort backup
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(
+              'nv_ui_tabs',
+              JSON.stringify({
+                tabs: serializable,
+                active: activeTabId,
+                rightActive: rightActiveTabId,
+                split,
+                splitRatio,
+                collapseMode
+              })
+            );
+          }
+        } catch {}
         await fetch('/api/tabs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

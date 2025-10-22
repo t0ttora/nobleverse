@@ -23,7 +23,11 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { ResizableImage } from './extensions/resizable-image';
-// Page format is handled by PagesView UI; no editor extension needed
+import {
+  Pages,
+  PAGE_FORMATS,
+  type PageFormat
+} from '@/components/tiptap-extensions/pages';
 import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import {
@@ -71,6 +75,7 @@ export type SimpleEditorHandle = {
   getHTML: () => string;
   getText: () => string;
   getEditor: () => ReturnType<typeof useEditor> | null;
+  setPageFormat: (format: string | PageFormat) => void;
 };
 
 export type SimpleEditorProps = {
@@ -80,9 +85,18 @@ export type SimpleEditorProps = {
   onChange?: (html: string) => void;
   onImageUpload?: (file: File) => Promise<string> | string;
   contentMaxWidthClass?: string; // tailwind max-w-* class to constrain content; toolbar remains full width
+  pageFormat?: string | PageFormat;
+  onPageFormatChange?: (format: PageFormat) => void;
 };
 
 const DEFAULT_PLACEHOLDER = 'Start typing, use the toolbar for formatting…';
+
+function resolvePageFormat(format?: string | PageFormat): PageFormat {
+  if (!format) return PAGE_FORMATS.A4;
+  if (typeof format === 'string')
+    return PAGE_FORMATS[format] || PAGE_FORMATS.A4;
+  return format;
+}
 
 export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
   function SimpleEditor(props, ref) {
@@ -92,7 +106,9 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
       placeholder = DEFAULT_PLACEHOLDER,
       onChange,
       onImageUpload,
-      contentMaxWidthClass = 'max-w-3xl'
+      contentMaxWidthClass = 'max-w-none',
+      pageFormat = PAGE_FORMATS.A4,
+      onPageFormatChange
     } = props;
 
     const [linkOpen, setLinkOpen] = useState(false);
@@ -100,9 +116,31 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const [_, setForceFlag] = useState(0);
+    const pageFormatChangeRef = useRef<typeof onPageFormatChange | null>(
+      onPageFormatChange || null
+    );
+    const [internalFormat, setInternalFormat] = useState<PageFormat>(() =>
+      resolvePageFormat(pageFormat)
+    );
+
+    useEffect(() => {
+      pageFormatChangeRef.current = onPageFormatChange || null;
+    }, [onPageFormatChange]);
+
+    useEffect(() => {
+      const next = resolvePageFormat(pageFormat);
+      setInternalFormat(next);
+    }, [pageFormat]);
 
     const editor = useEditor({
       extensions: [
+        Pages.configure({
+          pageFormat: internalFormat,
+          onPageFormatChange: (format: PageFormat) => {
+            setInternalFormat(format);
+            pageFormatChangeRef.current?.(format);
+          }
+        }),
         Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
         StarterKit.configure({
           heading: false
@@ -135,8 +173,9 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
       autofocus: 'start',
       editorProps: {
         attributes: {
+          // Keep editor content in light mode even when app is dark
           class:
-            'prose dark:prose-invert prose-sm sm:prose-base focus:outline-none max-w-none'
+            'prose prose-sm sm:prose-base focus:outline-none max-w-none text-black'
         }
       },
       onUpdate({ editor }) {
@@ -166,10 +205,20 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
           editor?.commands.insertContent(html ?? ''),
         getHTML: () => editor?.getHTML() ?? '',
         getText: () => editor?.getText() ?? '',
-        getEditor: () => editor
+        getEditor: () => editor,
+        setPageFormat: (format) => {
+          const next = resolvePageFormat(format as string | PageFormat);
+          setInternalFormat(next);
+          (editor as any)?.commands?.setPageFormat?.(next);
+        }
       }),
       [editor]
     );
+
+    useEffect(() => {
+      if (!editor) return;
+      (editor as any)?.commands?.setPageFormat?.(internalFormat);
+    }, [editor, internalFormat]);
 
     const setLink = useCallback(() => {
       if (!editor) return;
@@ -243,12 +292,17 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
       [editor]
     );
 
-    const can = useMemo(() => editor?.can() ?? null, [editor]);
+    const printCSS = useMemo(
+      () =>
+        `@media print { @page { size: ${internalFormat.width}px ${internalFormat.height}px; margin: 0; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .nv-simple-editor-stage { background: transparent !important; padding: 0 !important; } .nv-simple-editor-paper { box-shadow: none !important; border: none !important; } }`,
+      [internalFormat.height, internalFormat.width]
+    );
 
     return (
-      <div className={cn('w-full', className)}>
-        {/* Toolbar - Cells-like style: flat, subtle border, small padding, icon-only */}
-        <div className='z-10 flex w-full flex-wrap items-center gap-1 border-y border-[#d4d4d4] bg-[#fafafc] p-1 shadow-none'>
+      <div className={cn('nv-simple-editor flex w-full flex-col', className)}>
+        <style>{printCSS}</style>
+        {/* Toolbar - fixed (sticky) below the SuiteHeader; page body scrolls only */}
+        <div className='nv-simple-editor-toolbar sticky top-12 z-20 flex w-full flex-wrap items-center gap-1 border-b border-[#d4d4d4] bg-[#fafafc] p-1 shadow-none sm:top-14'>
           {/* Undo / Redo */}
           <Button
             size='icon'
@@ -619,23 +673,46 @@ export const SimpleEditor = forwardRef<SimpleEditorHandle, SimpleEditorProps>(
         </div>
 
         {/* Editor */}
-        <div
-          className={cn(
-            'mx-auto w-full rounded-md p-2 sm:p-3',
-            contentMaxWidthClass
-          )}
-        >
-          <EditorContent
-            editor={editor}
-            // Keyboard shortcuts
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault();
-                setLinkUrl(editor?.getAttributes('link')?.href ?? '');
-                setLinkOpen(true);
-              }
-            }}
-          />
+        <div className='nv-simple-editor-stage flex-1 overflow-auto bg-[#f4f5f9] px-4 py-6 sm:px-8 sm:py-8'>
+          <div
+            className={cn(
+              'mx-auto flex w-full justify-center',
+              contentMaxWidthClass
+            )}
+          >
+            <div
+              className='nv-simple-editor-paper relative mx-auto rounded-lg border border-[#d9dbe0] bg-white shadow-[0_10px_32px_rgba(15,23,42,0.12)]'
+              style={{
+                width: `${internalFormat.width}px`,
+                minHeight: `${internalFormat.height}px`
+              }}
+            >
+              <div
+                className='nv-simple-editor-body text-black'
+                style={{
+                  paddingTop: `${internalFormat.margins.top}px`,
+                  paddingRight: `${internalFormat.margins.right}px`,
+                  paddingBottom: `${internalFormat.margins.bottom}px`,
+                  paddingLeft: `${internalFormat.margins.left}px`
+                }}
+              >
+                <EditorContent
+                  editor={editor}
+                  // Keyboard shortcuts
+                  onKeyDown={(e) => {
+                    if (
+                      (e.ctrlKey || e.metaKey) &&
+                      e.key.toLowerCase() === 'k'
+                    ) {
+                      e.preventDefault();
+                      setLinkUrl(editor?.getAttributes('link')?.href ?? '');
+                      setLinkOpen(true);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

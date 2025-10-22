@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createDocServer } from '@/../utils/supabase/docs';
+import { createDocServer } from '@/../utils/supabase/docs.server';
 
 export default async function NewDocPage() {
   const doc = await createDocServer({

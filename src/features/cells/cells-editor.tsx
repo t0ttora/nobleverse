@@ -56,6 +56,15 @@ export default function CellsEditor({
   const [renderWorkbook, setRenderWorkbook] = useState(false);
   const didMountOnReadyRef = useRef(false);
   const { updateTabTitle } = useTabs();
+  const [shareBusy, setShareBusy] = useState(false);
+  const [currentShares, setCurrentShares] = useState<
+    Array<{
+      id: string;
+      role: 'viewer' | 'editor' | 'owner';
+      display_name?: string | null;
+      avatar_url?: string | null;
+    }>
+  >([]);
 
   // Title / rename state
   const [baseTitle, setBaseTitle] = useState<string>(() =>
@@ -143,6 +152,22 @@ export default function CellsEditor({
           setBaseTitle(base);
           setNameInput(base);
           setStarred(Boolean((data as any).is_starred));
+          // Load current shares for Share popover
+          try {
+            const { data: rows } = await supabase
+              .from('files_shares')
+              .select(
+                'user_id,role,profiles:profiles(id,display_name,avatar_url)'
+              )
+              .eq('file_id', (data as any).id);
+            const mapped = (rows || []).map((r: any) => ({
+              id: r.user_id,
+              role: (r.role as 'viewer' | 'editor') || 'viewer',
+              display_name: r.profiles?.display_name ?? null,
+              avatar_url: r.profiles?.avatar_url ?? null
+            }));
+            setCurrentShares(mapped);
+          } catch {}
         }
       } catch {}
     })();
@@ -517,6 +542,86 @@ export default function CellsEditor({
         showStar
         starred={starred}
         onToggleStar={toggleStar}
+        shareProps={{
+          async onSearchContacts(q) {
+            const like = `%${(q || '').trim()}%`;
+            const { data } = await supabase
+              .from('profiles')
+              .select('id,display_name,avatar_url,email')
+              .or(`display_name.ilike.${like},email.ilike.${like}`)
+              .order('display_name', { ascending: true })
+              .limit(10);
+            return (data as any) || [];
+          },
+          currentShares: currentShares.map((s) => ({
+            id: s.id,
+            role: s.role,
+            display_name: s.display_name,
+            avatar_url: s.avatar_url
+          })),
+          async onRoleChange(uid, role) {
+            if (!registeredFileId) return;
+            try {
+              await supabase
+                .from('files_shares')
+                .update({ role })
+                .eq('file_id', registeredFileId)
+                .eq('user_id', uid);
+              setCurrentShares((prev) =>
+                prev.map((x) => (x.id === uid ? { ...x, role } : x))
+              );
+            } catch {}
+          },
+          async onCopyLink() {
+            if (!registeredFileId) return;
+            const url = `/api/noblesuite/files/preview?id=${encodeURIComponent(registeredFileId)}`;
+            await navigator.clipboard.writeText(url);
+          },
+          async onShare(ids) {
+            if (!registeredFileId || !ids?.length) return;
+            setShareBusy(true);
+            try {
+              const res = await fetch('/api/noblesuite/files/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileIds: [registeredFileId],
+                  recipientIds: ids
+                })
+              });
+              const json = await res.json();
+              if (!json?.ok) throw new Error(json?.error || 'SHARE_FAILED');
+              // Refresh share list
+              const { data: rows } = await supabase
+                .from('files_shares')
+                .select(
+                  'user_id,role,profiles:profiles(id,display_name,avatar_url)'
+                )
+                .eq('file_id', registeredFileId);
+              const mapped = (rows || []).map((r: any) => ({
+                id: r.user_id,
+                role: (r.role as 'viewer' | 'editor') || 'viewer',
+                display_name: r.profiles?.display_name ?? null,
+                avatar_url: r.profiles?.avatar_url ?? null
+              }));
+              setCurrentShares(mapped);
+            } finally {
+              setShareBusy(false);
+            }
+          },
+          async onSendInbox(ids) {
+            // Reuse the same API to create a chat message with links
+            if (!registeredFileId || !ids?.length) return;
+            await fetch('/api/noblesuite/files/share', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileIds: [registeredFileId],
+                recipientIds: ids
+              })
+            });
+          }
+        }}
         rightSlot={
           loading ? (
             <span className='text-muted-foreground text-xs'>(loading…)</span>

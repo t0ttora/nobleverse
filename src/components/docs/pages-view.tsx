@@ -176,6 +176,7 @@ export function PagesView({
                 (availableFormats || Object.values(PAGE_FORMATS)).find(
                   (f: PageFormat) => f.id === id
                 ) || effectiveFormat;
+              editorRef.current?.setPageFormat(next);
               onFormatChange?.(next);
             }}
           >

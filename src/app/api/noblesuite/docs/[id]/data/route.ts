@@ -16,17 +16,17 @@ async function getClient() {
   return { supabase, userId: auth.user.id as string };
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, ctx: any) {
+  const params = (ctx && ctx.params) || {};
+  const resolvedParams =
+    typeof params?.then === 'function' ? await params : params;
   const { supabase, userId } = await getClient();
   if (!userId)
     return NextResponse.json(
       { ok: false, error: 'UNAUTHENTICATED' },
       { status: 401 }
     );
-  const id = params.id;
+  const id = resolvedParams?.id as string;
   // Try docs_data table first
   const { data, error } = await supabase
     .from('docs_data')
@@ -53,17 +53,17 @@ export async function GET(
   return NextResponse.json({ ok: true, item: data });
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, ctx: any) {
+  const params = (ctx && ctx.params) || {};
+  const resolvedParams =
+    typeof params?.then === 'function' ? await params : params;
   const { supabase, userId } = await getClient();
   if (!userId)
     return NextResponse.json(
       { ok: false, error: 'UNAUTHENTICATED' },
       { status: 401 }
     );
-  const id = params.id;
+  const id = resolvedParams?.id as string;
   let body: any;
   try {
     body = await req.json();

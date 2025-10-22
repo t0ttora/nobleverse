@@ -7,7 +7,8 @@
     "url": "https://github.com/t0ttora"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
@@ -147,7 +148,8 @@
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.2",
+    "encoding": "^0.1.13"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.3.0",

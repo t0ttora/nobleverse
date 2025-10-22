@@ -6,6 +6,7 @@ import {
   type SimpleEditorHandle
 } from '@/components/tiptap-templates/simple/simple-editor';
 import SuiteHeader from '@/components/suite/suite-header';
+import { useTabs } from '@/components/layout/tabs-context';
 import { toast } from 'sonner';
 
 type DocsEditorProps = {
@@ -16,13 +17,18 @@ type DocsEditorProps = {
   importUrl?: string; // preserved for API compatibility
 };
 
-export default function DocsEditor({ title, importUrl }: DocsEditorProps) {
+export default function DocsEditor({
+  tabId,
+  title,
+  importUrl
+}: DocsEditorProps) {
   const editorRef = React.useRef<SimpleEditorHandle | null>(null);
   const [html, setHtml] = React.useState<string>('');
   const [starred, setStarred] = React.useState<boolean>(false);
   const [docTitle, setDocTitle] = React.useState<string>(
     title || 'Untitled Document'
   );
+  const { updateTabTitle } = useTabs();
 
   // If an import URL is provided (e.g., from files), load it as HTML/text
   React.useEffect(() => {
@@ -44,12 +50,35 @@ export default function DocsEditor({ title, importUrl }: DocsEditorProps) {
     <div className={cn('flex h-full min-h-0 flex-col overflow-auto')}>
       <SuiteHeader
         title={docTitle}
-        onTitleChange={setDocTitle}
+        onTitleChange={(v) => {
+          setDocTitle(v);
+          // Try to sync with active docs tab title if present
+          try {
+            if (tabId) updateTabTitle(tabId, v);
+          } catch {}
+        }}
         onTitleSubmit={(v) => setDocTitle(v)}
         app='docs'
         showStar
         starred={starred}
         onToggleStar={() => setStarred((s) => !s)}
+        showImport
+        importAccept='.html,.txt,.md'
+        onImport={async (file) => {
+          const lower = file.name.toLowerCase();
+          const text = await file.text();
+          let nextHtml = text;
+          if (lower.endsWith('.txt')) {
+            nextHtml = `<pre>${escapeHtml(text)}</pre>`;
+          } else if (lower.endsWith('.md')) {
+            // naive md to html (paragraphs/line breaks)
+            nextHtml = text
+              .split(/\n\n+/)
+              .map((p) => `<p>${escapeHtml(p).replaceAll('\n', '<br/>')}</p>`)
+              .join('\n');
+          }
+          editorRef.current?.setContent(nextHtml);
+        }}
         shareProps={{
           async onSearchContacts() {
             // TODO: wire to contacts API
@@ -77,4 +106,11 @@ export default function DocsEditor({ title, importUrl }: DocsEditorProps) {
       </div>
     </div>
   );
+}
+
+function escapeHtml(s: string) {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }

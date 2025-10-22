@@ -56,9 +56,7 @@ export type SuiteHeaderProps = {
   }>;
   onActivityClick?: () => void; // open timeline
   shareProps?: {
-    onSearchContacts?: (
-      query: string
-    ) => Promise<
+    onSearchContacts?: (query: string) => Promise<
       Array<{
         id: string;
         display_name?: string | null;
@@ -109,8 +107,16 @@ export function SuiteHeader({
     if (app === 'files') return Icons.folder;
     return null;
   }, [app, appIcon]);
+  const titleMeasureRef = React.useRef<HTMLSpanElement | null>(null);
+  const [titleWidth, setTitleWidth] = React.useState<number>(240);
+
+  React.useLayoutEffect(() => {
+    if (!titleMeasureRef.current) return;
+    const nextWidth = titleMeasureRef.current.offsetWidth + 28;
+    setTitleWidth(Math.min(Math.max(nextWidth, 160), 640));
+  }, [title]);
   return (
-    <div className='bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 w-full border-b backdrop-blur'>
+    <div className='bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 w-full rounded-t-xl border-b backdrop-blur'>
       <div className='flex h-12 items-center gap-2 px-3 sm:h-14 sm:px-4'>
         {/* Left: app icon + title + star */}
         {AppIcon && (
@@ -128,67 +134,73 @@ export function SuiteHeader({
             <AppIcon className='size-5 sm:size-6' />
           </div>
         )}
-        <Input
-          value={title}
-          onChange={(e) => onTitleChange?.(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter')
-              onTitleSubmit?.((e.target as HTMLInputElement).value);
-          }}
-          onBlur={(e) => onTitleSubmit?.(e.target.value)}
-          className='focus:border-input h-8 max-w-[60%] truncate border-transparent px-2 text-base font-semibold focus-visible:ring-0 sm:text-lg'
-        />
-        {showStar && (
-          <button
-            className={
-              'rounded p-1 ' +
-              (starred
-                ? 'text-yellow-500'
-                : 'text-muted-foreground hover:text-foreground')
-            }
-            title={starred ? 'Unstar' : 'Star'}
-            onClick={() => onToggleStar?.()}
-          >
-            {starred ? (
-              <Icons.starFilled className='size-4' />
-            ) : (
-              <Icons.star className='size-4' />
-            )}
-          </button>
-        )}
+        <div className='flex min-w-0 items-center gap-1'>
+          <div className='relative flex items-center'>
+            <Input
+              value={title}
+              onChange={(e) => onTitleChange?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter')
+                  onTitleSubmit?.((e.target as HTMLInputElement).value);
+              }}
+              onBlur={(e) => onTitleSubmit?.(e.target.value)}
+              className='focus:border-input h-8 w-auto border-transparent px-2 text-base font-semibold focus-visible:ring-0 sm:text-lg'
+              style={{ width: titleWidth }}
+            />
+            <span
+              ref={titleMeasureRef}
+              aria-hidden='true'
+              className='pointer-events-none absolute top-0 left-0 -z-10 text-base font-semibold whitespace-pre opacity-0 sm:text-lg'
+            >
+              {(title && title.length ? title : 'Untitled doc') + ' '}
+            </span>
+          </div>
+          {showStar && (
+            <button
+              className={
+                'ml-0.5 rounded p-1 ' +
+                (starred
+                  ? 'text-yellow-500'
+                  : 'text-muted-foreground hover:text-foreground')
+              }
+              title={starred ? 'Unstar' : 'Star'}
+              onClick={() => onToggleStar?.()}
+            >
+              {starred ? (
+                <Icons.starFilled className='size-4' />
+              ) : (
+                <Icons.star className='size-4' />
+              )}
+            </button>
+          )}
+        </div>
 
         {/* Right: CTAs (Share + Log), optional Import, then custom rightSlot */}
         <div className='ml-auto flex items-center gap-1 sm:gap-2'>
           {/* Share button */}
           {shareProps && <SharePopover {...shareProps} />}
 
-          {/* Log icon-only button */}
-          <Button
-            size='icon'
-            variant='ghost'
-            title='Activity log'
-            onClick={onActivityClick}
-            aria-label='Activity log'
-          >
-            <Icons.history className='size-5' />
-          </Button>
-          {/* Activity: hover avatars, click to open timeline */}
-          {participants && participants.length > 0 && (
-            <HoverCard openDelay={100} closeDelay={100}>
-              <HoverCardTrigger asChild>
-                <Button
-                  size='sm'
-                  variant='ghost'
-                  className='text-muted-foreground hover:text-foreground h-8 gap-2'
-                  onClick={onActivityClick}
-                  title='Activity log'
-                >
-                  <Icons.fileDescription className='size-4' />
-                  <div className='flex -space-x-2 pl-1'>
-                    {participants.slice(0, 3).map((p, idx) => (
+          <HoverCard openDelay={100} closeDelay={100}>
+            <HoverCardTrigger asChild>
+              <Button
+                size='icon'
+                variant='ghost'
+                title='Activity log'
+                onClick={onActivityClick}
+                aria-label='Activity log'
+              >
+                <Icons.history className='size-5' />
+              </Button>
+            </HoverCardTrigger>
+            <HoverCardContent align='end' className='w-72'>
+              {participants && participants.length > 0 ? (
+                <>
+                  <div className='mb-2 text-xs font-medium'>Collaborators</div>
+                  <div className='mb-2 flex -space-x-2'>
+                    {participants.slice(0, 6).map((p) => (
                       <Avatar
                         key={p.id}
-                        className='ring-background size-5 rounded-full border ring-1'
+                        className='ring-background size-7 rounded-full border ring-2'
                       >
                         {p.avatar_url ? (
                           <AvatarImage
@@ -196,49 +208,29 @@ export function SuiteHeader({
                             alt={p.display_name || ''}
                           />
                         ) : (
-                          <AvatarFallback className='text-[9px]'>
+                          <AvatarFallback className='text-[10px]'>
                             {(p.display_name || '?').slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         )}
                       </Avatar>
                     ))}
-                    {participants.length > 3 && (
-                      <div className='text-muted-foreground bg-muted flex size-5 items-center justify-center rounded-full border text-[10px]'>
-                        +{participants.length - 3}
+                    {participants.length > 6 && (
+                      <div className='text-muted-foreground bg-muted flex size-7 items-center justify-center rounded-full border text-[11px]'>
+                        +{participants.length - 6}
                       </div>
                     )}
                   </div>
-                </Button>
-              </HoverCardTrigger>
-              <HoverCardContent align='end' className='w-72'>
-                <div className='mb-2 text-xs font-medium'>
-                  Recent participants
-                </div>
-                <div className='mb-2 flex -space-x-2'>
-                  {participants.slice(0, 8).map((p) => (
-                    <Avatar
-                      key={p.id}
-                      className='ring-background size-7 rounded-full border ring-2'
-                    >
-                      {p.avatar_url ? (
-                        <AvatarImage
-                          src={p.avatar_url}
-                          alt={p.display_name || ''}
-                        />
-                      ) : (
-                        <AvatarFallback className='text-[10px]'>
-                          {(p.display_name || '?').slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-                  ))}
-                </div>
+                  <div className='text-muted-foreground text-xs'>
+                    Click the history icon to open the activity timeline.
+                  </div>
+                </>
+              ) : (
                 <div className='text-muted-foreground text-xs'>
-                  Click to open activity timeline
+                  No collaborators yet. Invite teammates from Share.
                 </div>
-              </HoverCardContent>
-            </HoverCard>
-          )}
+              )}
+            </HoverCardContent>
+          </HoverCard>
           {showImport && (
             <>
               <input
