@@ -44,11 +44,24 @@ type Source = {
   created_at: string;
 };
 
-export function TrackingTab({ shipmentId }: { shipmentId: string }) {
+export function TrackingTab({
+  shipmentId,
+  ownerId,
+  forwarderId,
+  currentUserId
+}: {
+  shipmentId: string;
+  ownerId?: string | null;
+  forwarderId?: string | null;
+  currentUserId?: string | null;
+}) {
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [status, setStatus] = useState<any>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const isOwner = !!ownerId && !!currentUserId && ownerId === currentUserId;
+  const isForwarder =
+    !!forwarderId && !!currentUserId && forwarderId === currentUserId;
 
   const fetchSources = useCallback(async () => {
     const res = await fetch(`/api/shipments/${shipmentId}/tracking/sources`);
@@ -79,6 +92,10 @@ export function TrackingTab({ shipmentId }: { shipmentId: string }) {
   const driverSource = useMemo(
     () =>
       sources.find((s) => s.mode === 'road' && s.source_type === 'driver_app'),
+    [sources]
+  );
+  const activeSources = useMemo(
+    () => sources.filter((s) => s.active),
     [sources]
   );
 
@@ -251,30 +268,36 @@ export function TrackingTab({ shipmentId }: { shipmentId: string }) {
     <div className='space-y-4'>
       <div className='flex flex-col gap-2 md:flex-row md:items-center md:justify-between'>
         <h3 className='text-base font-semibold'>Tracking</h3>
-        <div className='flex gap-2'>
-          {!driverSource && (
-            <Button onClick={onCreateDriverSource} disabled={loading}>
-              {loading ? 'Creating…' : 'Enable Driver GPS'}
+        {isForwarder ? (
+          <div className='flex gap-2'>
+            {!driverSource && (
+              <Button onClick={onCreateDriverSource} disabled={loading}>
+                {loading ? 'Creating…' : 'Enable Driver GPS'}
+              </Button>
+            )}
+            <Button
+              variant='secondary'
+              onClick={onCreateAirAwb}
+              disabled={loading}
+            >
+              Add Air (AWB)
             </Button>
-          )}
-          <Button
-            variant='secondary'
-            onClick={onCreateAirAwb}
-            disabled={loading}
-          >
-            Add Air (AWB)
-          </Button>
-          <Button
-            variant='secondary'
-            onClick={onCreateSeaContainer}
-            disabled={loading}
-          >
-            Add Sea (Container)
-          </Button>
-        </div>
+            <Button
+              variant='secondary'
+              onClick={onCreateSeaContainer}
+              disabled={loading}
+            >
+              Add Sea (Container)
+            </Button>
+          </div>
+        ) : (
+          <div className='text-muted-foreground text-xs'>
+            Locations are managed by your forwarder.
+          </div>
+        )}
       </div>
 
-      {driverSource ? (
+      {driverSource && isForwarder ? (
         <Card className='p-4'>
           <div className='grid gap-3 md:grid-cols-3'>
             <div className='space-y-2 md:col-span-2'>
@@ -313,6 +336,16 @@ export function TrackingTab({ shipmentId }: { shipmentId: string }) {
           </div>
         </Card>
       ) : null}
+      {driverSource && !isForwarder ? (
+        <Card className='p-4'>
+          <div className='flex items-center justify-between'>
+            <div className='text-sm'>Driver GPS is enabled</div>
+            <div className='text-muted-foreground text-xs'>
+              Managed by forwarder
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className='p-4'>
         <div className='space-y-2'>
@@ -323,13 +356,19 @@ export function TrackingTab({ shipmentId }: { shipmentId: string }) {
               {new Date(status.last_timestamp).toLocaleString()} (
               {status.provider})
             </div>
+          ) : activeSources.length === 0 ? (
+            <div className='text-muted-foreground text-sm'>
+              Location is not shared
+            </div>
           ) : (
-            <div className='text-muted-foreground text-sm'>No position yet</div>
+            <div className='text-muted-foreground text-sm'>
+              Awaiting first location…
+            </div>
           )}
         </div>
       </Card>
 
-      {airSeaSources.length > 0 && (
+      {airSeaSources.length > 0 && isForwarder && (
         <Card className='p-4'>
           <div className='mb-2 flex items-center justify-between'>
             <div className='text-sm font-medium'>Air/Sea Sources</div>

@@ -31,10 +31,14 @@ export async function fetchSeaPosition(
     );
   }
   if (provider === 'ais') {
-    const key = process.env.AIS_API_KEY;
-    if (!key) throw new Error('AIS API key missing');
+    const key = process.env.AISSTREAM_API_KEY || process.env.AIS_API_KEY;
+    if (!key) throw new Error('AISStream API key missing');
+    // AISStream is a websocket streaming API. Our current on-demand Refresh
+    // endpoint is HTTP-based. To support AISStream properly we should add a
+    // short-lived websocket sampler or a background worker to keep last known
+    // positions. For now, fail with an actionable message.
     throw new Error(
-      'AIS fetch not wired: provide vessel mapping and enable outbound'
+      'AISStream requires websocket streaming. Switch provider to marinetraffic with MMSI/IMO for Refresh, or allow us to add a streaming sampler.'
     );
   }
 

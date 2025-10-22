@@ -1178,7 +1178,12 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
               {!formState.isLast ? (
                 <Button
                   size='sm'
-                  disabled={!formState.currentValid}
+                  disabled={
+                    !(
+                      formState.currentValid ||
+                      offerFormRef.current?.isCurrentStepValid?.()
+                    )
+                  }
                   onClick={() => offerFormRef.current?.next()}
                 >
                   Next
@@ -1187,7 +1192,10 @@ export const RequestDetailsPanel: React.FC<RequestDetailsPanelProps> = ({
                 <Button
                   size='sm'
                   onClick={() => offerFormRef.current?.submit()}
-                  disabled={formState.submitting || !formState.currentValid}
+                  disabled={
+                    (formState.submitting || !formState.currentValid) &&
+                    !offerFormRef.current?.isCurrentStepValid?.()
+                  }
                   className='bg-orange-500 font-bold text-white hover:bg-orange-600'
                 >
                   {formState.submitting

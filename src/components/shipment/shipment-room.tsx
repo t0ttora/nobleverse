@@ -249,7 +249,12 @@ export default function ShipmentRoom({
                 value='tracking'
                 className='flex-1 space-y-6 overflow-auto p-4'
               >
-                <TrackingTab shipmentId={shipment.id} />
+                <TrackingTab
+                  shipmentId={shipment.id}
+                  ownerId={shipment.owner_id}
+                  forwarderId={shipment.forwarder_id}
+                  currentUserId={currentUserId}
+                />
               </TabsContent>
               <TabsContent
                 value='docs'
@@ -329,7 +334,12 @@ export default function ShipmentRoom({
                   value='tracking'
                   className='flex-1 space-y-4 overflow-auto p-3'
                 >
-                  <TrackingTab shipmentId={shipment.id} />
+                  <TrackingTab
+                    shipmentId={shipment.id}
+                    ownerId={shipment.owner_id}
+                    forwarderId={shipment.forwarder_id}
+                    currentUserId={currentUserId}
+                  />
                 </TabsContent>
                 <TabsContent
                   value='docs'

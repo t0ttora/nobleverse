@@ -100,7 +100,12 @@ export const ForwarderOfferForm = forwardRef<
           free_time: d.free_time_days ?? prev.free_time ?? '',
           payment_terms: d.payment_terms ?? prev.payment_terms ?? '',
           currency: prev.currency || 'USD',
-          total_price_currency: prev.total_price_currency || 'USD'
+          total_price_currency: prev.total_price_currency || 'USD',
+          price_includes: Array.isArray(prev.price_includes)
+            ? prev.price_includes
+            : prev.price_includes
+              ? [prev.price_includes]
+              : []
         };
       });
     }
@@ -127,7 +132,12 @@ export const ForwarderOfferForm = forwardRef<
         ...d,
         currency: d.currency || prev.currency || 'USD',
         total_price_currency:
-          d.total_price_currency || prev.total_price_currency || 'USD'
+          d.total_price_currency || prev.total_price_currency || 'USD',
+        price_includes: Array.isArray(d.price_includes)
+          ? d.price_includes
+          : d.price_includes
+            ? [d.price_includes]
+            : []
       }));
     }
   }, [embedded, open, existingOffer?.id]);
@@ -136,8 +146,9 @@ export const ForwarderOfferForm = forwardRef<
   const isLast = step === sections.length - 1;
   const isFirst = step === 0;
 
-  function isEmpty(v: any) {
+  function isEmpty(v: any, type?: string) {
     if (v === null || v === undefined) return true;
+    if (type === 'multiselect') return !Array.isArray(v) || v.length === 0;
     if (typeof v === 'string') return v.trim() === '';
     if (Array.isArray(v)) return v.length === 0;
     return false;
@@ -149,7 +160,7 @@ export const ForwarderOfferForm = forwardRef<
     for (const f of current.fields as OfferField[]) {
       if (f.required) {
         const val = (formData as any)[f.id];
-        if (isEmpty(val)) return false;
+        if (isEmpty(val, f.type)) return false;
         if (f.type === 'number') {
           // During typing, numbers are kept as strings; validate parsable number when non-empty
           if (val !== '') {
@@ -247,7 +258,7 @@ export const ForwarderOfferForm = forwardRef<
       );
     }
     if (field.type === 'multiselect') {
-      const selected: string[] = Array.isArray(val) ? val : [];
+      const selected: string[] = Array.isArray(val) ? val : val ? [val] : [];
       return (
         <div className='flex flex-wrap gap-1'>
           {(field.options || []).map((o) => {
@@ -257,9 +268,12 @@ export const ForwarderOfferForm = forwardRef<
                 type='button'
                 key={o}
                 onClick={() => {
-                  const next = isOn
-                    ? selected.filter((x) => x !== o)
-                    : [...selected, o];
+                  let next: string[];
+                  if (isOn) {
+                    next = selected.filter((x) => x !== o);
+                  } else {
+                    next = [...selected, o];
+                  }
                   handleChange(field, next);
                 }}
                 className={`rounded border px-2 py-1 text-xs ${isOn ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-foreground border-border'}`}

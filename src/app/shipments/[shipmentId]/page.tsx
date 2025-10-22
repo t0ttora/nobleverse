@@ -66,7 +66,20 @@ export default async function ShipmentPage(props: any) {
         codeOrId,
         error: serializeError(error)
       });
-      return notFound();
+      return (
+        <div className='flex h-full flex-col items-center justify-center p-8 text-center'>
+          <h2 className='text-destructive mb-2 text-lg font-semibold'>
+            Could not load shipment
+          </h2>
+          <div className='text-muted-foreground mb-4 text-sm'>
+            Database error occurred. Please check your permissions or try again
+            later.
+          </div>
+          <pre className='bg-muted mx-auto max-w-xl overflow-x-auto rounded p-2 text-left text-xs'>
+            {JSON.stringify(serializeError(error), null, 2)}
+          </pre>
+        </div>
+      );
     }
     if (!shipment) {
       // Distinguish true not-found vs possible RLS filtered scenario (no error, no row)
@@ -74,7 +87,15 @@ export default async function ShipmentPage(props: any) {
         codeOrId,
         lookedUpBy: looksLikeUuid ? 'code_then_uuid' : 'code_only'
       });
-      return notFound();
+      return (
+        <div className='flex h-full flex-col items-center justify-center p-8 text-center'>
+          <h2 className='mb-2 text-lg font-semibold'>Shipment Not Found</h2>
+          <div className='text-muted-foreground mb-4 text-sm'>
+            No shipment found for code or ID:{' '}
+            <span className='font-mono'>{codeOrId}</span>
+          </div>
+        </div>
+      );
     }
     return <ShipmentRoom shipment={shipment} currentUserId={uid} />;
   } catch (err) {
@@ -82,6 +103,19 @@ export default async function ShipmentPage(props: any) {
       codeOrId,
       error: serializeError(err)
     });
-    return notFound();
+    return (
+      <div className='flex h-full flex-col items-center justify-center p-8 text-center'>
+        <h2 className='text-destructive mb-2 text-lg font-semibold'>
+          Unexpected error
+        </h2>
+        <div className='text-muted-foreground mb-4 text-sm'>
+          Something went wrong while loading this shipment. Please try again or
+          contact support.
+        </div>
+        <pre className='bg-muted mx-auto max-w-xl overflow-x-auto rounded p-2 text-left text-xs'>
+          {JSON.stringify(serializeError(err), null, 2)}
+        </pre>
+      </div>
+    );
   }
 }
