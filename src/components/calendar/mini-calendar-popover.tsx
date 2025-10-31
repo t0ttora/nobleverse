@@ -14,6 +14,13 @@ import {
   Share2
 } from 'lucide-react';
 import { Calendar as DayCalendar } from '@/components/ui/calendar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Tooltip,
@@ -37,6 +44,7 @@ export type MiniCalendarProps = {
   align?: 'start' | 'center' | 'end';
   sideOffset?: number;
   alignOffset?: number;
+  active?: boolean;
 };
 
 export default function MiniCalendarPopover({
@@ -48,7 +56,8 @@ export default function MiniCalendarPopover({
   side = 'bottom',
   align = 'end',
   sideOffset = 4,
-  alignOffset = 0
+  alignOffset = 0,
+  active = false
 }: MiniCalendarProps) {
   const [month, setMonth] = React.useState<Date>(new Date());
   const [selected, setSelected] = React.useState<Date | undefined>(new Date());
@@ -102,11 +111,24 @@ export default function MiniCalendarPopover({
   }
 
   const [addOpen, setAddOpen] = React.useState(false);
+  // Reset to today on each open for predictable default view
+  React.useEffect(() => {
+    if (open) {
+      const now = new Date();
+      setMonth(now);
+      setSelected(now);
+    }
+  }, [open]);
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <Button size='icon' className='rounded-lg' aria-label='Calendar'>
+        <Button
+          size='icon'
+          variant='ghost'
+          className={'rounded-lg ' + (active ? 'bg-foreground/10' : '')}
+          aria-label='Calendar'
+        >
           <CalendarRange className='size-4' />
         </Button>
       </PopoverTrigger>
@@ -139,7 +161,7 @@ export default function MiniCalendarPopover({
               <PopoverContent
                 side='bottom'
                 align='end'
-                className='bg-muted text-foreground w-[380px] space-y-4 border p-4 shadow-lg'
+                className='bg-muted text-foreground w-[min(420px,92vw)] space-y-4 border p-4 shadow-lg'
                 sideOffset={8}
               >
                 <div className='pt-1'>
@@ -148,7 +170,7 @@ export default function MiniCalendarPopover({
                     Pick a date and time, then we’ll add it to your calendar.
                   </div>
                 </div>
-                <div className='grid grid-cols-2 gap-2'>
+                <div className='grid grid-cols-6 gap-2'>
                   <div className='col-span-2'>
                     <Label className='text-xs'>Title</Label>
                     <Input
@@ -158,27 +180,50 @@ export default function MiniCalendarPopover({
                       className='h-9'
                     />
                   </div>
-                  <div>
+                  <div className='col-span-2'>
                     <Label className='text-xs'>Date</Label>
-                    <Input
-                      type='date'
-                      value={
-                        selected
-                          ? new Date(selected).toISOString().slice(0, 10)
-                          : new Date().toISOString().slice(0, 10)
-                      }
-                      onChange={(e) => setSelected(new Date(e.target.value))}
-                      className='h-9'
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant='outline'
+                          className='h-9 w-full justify-start'
+                        >
+                          {selected
+                            ? new Date(selected).toLocaleDateString()
+                            : new Date().toLocaleDateString()}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align='start' className='p-2'>
+                        <DayCalendar
+                          mode='single'
+                          selected={selected}
+                          onSelect={(d: any) => d && setSelected(new Date(d))}
+                          showOutsideDays
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                  <div>
+                  <div className='col-span-2'>
                     <Label className='text-xs'>Time</Label>
-                    <Input
-                      type='time'
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      className='h-9'
-                    />
+                    <Select value={time} onValueChange={setTime}>
+                      <SelectTrigger className='h-9 w-full'>
+                        <SelectValue placeholder='Select time' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 * 2 }, (_, i) => {
+                          const h = Math.floor(i / 2)
+                            .toString()
+                            .padStart(2, '0');
+                          const m = i % 2 === 0 ? '00' : '30';
+                          const v = `${h}:${m}`;
+                          return (
+                            <SelectItem key={v} value={v}>
+                              {v}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className='col-span-2'>
                     <Label className='text-xs'>Notes</Label>
@@ -222,7 +267,7 @@ export default function MiniCalendarPopover({
         </div>
         {/* Body: calendar on top, events list for month below */}
         <div className='flex-1 p-3 pt-2'>
-          <div className='mx-auto'>
+          <div className='mx-auto w-full'>
             <div className='mb-2'>
               <DayCalendar
                 mode='single'
@@ -240,7 +285,7 @@ export default function MiniCalendarPopover({
                       (e) => new Date(e.starts_at).toDateString() === key
                     ).length;
                     return (
-                      <div className='relative flex h-8 w-8 items-center justify-center'>
+                      <div className='relative flex h-9 w-9 items-center justify-center'>
                         <span className='text-xs'>{date.getDate()}</span>
                         {count > 0 && (
                           <span className='absolute bottom-0.5 inline-block h-1.5 w-1.5 rounded-full bg-white' />
@@ -250,6 +295,8 @@ export default function MiniCalendarPopover({
                   }
                 }}
                 classNames={{
+                  months: 'w-full flex flex-col sm:flex-row gap-2',
+                  month: 'w-full flex flex-col gap-4',
                   nav_button:
                     'size-7 bg-transparent p-0 border-0 text-foreground/70 hover:text-foreground',
                   caption_label: 'text-sm font-medium'

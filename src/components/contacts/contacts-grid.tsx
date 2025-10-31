@@ -2,6 +2,7 @@
 import * as React from 'react';
 import type { ContactListItem } from '@/lib/contacts';
 import { ContactCard } from './contact-card';
+import { TeamMemberCard } from './team-member-card';
 import { ContactPanel } from './contact-panel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/../utils/supabase/client';
@@ -11,12 +12,42 @@ export interface ContactsGridProps {
   people: ContactListItem[];
   onContact?: (userId: string) => void;
   onMessage?: (userId: string) => void;
+  variant?: 'default' | 'team';
+  selectedIds?: string[];
+  onToggleSelect?: (userId: string) => void;
+  onAssignTask?: (userId: string) => void;
+  onAssignEvent?: (userId: string) => void;
+  onAssignShipment?: (userId: string) => void;
+  onAssignRequest?: (userId: string) => void;
+  onChangeRole?: (userId: string, role: 'Admin' | 'Member' | 'Viewer') => void;
+  onAddTag?: (userId: string) => void;
+  onAddDepartment?: (userId: string) => void;
+  onStartThread?: (userId: string) => void;
+  onShareDoc?: (userId: string) => void;
+  onMention?: (userId: string) => void;
+  onMentionInInbox?: (userId: string) => void;
+  labelsMap?: Record<string, { tags?: string[]; departments?: string[] }>;
 }
 
 export function ContactsGrid({
   people,
   onContact,
-  onMessage
+  onMessage,
+  variant = 'default',
+  selectedIds,
+  onToggleSelect,
+  onAssignTask,
+  onAssignEvent,
+  onAssignShipment,
+  onAssignRequest,
+  onChangeRole,
+  onAddTag,
+  onAddDepartment,
+  onStartThread,
+  onShareDoc,
+  onMention,
+  onMentionInInbox,
+  labelsMap
 }: ContactsGridProps) {
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState<ContactListItem | null>(null);
@@ -62,18 +93,46 @@ export function ContactsGrid({
     <div className='relative'>
       <ScrollArea className='h-[calc(100vh-220px)] w-full pr-2'>
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
-          {people.map((p) => (
-            <ContactCard
-              key={p.id}
-              person={p}
-              onOpen={async (x) => {
-                setActive(x);
-                setOpen(true);
-                const rel = await computeRelationship(x);
-                setRelationship(rel);
-              }}
-            />
-          ))}
+          {people.map((p) =>
+            variant === 'team' ? (
+              <TeamMemberCard
+                key={p.id}
+                person={p}
+                selected={!!selectedIds?.includes(p.id)}
+                onToggleSelect={onToggleSelect}
+                onOpen={async (x) => {
+                  setActive(x);
+                  setOpen(true);
+                  const rel = await computeRelationship(x);
+                  setRelationship(rel);
+                }}
+                onMessage={onMessage}
+                onAssignTask={onAssignTask}
+                onAssignEvent={onAssignEvent}
+                onAssignShipment={onAssignShipment}
+                onAssignRequest={onAssignRequest}
+                onChangeRole={onChangeRole}
+                onAddTag={onAddTag}
+                onAddDepartment={onAddDepartment}
+                onStartThread={onStartThread}
+                onShareDoc={onShareDoc}
+                onMention={onMention}
+                onMentionInInbox={onMentionInInbox}
+                labels={labelsMap ? labelsMap[p.id] : undefined}
+              />
+            ) : (
+              <ContactCard
+                key={p.id}
+                person={p}
+                onOpen={async (x) => {
+                  setActive(x);
+                  setOpen(true);
+                  const rel = await computeRelationship(x);
+                  setRelationship(rel);
+                }}
+              />
+            )
+          )}
         </div>
       </ScrollArea>
       <ContactPanel

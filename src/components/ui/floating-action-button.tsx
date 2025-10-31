@@ -19,6 +19,8 @@ import ExpandedCalendar from '@/components/calendar/expanded-calendar';
 import { SidePanel } from '@/components/ui/side-panel';
 import SidepanelCalendar from '@/components/calendar/sidepanel-calendar';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import MiniTasksPopover from '@/components/tasks/mini-tasks-popover';
+import MiniAIPopover from '@/components/ai/mini-ai-popover';
 
 // A tiny, reusable icon button for the launcher with minimal, modern styling + native title
 function IconButton({
@@ -54,10 +56,13 @@ export interface FabProps {
 
 export default function FloatingActionButton({ className }: FabProps) {
   const ref = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
   const [calExpanded, setCalExpanded] = useState(false);
   const [calSide, setCalSide] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const { isOpen: isMobile } = useMediaQuery();
 
   // If mobile, ensure expanded/sidepanel are closed and disabled
@@ -68,10 +73,31 @@ export default function FloatingActionButton({ className }: FabProps) {
     }
   }, [isMobile]);
 
+  // Close FAB menu on outside click or Esc
+  React.useEffect(() => {
+    function onDocPointerDown(e: MouseEvent) {
+      if (!open) return;
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return; // clicking the toggle
+      if (menuRef.current?.contains(target)) return; // clicking inside the menu
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (!open) return;
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   return (
-    <>
-      {/* FAB toggle */}
-      <div className={cn('fixed right-5 bottom-5 z-40', className)}>
+    <div className={cn('fixed right-5 bottom-5 z-40', className)}>
+      <div className='relative'>
+        {/* FAB toggle */}
         <button
           ref={ref}
           type='button'
@@ -90,71 +116,92 @@ export default function FloatingActionButton({ className }: FabProps) {
             className='brightness-0 invert'
           />
         </button>
-      </div>
 
-      {/* Minimal adjacent launcher (vertical stack, opens upward) */}
-      <div
-        className={cn(
-          'fixed z-40 flex transform-gpu transition-all duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
-          open
-            ? 'pointer-events-auto translate-y-0 opacity-100'
-            : 'pointer-events-none translate-y-2 opacity-0'
-        )}
-        style={{ right: '20px', bottom: '76px' }}
-        aria-hidden={!open}
-      >
-        <div className='bg-background/80 supports-[backdrop-filter]:bg-background/60 supports-[backdrop-filter]:dark:bg-background/50 flex flex-col items-center gap-1.5 rounded-xl border border-white/15 p-2 shadow-xl backdrop-blur dark:border-white/10'>
-          {/* Marketplace (amber accent) */}
-          <IconButton label='Marketplace' className='hover:bg-amber-500/10'>
-            <ShoppingBag className='size-5 text-amber-500' strokeWidth={1.5} />
-          </IconButton>
+        {/* Minimal adjacent launcher (vertical stack, opens upward; centered to FAB) */}
+        <div
+          className={cn(
+            'absolute left-1/2 z-40 -translate-x-1/2 transform-gpu transition-all duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
+            open
+              ? 'pointer-events-auto opacity-100'
+              : 'pointer-events-none opacity-0'
+          )}
+          style={{ bottom: '56px' }}
+          aria-hidden={!open}
+          ref={menuRef}
+        >
+          <div className='bg-background/80 supports-[backdrop-filter]:bg-background/60 supports-[backdrop-filter]:dark:bg-background/50 flex flex-col items-center gap-1.5 rounded-xl border border-white/10 p-2 shadow-xl backdrop-blur dark:border-white/10'>
+            {/* Marketplace (neutralized accent) */}
+            <IconButton label='Marketplace' className='hover:bg-white/10'>
+              <ShoppingBag
+                className='text-foreground/80 size-5'
+                strokeWidth={1.5}
+              />
+            </IconButton>
 
-          <div className='h-px w-6 bg-white/15 dark:bg-white/10' />
+            <div className='h-px w-6 bg-white/15 dark:bg-white/10' />
 
-          {/* Calendar (sky accent) */}
-          <div className='relative'>
-            <MiniCalendarPopover
-              open={calOpen}
-              onOpenChange={setCalOpen}
-              onExpand={
-                isMobile
-                  ? () => {}
-                  : () => {
-                      setCalExpanded(true);
-                      setCalOpen(false);
-                    }
-              }
-              onSidePanel={
-                isMobile
-                  ? () => {}
-                  : () => {
-                      setCalSide(true);
-                      setCalOpen(false);
-                    }
-              }
-              isMobile={isMobile}
-              side='left'
-              align='center'
-              sideOffset={12}
-            />
+            {/* Calendar */}
+            <div className='relative'>
+              <MiniCalendarPopover
+                open={calOpen}
+                onOpenChange={setCalOpen}
+                onExpand={
+                  isMobile
+                    ? () => {}
+                    : () => {
+                        setCalExpanded(true);
+                        setCalOpen(false);
+                      }
+                }
+                onSidePanel={
+                  isMobile
+                    ? () => {}
+                    : () => {
+                        setCalSide(true);
+                        setCalOpen(false);
+                      }
+                }
+                isMobile={isMobile}
+                side='left'
+                align='center'
+                sideOffset={12}
+                active={calOpen}
+              />
+            </div>
+
+            {/* Tasks */}
+            <div className='relative'>
+              <MiniTasksPopover
+                open={tasksOpen}
+                onOpenChange={setTasksOpen}
+                isMobile={isMobile}
+                side='left'
+                align='center'
+                sideOffset={12}
+                active={tasksOpen}
+              />
+            </div>
+
+            {/* AI */}
+            <div className='relative'>
+              <MiniAIPopover
+                open={aiOpen}
+                onOpenChange={setAiOpen}
+                side='left'
+                align='center'
+                sideOffset={12}
+                active={aiOpen}
+              />
+            </div>
+
+            {/* Actions (neutral style) */}
+            <IconButton label='Actions' className='hover:bg-white/10'>
+              <Rocket className='text-foreground/80 size-5' strokeWidth={1.5} />
+            </IconButton>
           </div>
-
-          {/* Tasks (emerald accent, use Target icon) */}
-          <IconButton label='Tasks' className='hover:bg-emerald-500/10'>
-            <Target className='size-5 text-emerald-500' strokeWidth={1.5} />
-          </IconButton>
-
-          {/* AI (violet accent, use Bot icon) */}
-          <IconButton label='AI' className='hover:bg-violet-500/10'>
-            <Bot className='size-5 text-violet-500' strokeWidth={1.5} />
-          </IconButton>
-
-          {/* Actions (indigo accent, use Rocket icon) */}
-          <IconButton label='Actions' className='hover:bg-indigo-500/10'>
-            <Rocket className='size-5 text-indigo-500' strokeWidth={1.5} />
-          </IconButton>
         </div>
       </div>
+
       {/* Expanded calendar overlay */}
       {!isMobile && calExpanded && (
         <ExpandedCalendar onClose={() => setCalExpanded(false)} />
@@ -195,6 +242,6 @@ export default function FloatingActionButton({ className }: FabProps) {
           </div>
         </SidePanel>
       )}
-    </>
+    </div>
   );
 }

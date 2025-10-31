@@ -171,9 +171,14 @@ export const ForwarderOfferForm = forwardRef<
       }
     }
     // business rules
-    const budget = Number(
-      String(requestDetails?.budget ?? '').replace(',', '.')
-    );
+    // Treat missing/empty budget as NaN (no constraint)
+    const rawBudget = (requestDetails as any)?.budget;
+    const budget =
+      rawBudget === undefined ||
+      rawBudget === null ||
+      String(rawBudget).trim() === ''
+        ? Number.NaN
+        : Number(String(rawBudget).replace(',', '.'));
     const price = Number(
       String((formData as any).total_price ?? '').replace(',', '.')
     );
@@ -300,9 +305,14 @@ export const ForwarderOfferForm = forwardRef<
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      const budget = Number(
-        String(requestDetails?.budget ?? '').replace(',', '.')
-      );
+      // Treat missing/empty budget as NaN (no constraint)
+      const rawBudget = (requestDetails as any)?.budget;
+      const budget =
+        rawBudget === undefined ||
+        rawBudget === null ||
+        String(rawBudget).trim() === ''
+          ? Number.NaN
+          : Number(String(rawBudget).replace(',', '.'));
       const price = Number(
         String((formData as any).total_price ?? '').replace(',', '.')
       );

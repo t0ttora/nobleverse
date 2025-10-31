@@ -54,7 +54,8 @@ export function NewMessageDialog({
   onOpenChange,
   onSubmit,
   fromEmail,
-  presetRecipients
+  presetRecipients,
+  presetText
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -65,6 +66,7 @@ export function NewMessageDialog({
   }) => Promise<void>;
   fromEmail: string | null;
   presetRecipients?: Profile[];
+  presetText?: string;
 }) {
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<Profile[]>([]);
@@ -88,7 +90,10 @@ export function NewMessageDialog({
     if (open && presetRecipients && presetRecipients.length) {
       setRecipients(presetRecipients);
     }
-  }, [open, presetRecipients]);
+    if (open && presetText && !text) {
+      setText(presetText);
+    }
+  }, [open, presetRecipients, presetText]);
 
   useEffect(() => {
     let active = true;

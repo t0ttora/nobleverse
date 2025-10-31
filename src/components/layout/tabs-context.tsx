@@ -65,9 +65,46 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
   );
   const [focusedPane, setFocusedPane] = useState<'left' | 'right'>('left');
 
-  // Load persisted tabs from profiles.ui_tabs
+  // Revert to server-driven tabs without localStorage-first hydration
   useEffect(() => {
     let cancelled = false;
+    // Small helper to resolve icons and clamp ratios, then apply state
+    const applyState = (
+      payload:
+        | {
+            tabs?: AppTab[];
+            active?: string | null;
+            rightActive?: string | null;
+            split?: boolean;
+            splitRatio?: number;
+            collapseMode?: 'none' | 'others' | 'bar';
+          }
+        | null
+        | undefined
+    ) => {
+      if (!payload || !Array.isArray(payload.tabs)) return false;
+      const resolved = payload.tabs.map((t) => ({
+        ...t,
+        icon:
+          t.iconName === 'sheet'
+            ? (Icons.sheet as unknown as Icon)
+            : t.iconName === 'doc'
+              ? (Icons.doc as unknown as Icon)
+              : t.icon || (Icons.file as unknown as Icon)
+      }));
+      setTabs(resolved);
+      setActiveTabId(payload.active ?? (resolved[0]?.id || null));
+      setRightActiveTabId(payload.rightActive ?? null);
+      if (typeof payload.split === 'boolean') _setSplit(payload.split);
+      if (typeof payload.splitRatio === 'number')
+        setSplitRatio(
+          Math.min(0.8, Math.max(0.2, Number(payload.splitRatio) || 0.5))
+        );
+      if (payload.collapseMode) setCollapseMode(payload.collapseMode);
+      return true;
+    };
+
+    // Server truth fetch (no-store to keep it up-to-date)
     async function load() {
       try {
         const res = await fetch('/api/tabs', { cache: 'no-store' });
@@ -82,58 +119,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
           splitRatio?: number;
           collapseMode?: 'none' | 'others' | 'bar';
         } | null;
-        if (payload && Array.isArray(payload.tabs)) {
-          // Resolve icons from iconName
-          const resolved = payload.tabs.map((t) => ({
-            ...t,
-            icon:
-              t.iconName === 'sheet'
-                ? (Icons.sheet as unknown as Icon)
-                : t.iconName === 'doc'
-                  ? (Icons.doc as unknown as Icon)
-                  : t.icon || (Icons.file as unknown as Icon)
-          }));
-          setTabs(resolved);
-          setActiveTabId(payload.active ?? (payload.tabs[0]?.id || null));
-          setRightActiveTabId(payload.rightActive ?? null);
-          if (typeof payload.split === 'boolean') _setSplit(payload.split);
-          if (typeof payload.splitRatio === 'number')
-            setSplitRatio(
-              Math.min(0.8, Math.max(0.2, Number(payload.splitRatio) || 0.5))
-            );
-          if (payload.collapseMode) setCollapseMode(payload.collapseMode);
-        } else {
-          // Fallback: try localStorage backup when server has no data yet
-          try {
-            const raw =
-              typeof window !== 'undefined'
-                ? localStorage.getItem('nv_ui_tabs')
-                : null;
-            if (raw) {
-              const ls = JSON.parse(raw);
-              if (ls && Array.isArray(ls.tabs)) {
-                const resolved = ls.tabs.map((t: AppTab) => ({
-                  ...t,
-                  icon:
-                    (t as any).iconName === 'sheet'
-                      ? (Icons.sheet as unknown as Icon)
-                      : (t as any).iconName === 'doc'
-                        ? (Icons.doc as unknown as Icon)
-                        : (t as any).icon || (Icons.file as unknown as Icon)
-                }));
-                setTabs(resolved);
-                setActiveTabId(ls.active ?? (resolved[0]?.id || null));
-                setRightActiveTabId(ls.rightActive ?? null);
-                if (typeof ls.split === 'boolean') _setSplit(ls.split);
-                if (typeof ls.splitRatio === 'number')
-                  setSplitRatio(
-                    Math.min(0.8, Math.max(0.2, Number(ls.splitRatio) || 0.5))
-                  );
-                if (ls.collapseMode) setCollapseMode(ls.collapseMode);
-              }
-            }
-          } catch {}
-        }
+        applyState(payload);
       } catch {}
     }
     void load();
@@ -184,7 +170,7 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Persist on change (debounced slightly via microtask)
+  // Persist on change
   useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
@@ -197,22 +183,6 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
             t.iconName ||
             (t.kind === 'cells' ? 'sheet' : t.kind === 'docs' ? 'doc' : 'file')
         }));
-        // Persist to localStorage as best-effort backup
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(
-              'nv_ui_tabs',
-              JSON.stringify({
-                tabs: serializable,
-                active: activeTabId,
-                rightActive: rightActiveTabId,
-                split,
-                splitRatio,
-                collapseMode
-              })
-            );
-          }
-        } catch {}
         await fetch('/api/tabs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import EmptyState from '@/components/ui/empty-state';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function ScansTab({ shipmentId }: { shipmentId: string }) {
@@ -40,14 +41,17 @@ export default function ScansTab({ shipmentId }: { shipmentId: string }) {
       {scans.map((s) => (
         <div
           key={s.id}
-          className='bg-card/40 flex items-center justify-between rounded border p-2'
+          className='flex items-center justify-between rounded-md border p-2'
         >
           <div>{new Date(s.scanned_at).toLocaleString()}</div>
           <div className='text-[10px] opacity-60'>{s.location || '—'}</div>
         </div>
       ))}
       {scans.length === 0 && (
-        <div className='text-muted-foreground'>No scans yet.</div>
+        <EmptyState
+          title='No scans yet'
+          subtitle='Scan events will appear here as they come in.'
+        />
       )}
     </div>
   );

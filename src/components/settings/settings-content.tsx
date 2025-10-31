@@ -17,10 +17,9 @@ import {
   Shield,
   Plug,
   Eye,
-  Building2,
-  Package,
   CreditCard,
   Truck,
+  Users,
   ArrowLeft
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -45,8 +44,7 @@ type LeftSection =
   | 'privacy'
   | 'integrations'
   | 'appearance'
-  | 'org'
-  | 'offers'
+  | 'team'
   | 'billing'
   | 'shipping';
 
@@ -100,8 +98,12 @@ export default function SettingsContent({
     sidebarFeature: 'Recent Changes',
     scale: 100
   });
-  const initialOrg = React.useRef({ companyName: '', companyWebsite: '' });
-  const initialOffers = React.useRef({ currency: 'USD', validityDays: '14' });
+  // Store settings removed
+  const initialTeam = React.useRef<{
+    members: { email: string; name?: string | null; role: TeamRole }[];
+    invites: TeamInvite[];
+  }>({ members: [], invites: [] });
+  // Products settings removed
   const initialBilling = React.useRef<{
     plan: 'Free' | 'Pro' | 'Business';
     methods: { id: string; brand: string; last4: string; primary?: boolean }[];
@@ -116,6 +118,20 @@ export default function SettingsContent({
   const [email, setEmail] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [nobleId, setNobleId] = React.useState<string | null>(null);
+  // Team Management
+  type TeamRole = 'Owner' | 'Admin' | 'Member' | 'Viewer';
+  type TeamInvite = {
+    email: string;
+    role: TeamRole;
+    invited_at: string; // ISO
+    status: 'pending' | 'accepted' | 'expired';
+  };
+  const [teamMembers, setTeamMembers] = React.useState<
+    { email: string; name?: string | null; role: TeamRole }[]
+  >([]);
+  const [teamInvites, setTeamInvites] = React.useState<TeamInvite[]>([]);
+  const [inviteEmail, setInviteEmail] = React.useState('');
+  const [inviteRole, setInviteRole] = React.useState<TeamRole>('Member');
 
   // Inline edit toggles
   const [editName, setEditName] = React.useState(false);
@@ -340,25 +356,52 @@ export default function SettingsContent({
           carriers: Array.isArray(sh.carriers) ? (sh.carriers as string[]) : []
         } as any;
       }
-      // Prefill organization
+      // Prefill team (within org JSON)
       if (st?.org) {
         const o = st.org as any;
-        setCompanyName(o.company_name ?? '');
-        setCompanyWebsite(o.website ?? '');
-        initialOrg.current = {
-          companyName: o.company_name ?? '',
-          companyWebsite: o.website ?? ''
-        };
-      }
-      // Prefill offers
-      if (st?.offers) {
-        const of = st.offers as any;
-        setCurrency(of.currency ?? 'USD');
-        setValidityDays(String(of.validity_days ?? '14'));
-        initialOffers.current = {
-          currency: of.currency ?? 'USD',
-          validityDays: String(of.validity_days ?? '14')
-        } as any;
+        if (o.team) {
+          const t = o.team as any;
+          const mems = Array.isArray(t.members) ? t.members : [];
+          const invs = Array.isArray(t.invites) ? t.invites : [];
+          setTeamMembers(
+            mems.map((m: any) => ({
+              email: String(m.email || '').trim(),
+              name: m.name ?? null,
+              role: (m.role as TeamRole) || 'Member'
+            }))
+          );
+          setTeamInvites(
+            invs.map((iv: any) => ({
+              email: String(iv.email || '').trim(),
+              role: (iv.role as TeamRole) || 'Member',
+              invited_at: iv.invited_at || new Date().toISOString(),
+              status: (iv.status as any) || 'pending'
+            }))
+          );
+          initialTeam.current = {
+            members: mems.map((m: any) => ({
+              email: String(m.email || '').trim(),
+              name: m.name ?? null,
+              role: (m.role as TeamRole) || 'Member'
+            })),
+            invites: invs.map((iv: any) => ({
+              email: String(iv.email || '').trim(),
+              role: (iv.role as TeamRole) || 'Member',
+              invited_at: iv.invited_at || new Date().toISOString(),
+              status: (iv.status as any) || 'pending'
+            }))
+          };
+        } else {
+          // Default: ensure current user present as Owner
+          const selfEmail = email || '';
+          const selfName = fullName || '';
+          const defaultMembers = selfEmail
+            ? [{ email: selfEmail, name: selfName, role: 'Owner' as TeamRole }]
+            : [];
+          setTeamMembers(defaultMembers);
+          setTeamInvites([]);
+          initialTeam.current = { members: defaultMembers, invites: [] };
+        }
       }
     })();
   }, [userId]);
@@ -599,30 +642,14 @@ export default function SettingsContent({
     toast.success('Shipping & Delivery saved');
   };
 
-  // Organization
-  const [companyName, setCompanyName] = React.useState('');
-  const [companyWebsite, setCompanyWebsite] = React.useState('');
-  const saveOrg = async () => {
+  const saveTeam = async () => {
     if (!userId) return;
     await supabase.from('settings').upsert({
       user_id: userId,
-      org: { company_name: companyName, website: companyWebsite }
+      org: { team: { members: teamMembers, invites: teamInvites } }
     });
-    initialOrg.current = { companyName, companyWebsite };
-    toast.success('Organization saved');
-  };
-
-  // Offers & Products
-  const [currency, setCurrency] = React.useState<'USD' | 'EUR' | 'TRY'>('USD');
-  const [validityDays, setValidityDays] = React.useState('14');
-  const saveOffers = async () => {
-    if (!userId) return;
-    await supabase.from('settings').upsert({
-      user_id: userId,
-      offers: { currency, validity_days: Number(validityDays) }
-    });
-    initialOffers.current = { currency, validityDays } as any;
-    toast.success('Offers & Products saved');
+    initialTeam.current = { members: teamMembers, invites: teamInvites };
+    toast.success('Team updated');
   };
 
   const onTopSave = () => {
@@ -635,8 +662,7 @@ export default function SettingsContent({
     else if (left === 'appearance') return saveAppearance();
     else if (left === 'billing') return saveBilling();
     else if (left === 'shipping') return saveShipping();
-    else if (left === 'org') return saveOrg();
-    else if (left === 'offers') return saveOffers();
+    else if (left === 'team') return saveTeam();
   };
 
   const onTopDiscard = () => {
@@ -774,22 +800,41 @@ export default function SettingsContent({
               ? (sh.carriers as string[])
               : []
           } as any;
-        } else if (left === 'org' && data.org) {
+        } else if (left === 'team' && data.org) {
           const o = data.org as any;
-          setCompanyName(o.company_name ?? '');
-          setCompanyWebsite(o.website ?? '');
-          initialOrg.current = {
-            companyName: o.company_name ?? '',
-            companyWebsite: o.website ?? ''
-          };
-        } else if (left === 'offers' && data.offers) {
-          const of = data.offers as any;
-          setCurrency(of.currency ?? 'USD');
-          setValidityDays(String(of.validity_days ?? '14'));
-          initialOffers.current = {
-            currency: of.currency ?? 'USD',
-            validityDays: String(of.validity_days ?? '14')
-          } as any;
+          if (o.team) {
+            const t = o.team as any;
+            const mems = Array.isArray(t.members) ? t.members : [];
+            const invs = Array.isArray(t.invites) ? t.invites : [];
+            setTeamMembers(
+              mems.map((m: any) => ({
+                email: String(m.email || '').trim(),
+                name: m.name ?? null,
+                role: (m.role as TeamRole) || 'Member'
+              }))
+            );
+            setTeamInvites(
+              invs.map((iv: any) => ({
+                email: String(iv.email || '').trim(),
+                role: (iv.role as TeamRole) || 'Member',
+                invited_at: iv.invited_at || new Date().toISOString(),
+                status: (iv.status as any) || 'pending'
+              }))
+            );
+            initialTeam.current = {
+              members: mems.map((m: any) => ({
+                email: String(m.email || '').trim(),
+                name: m.name ?? null,
+                role: (m.role as TeamRole) || 'Member'
+              })),
+              invites: invs.map((iv: any) => ({
+                email: String(iv.email || '').trim(),
+                role: (iv.role as TeamRole) || 'Member',
+                invited_at: iv.invited_at || new Date().toISOString(),
+                status: (iv.status as any) || 'pending'
+              }))
+            };
+          }
         }
       });
   };
@@ -848,15 +893,12 @@ export default function SettingsContent({
         (typeof i.scale === 'number' ? i.scale : 100) !== uiScale
       );
     }
-    if (left === 'org') {
-      const i = initialOrg.current;
+    if (left === 'team') {
+      const i = initialTeam.current;
       return (
-        i.companyName !== companyName || i.companyWebsite !== companyWebsite
+        JSON.stringify(i.members) !== JSON.stringify(teamMembers) ||
+        JSON.stringify(i.invites) !== JSON.stringify(teamInvites)
       );
-    }
-    if (left === 'offers') {
-      const i = initialOffers.current as any;
-      return i.currency !== currency || i.validityDays !== validityDays;
     }
     if (left === 'billing') {
       const i = initialBilling.current;
@@ -896,10 +938,6 @@ export default function SettingsContent({
     intOneDrive,
     appearanceTheme,
     density,
-    companyName,
-    companyWebsite,
-    currency,
-    validityDays,
     plan,
     methods,
     incoterm,
@@ -978,28 +1016,17 @@ export default function SettingsContent({
         <SectionLabel className='mt-6'>GENERAL SETTINGS</SectionLabel>
         <div
           onClick={() => {
-            setLeft('org');
+            setLeft('team');
             if (isMobile) setShowDetail(true);
           }}
         >
           <NavItem
-            active={left === 'org'}
-            icon={<Building2 className='h-4 w-4' />}
-            label='Store Settings'
+            active={left === 'team'}
+            icon={<Users className='h-4 w-4' />}
+            label='Team Management'
           />
         </div>
-        <div
-          onClick={() => {
-            setLeft('offers');
-            if (isMobile) setShowDetail(true);
-          }}
-        >
-          <NavItem
-            active={left === 'offers'}
-            icon={<Package className='h-4 w-4' />}
-            label='Products Settings'
-          />
-        </div>
+        {/* Products Settings removed */}
         <div
           onClick={() => {
             setLeft('billing');
@@ -1058,13 +1085,11 @@ export default function SettingsContent({
                       ? 'Integrations'
                       : left === 'appearance'
                         ? 'Appearance'
-                        : left === 'org'
-                          ? 'Organization Settings'
-                          : left === 'offers'
-                            ? 'Offers & Products'
-                            : left === 'billing'
-                              ? 'Payment & Billing'
-                              : 'Shipping & Delivery'}
+                        : left === 'team'
+                          ? 'Team Management'
+                          : left === 'billing'
+                            ? 'Payment & Billing'
+                            : 'Shipping & Delivery'}
               </h2>
               <p className='text-neutral-500 dark:text-neutral-400'>
                 Manage and collaborate on your {left.replace('&', 'and')}{' '}
@@ -1679,59 +1704,199 @@ export default function SettingsContent({
             </div>
           )}
 
-          {is('org') && (
+          {/* Store Settings removed */}
+
+          {is('team') && (
             <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
-              <Row label='Company Name'>
-                <Input
-                  className='h-8 w-64'
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </Row>
-              <Row label='Website'>
-                <Input
-                  className='h-8 w-64'
-                  value={companyWebsite}
-                  onChange={(e) => setCompanyWebsite(e.target.value)}
-                />
-              </Row>
+              <div className='px-1 py-4'>
+                <div className='mb-2 font-medium'>Members</div>
+                <div className='space-y-2'>
+                  {teamMembers.length === 0 && (
+                    <div className='text-sm text-neutral-500'>
+                      No members yet
+                    </div>
+                  )}
+                  {teamMembers.map((m, idx) => (
+                    <div
+                      key={`${m.email}-${idx}`}
+                      className='flex items-center justify-between border-b border-dashed py-2 last:border-b-0 dark:border-neutral-800'
+                    >
+                      <div className='min-w-0'>
+                        <div className='truncate text-sm text-neutral-800 dark:text-neutral-100'>
+                          {m.name || m.email}
+                        </div>
+                        {m.name && (
+                          <div className='truncate text-xs text-neutral-500'>
+                            {m.email}
+                          </div>
+                        )}
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <Select
+                          value={m.role}
+                          onValueChange={(v) =>
+                            setTeamMembers((cur) =>
+                              cur.map((x, i) =>
+                                i === idx ? { ...x, role: v as TeamRole } : x
+                              )
+                            )
+                          }
+                        >
+                          <SelectTrigger size='sm' className='h-8 min-w-32'>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(
+                              [
+                                'Owner',
+                                'Admin',
+                                'Member',
+                                'Viewer'
+                              ] as TeamRole[]
+                            ).map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {r}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-8'
+                          onClick={() =>
+                            setTeamMembers((cur) =>
+                              cur.filter((_, i) => i !== idx)
+                            )
+                          }
+                          disabled={m.role === 'Owner' && m.email === email}
+                          title={
+                            m.role === 'Owner' && m.email === email
+                              ? 'Cannot remove yourself as Owner'
+                              : 'Remove member'
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className='px-1 py-4'>
+                <div className='mb-2 font-medium'>Invite members</div>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <Input
+                    className='h-8 w-64'
+                    placeholder='email@company.com'
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                  <Select
+                    value={inviteRole}
+                    onValueChange={(v) => setInviteRole(v as TeamRole)}
+                  >
+                    <SelectTrigger size='sm' className='h-8 min-w-32'>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(['Admin', 'Member', 'Viewer'] as TeamRole[]).map(
+                        (r) => (
+                          <SelectItem key={r} value={r}>
+                            {r}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size='sm'
+                    className='h-8 bg-orange-500 text-white hover:bg-orange-600'
+                    onClick={() => {
+                      const e = inviteEmail.trim();
+                      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+                      if (!emailOk) {
+                        toast.error('Enter a valid email');
+                        return;
+                      }
+                      // Avoid duplicates
+                      const alreadyMember = teamMembers.some(
+                        (m) => m.email.toLowerCase() === e.toLowerCase()
+                      );
+                      const alreadyInvited = teamInvites.some(
+                        (iv) =>
+                          iv.email.toLowerCase() === e.toLowerCase() &&
+                          iv.status === 'pending'
+                      );
+                      if (alreadyMember || alreadyInvited) {
+                        toast.error('Already a member or invited');
+                        return;
+                      }
+                      setTeamInvites((cur) => [
+                        ...cur,
+                        {
+                          email: e,
+                          role: inviteRole,
+                          invited_at: new Date().toISOString(),
+                          status: 'pending'
+                        }
+                      ]);
+                      setInviteEmail('');
+                      toast.success('Invitation added');
+                    }}
+                  >
+                    Invite
+                  </Button>
+                </div>
+                {teamInvites.length > 0 && (
+                  <div className='mt-3 space-y-2'>
+                    {teamInvites.map((iv, idx) => (
+                      <div
+                        key={`${iv.email}-${idx}`}
+                        className='flex items-center justify-between border-b border-dashed py-2 last:border-b-0 dark:border-neutral-800'
+                      >
+                        <div className='min-w-0'>
+                          <div className='truncate text-sm text-neutral-800 dark:text-neutral-100'>
+                            {iv.email}
+                          </div>
+                          <div className='truncate text-xs text-neutral-500'>
+                            {iv.role} • {iv.status}
+                          </div>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='h-8'
+                            onClick={() =>
+                              toast.info('Resend not implemented in demo')
+                            }
+                            disabled={iv.status !== 'pending'}
+                          >
+                            Resend
+                          </Button>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='h-8'
+                            onClick={() =>
+                              setTeamInvites((cur) =>
+                                cur.filter((_, i) => i !== idx)
+                              )
+                            }
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {is('offers') && (
-            <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>
-              <Row label='Default currency' hint='Used in offers and pricing'>
-                <Select
-                  value={currency}
-                  onValueChange={(v) => setCurrency(v as any)}
-                >
-                  <SelectTrigger size='sm' className='h-8 min-w-36'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='USD'>USD</SelectItem>
-                    <SelectItem value='EUR'>EUR</SelectItem>
-                    <SelectItem value='TRY'>TRY</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row
-                label='Offer validity'
-                hint='Default days your offer remains valid'
-              >
-                <Select value={validityDays} onValueChange={setValidityDays}>
-                  <SelectTrigger size='sm' className='h-8 min-w-36'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='7'>7 days</SelectItem>
-                    <SelectItem value='14'>14 days</SelectItem>
-                    <SelectItem value='30'>30 days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </div>
-          )}
+          {/* Products Settings removed */}
 
           {is('billing') && (
             <div className='divide-y divide-dashed divide-neutral-200 rounded-md border border-transparent'>

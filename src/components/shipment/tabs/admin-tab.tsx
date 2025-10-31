@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
+import EmptyState from '@/components/ui/empty-state';
 
 export default function AdminTab({ shipment }: { shipment: any }) {
   const [ledger, setLedger] = useState<any[]>([]);
@@ -58,37 +59,42 @@ export default function AdminTab({ shipment }: { shipment: any }) {
           Refund
         </Button>
       </div>
-      <table className='w-full overflow-hidden rounded border text-xs'>
-        <thead className='bg-muted/50'>
-          <tr className='text-left'>
-            <th className='p-2'>Type</th>
-            <th className='p-2'>Amount</th>
-            <th className='p-2'>Meta</th>
-            <th className='p-2'>At</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ledger.map((e) => (
-            <tr key={e.id} className='border-t'>
-              <td className='p-2 font-medium'>{e.entry_type}</td>
-              <td className='p-2'>${(e.amount_cents / 100).toFixed(2)}</td>
-              <td className='max-w-[240px] truncate p-2'>
-                {e.meta ? JSON.stringify(e.meta) : ''}
-              </td>
-              <td className='p-2 opacity-60'>
-                {new Date(e.created_at).toLocaleString()}
-              </td>
+      <div className='rounded-lg border'>
+        <table className='w-full overflow-hidden text-xs'>
+          <thead className='bg-muted/50'>
+            <tr className='text-left'>
+              <th className='p-2'>Type</th>
+              <th className='p-2'>Amount</th>
+              <th className='p-2'>Meta</th>
+              <th className='p-2'>At</th>
             </tr>
-          ))}
-          {ledger.length === 0 && (
-            <tr>
-              <td colSpan={4} className='text-muted-foreground p-4 text-center'>
-                No ledger entries.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ledger.map((e) => (
+              <tr key={e.id} className='border-t'>
+                <td className='p-2 font-medium'>{e.entry_type}</td>
+                <td className='p-2'>${(e.amount_cents / 100).toFixed(2)}</td>
+                <td className='max-w-[240px] truncate p-2'>
+                  {e.meta ? JSON.stringify(e.meta) : ''}
+                </td>
+                <td className='p-2 opacity-60'>
+                  {new Date(e.created_at).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+            {ledger.length === 0 && (
+              <tr>
+                <td colSpan={4} className='p-4'>
+                  <EmptyState
+                    title='No ledger entries'
+                    subtitle='New entries will appear in realtime.'
+                  />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,13 @@
 'use client';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState, useTransition, useRef } from 'react';
+import {
+  useEffect,
+  useState,
+  useTransition,
+  useRef,
+  useMemo,
+  memo
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   DropdownMenu,
@@ -28,6 +35,7 @@ import {
   PopoverTrigger,
   PopoverContent
 } from '@/components/ui/popover';
+// Restore direct imports for export helpers (pre-optimization behavior)
 import domtoimage from 'dom-to-image-more';
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
@@ -62,7 +70,11 @@ interface ProfileMini {
 
 import Link from 'next/link';
 
-function AvatarStack({ participantIds }: { participantIds: string[] }) {
+const AvatarStack = memo(function AvatarStack({
+  participantIds
+}: {
+  participantIds: string[];
+}) {
   const [profiles, setProfiles] = useState<ProfileMini[]>([]);
   const [roles, setRoles] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -109,6 +121,7 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
                 <Avatar className='ring-background bg-muted/30 h-9 w-9 border shadow-sm ring-2 backdrop-blur'>
                   {p.avatar_url && (
                     <AvatarImage
+                      loading='lazy'
                       src={p.avatar_url}
                       alt={p.display_name || p.username || ''}
                     />
@@ -139,6 +152,7 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
                 <Avatar className='bg-muted/40 h-6 w-6 border'>
                   {p.avatar_url && (
                     <AvatarImage
+                      loading='lazy'
                       src={p.avatar_url}
                       alt={p.display_name || ''}
                     />
@@ -169,7 +183,7 @@ function AvatarStack({ participantIds }: { participantIds: string[] }) {
       </HoverCardContent>
     </HoverCard>
   );
-}
+});
 
 interface ShipmentHeaderProps {
   shipment: any;
@@ -196,17 +210,22 @@ export default function ShipmentHeader({
     ? format(new Date(shipment.created_at), 'MMM d, yyyy')
     : '—';
   // Build participant list: always include owner/forwarder as baseline
-  const baseIds = [shipment.owner_id, shipment.forwarder_id].filter(
-    Boolean
-  ) as string[];
-  const participants: string[] = Array.from(
-    new Set(
-      (Array.isArray(shipment.participants)
-        ? shipment.participants
-        : []
-      ).concat(baseIds)
-    )
+  const baseIds = useMemo(
+    () =>
+      [shipment.owner_id, shipment.forwarder_id].filter(Boolean) as string[],
+    [shipment.owner_id, shipment.forwarder_id]
   );
+  const participants: string[] = useMemo(() => {
+    const list = Array.isArray(shipment.participants)
+      ? (shipment.participants as string[])
+      : [];
+    return Array.from(new Set(list.concat(baseIds)));
+  }, [
+    baseIds,
+    Array.isArray(shipment.participants)
+      ? (shipment.participants as string[]).join('|')
+      : ''
+  ]);
 
   const handleGenerateLabel = () => {
     startLabel(async () => {
@@ -407,7 +426,7 @@ export default function ShipmentHeader({
   }, []);
 
   return (
-    <div className='bg-background/85 supports-[backdrop-filter]:bg-background/70 relative flex w-full flex-col gap-2 border-b px-4 py-2.5 backdrop-blur md:px-5 md:py-3'>
+    <div className='bg-background/85 supports-[backdrop-filter]:bg-background/70 relative flex w-full flex-col gap-2 px-4 py-2 backdrop-blur md:px-5 md:py-2.5'>
       {mounted &&
         labelOpen &&
         createPortal(
@@ -638,12 +657,7 @@ export default function ShipmentHeader({
           </DropdownMenu>
         </div>
       </div>
-      <div className='bg-border h-1 w-full overflow-hidden rounded'>
-        <div
-          className='h-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400'
-          style={{ width: pct + '%' }}
-        />
-      </div>
+      {/* Progress bar removed for a cleaner header per request */}
       {/* Hidden label for export (always in DOM) */}
       <div className='absolute top-0 -left-[9999px]' aria-hidden='true'>
         <div
@@ -742,7 +756,13 @@ function LabelRow({ k, v, full }: { k: string; v: string; full?: string }) {
 }
 
 // Minimal QR: simple matrix using deterministic hash (not standard error correction, placeholder until lib added)
-function SimpleQR({ value, size = 80 }: { value: string; size?: number }) {
+const SimpleQR = memo(function SimpleQR({
+  value,
+  size = 80
+}: {
+  value: string;
+  size?: number;
+}) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -785,9 +805,9 @@ function SimpleQR({ value, size = 80 }: { value: string; size?: number }) {
       style={{ width: size, height: size }}
     />
   );
-}
+});
 
-function SimpleBarcode({
+const SimpleBarcode = memo(function SimpleBarcode({
   value,
   height = 48
 }: {
@@ -820,4 +840,4 @@ function SimpleBarcode({
     ctx.fillText(value, 6, height - 2);
   }, [value, height]);
   return <canvas ref={ref} width={360} height={height} className='w-full' />;
-}
+});

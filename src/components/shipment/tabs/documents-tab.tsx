@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import EmptyState from '@/components/ui/empty-state';
 import {
   Download,
   File,
@@ -20,7 +21,8 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogTrigger
 } from '@/components/ui/dialog';
 
 type DocType =
@@ -332,415 +334,207 @@ export default function DocumentsTab({ shipment }: { shipment: any }) {
   }, [files, shortCounter]);
 
   return (
-    <div className='space-y-6'>
-      {/* Request Documents (scoped to this shipment) */}
-      <div className='rounded-2xl border p-4'>
-        <div className='mb-2 text-sm font-medium'>
-          Request documents from your counterparty
-        </div>
-        <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
-          {COMMON_DOCS.map((d) => (
-            <label
-              key={d.key}
-              className='hover:bg-accent/40 flex items-center gap-2 rounded-xl border p-2'
-            >
-              <Checkbox
-                checked={!!selected[d.key]}
-                onCheckedChange={() => toggle(d.key)}
-              />
-              <span className='text-sm'>{d.label}</span>
-            </label>
-          ))}
-        </div>
-        {templates.length > 0 && (
-          <div className='mt-3'>
-            <div className='text-muted-foreground mb-1 text-xs'>
-              Your templates
-            </div>
-            <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
-              {templates.map((t) => (
-                <label
-                  key={t}
-                  className='hover:bg-accent/40 flex items-center gap-2 rounded-xl border p-2'
-                >
-                  <Checkbox
-                    checked={!!selectedTemplates[t]}
-                    onCheckedChange={() =>
-                      setSelectedTemplates((m) => ({ ...m, [t]: !m[t] }))
-                    }
-                  />
-                  <span className='text-sm'>{t}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className='mt-3'>
-          <div className='text-muted-foreground mb-1 text-xs'>
-            Ask a specific document (custom name)
-          </div>
-          <div className='flex items-center gap-2'>
-            <Input
-              placeholder='e.g. SGS Inspection Report'
-              value={customDocName}
-              onChange={(e) => setCustomDocName(e.target.value)}
-              className='max-w-sm'
+    <div className='space-y-4'>
+      <Tabs defaultValue='all'>
+        <div className='flex items-center justify-between gap-2'>
+          <TabsList className='scrollbar-thin w-full justify-start overflow-x-auto'>
+            <TabsTrigger value='all'>All Documents</TabsTrigger>
+            <TabsTrigger value='incoming'>Incoming Requests</TabsTrigger>
+          </TabsList>
+          <div className='flex flex-shrink-0 items-center gap-2'>
+            <input
+              id='doc_upload'
+              type='file'
+              className='hidden'
+              onChange={onUpload}
             />
             <Button
               size='sm'
-              variant='outline'
-              onClick={addCustom}
-              disabled={!customDocName.trim()}
+              onClick={() => document.getElementById('doc_upload')?.click()}
+              disabled={uploading}
             >
-              Add
+              + Upload Document
             </Button>
-          </div>
-          {customDocs.length > 0 && (
-            <div className='mt-2 flex flex-wrap gap-2'>
-              {customDocs.map((label) => (
-                <span
-                  key={label}
-                  className='bg-accent/50 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs'
+            <RequestDocsButton
+              disabled={!counterpartyId}
+              onOpenDialog={() => void 0}
+              trigger={
+                <Button
+                  size='sm'
+                  variant='secondary'
+                  disabled={!counterpartyId}
                 >
-                  {label}
-                  <button
-                    onClick={() => removeCustom(label)}
-                    className='text-muted-foreground hover:text-foreground rounded bg-transparent px-1'
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+                  + Request Documents
+                </Button>
+              }
+              content={
+                <RequestBuilder
+                  selected={selected}
+                  onToggle={toggle}
+                  templates={templates}
+                  selectedTemplates={selectedTemplates}
+                  setSelectedTemplates={setSelectedTemplates}
+                  customDocName={customDocName}
+                  setCustomDocName={setCustomDocName}
+                  customDocs={customDocs}
+                  addCustom={addCustom}
+                  removeCustom={removeCustom}
+                  onSubmit={submitRequest}
+                  counterpartyDetected={!!counterpartyId}
+                />
+              }
+            />
+          </div>
         </div>
-        <div className='mt-3 flex items-center gap-2'>
-          <Button size='sm' onClick={submitRequest} disabled={!counterpartyId}>
-            Request Selected
-          </Button>
-          {!counterpartyId && (
-            <span className='text-muted-foreground text-xs'>
-              Counterparty not detected
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className='flex items-center gap-2'>
-        <input
-          id='doc_upload'
-          type='file'
-          className='hidden'
-          onChange={onUpload}
-        />
-        <Button
-          size='sm'
-          onClick={() => document.getElementById('doc_upload')?.click()}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : 'Upload'}
-        </Button>
-      </div>
-      {error && <div className='text-destructive text-xs'>{error}</div>}
-      {/* Section 1: All files (current view) */}
-      <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
-        {files.map((f) => {
-          const url = publicBase
-            ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data.publicUrl
-            : '#';
-          return (
-            <Card key={f.name} className='bg-card/50 rounded-2xl border p-3'>
-              <div className='flex items-start justify-between gap-3'>
-                <div className='flex min-w-0 items-center gap-2'>
-                  <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
-                    {iconFor(f.name)}
-                  </span>
-                  <div className='min-w-0'>
-                    <div
-                      className='truncate text-sm font-medium'
-                      title={f.name}
-                    >
-                      {f.name}
-                    </div>
-                    <div className='text-muted-foreground text-[11px]'>
-                      {f.updated_at
-                        ? new Date(f.updated_at).toLocaleString()
-                        : ''}
-                    </div>
-                  </div>
-                </div>
-                <div className='flex items-center gap-2'>
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    className='h-7 px-2 text-xs'
-                    onClick={() => setPreview({ url, name: f.name })}
-                  >
-                    <Eye className='mr-1 size-3' /> Preview
-                  </Button>
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    className='text-destructive h-7 px-2 text-xs'
-                    onClick={async () => {
-                      await supabase.storage
-                        .from('shipments')
-                        .remove([`${shipmentId}/${f.name}`]);
-                      await refresh();
-                    }}
-                  >
-                    <Trash className='mr-1 size-3' /> Delete
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-      {files.length === 0 && !error && (
-        <div className='text-muted-foreground text-sm'>No documents.</div>
-      )}
-
-      {/* Section 2: My uploads vs Counterparty uploads */}
-      <div className='space-y-2'>
-        <div className='text-sm font-medium'>Uploads by participant</div>
-        <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
-          <Card className='bg-card/50 rounded-2xl border p-3'>
-            <div className='mb-2 text-xs font-semibold'>My uploads</div>
-            <div className='space-y-2'>
-              {mine.map((f) => {
-                const url = publicBase
-                  ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data
-                      .publicUrl
-                  : '#';
-                return (
-                  <div
-                    key={f.name}
-                    className='flex items-center justify-between gap-2 text-sm'
-                  >
+        {error && <div className='text-destructive mt-1 text-xs'>{error}</div>}
+        <TabsContent value='all'>
+          <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+            {files.map((f) => {
+              const url = publicBase
+                ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data
+                    .publicUrl
+                : '#';
+              return (
+                <Card key={f.name} className='rounded-lg border p-3'>
+                  <div className='flex items-start justify-between gap-3'>
                     <div className='flex min-w-0 items-center gap-2'>
                       <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
                         {iconFor(f.name)}
                       </span>
-                      <div className='truncate'>{f.name}</div>
-                    </div>
-                    <a
-                      href={url}
-                      target='_blank'
-                      rel='noreferrer'
-                      className='text-primary text-xs hover:underline'
-                    >
-                      View
-                    </a>
-                  </div>
-                );
-              })}
-              {mine.length === 0 && (
-                <div className='text-muted-foreground text-xs'>
-                  No uploads yet.
-                </div>
-              )}
-            </div>
-          </Card>
-          <Card className='bg-card/50 rounded-2xl border p-3'>
-            <div className='mb-2 text-xs font-semibold'>
-              Counterparty uploads
-            </div>
-            <div className='space-y-2'>
-              {theirs.map((f) => {
-                const url = publicBase
-                  ? publicBase.getPublicUrl(`${shipmentId}/${f.name}`).data
-                      .publicUrl
-                  : '#';
-                return (
-                  <div
-                    key={f.name}
-                    className='flex items-center justify-between gap-2 text-sm'
-                  >
-                    <div className='flex min-w-0 items-center gap-2'>
-                      <span className='bg-muted text-muted-foreground inline-flex items-center justify-center rounded-md p-1'>
-                        {iconFor(f.name)}
-                      </span>
-                      <div className='truncate'>{f.name}</div>
-                    </div>
-                    <a
-                      href={url}
-                      target='_blank'
-                      rel='noreferrer'
-                      className='text-primary text-xs hover:underline'
-                    >
-                      View
-                    </a>
-                  </div>
-                );
-              })}
-              {theirs.length === 0 && (
-                <div className='text-muted-foreground text-xs'>
-                  No uploads yet.
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* Requests for this shipment */}
-      <div className='space-y-2'>
-        <div className='text-sm font-medium'>Requests for this shipment</div>
-        <Tabs defaultValue='incoming'>
-          <TabsList>
-            <TabsTrigger value='incoming'>Incoming</TabsTrigger>
-            <TabsTrigger value='outgoing'>Outgoing</TabsTrigger>
-          </TabsList>
-          <TabsContent value='incoming'>
-            <div className='space-y-2'>
-              {requests
-                .filter((r) => r.receiver_id === me)
-                .map((r) => (
-                  <div
-                    key={r.id}
-                    className='bg-card/50 rounded-2xl border p-3 text-sm'
-                  >
-                    <div className='flex items-center justify-between gap-2'>
-                      <div>
-                        <div className='font-medium'>
-                          {r.type === 'custom'
-                            ? r.note || 'Custom document'
-                            : COMMON_DOCS.find((d) => d.key === r.type)
-                                ?.label || r.type}
+                      <div className='min-w-0'>
+                        <div
+                          className='truncate text-sm font-medium'
+                          title={f.name}
+                        >
+                          {f.name}
                         </div>
-                        <div className='text-muted-foreground text-xs'>
-                          From: {String(r.requester_id).slice(0, 8)} •{' '}
-                          {new Date(r.created_at).toLocaleString()}
+                        <div className='text-muted-foreground text-[11px]'>
+                          {f.updated_at
+                            ? new Date(f.updated_at).toLocaleString()
+                            : ''}
                         </div>
                       </div>
-                      <div className='flex items-center gap-2'>
-                        {r.status !== 'fulfilled' ? (
-                          <label className='hover:bg-accent/50 inline-flex cursor-pointer items-center rounded-full border px-2 py-1 text-xs'>
-                            <input
-                              type='file'
-                              className='hidden'
-                              onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) void onFulfillUpload(r, f);
-                              }}
-                            />
-                            <span>
-                              {uploadingFor === r.id ? 'Uploading…' : 'Upload'}
-                            </span>
-                          </label>
-                        ) : (
-                          <div className='flex items-center gap-2'>
-                            <Button
-                              size='sm'
-                              variant='ghost'
-                              className='h-7 px-2 text-xs'
-                              onClick={() => {
-                                const url = r.file_path
-                                  ? supabase.storage
-                                      .from('shipments')
-                                      .getPublicUrl(r.file_path).data.publicUrl
-                                  : '#';
-                                setPreview({
-                                  url,
-                                  name: r.file_path || 'file'
-                                });
-                              }}
-                            >
-                              <Eye className='mr-1 size-3' /> Preview
-                            </Button>
-                            <Button
-                              size='sm'
-                              variant='ghost'
-                              className='text-destructive h-7 px-2 text-xs'
-                              onClick={async () => {
-                                if (r.file_path) {
-                                  await supabase.storage
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        className='h-7 px-2 text-xs'
+                        onClick={() => setPreview({ url, name: f.name })}
+                      >
+                        <Eye className='mr-1 size-3' /> Preview
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        className='text-destructive h-7 px-2 text-xs'
+                        onClick={async () => {
+                          await supabase.storage
+                            .from('shipments')
+                            .remove([`${shipmentId}/${f.name}`]);
+                          await refresh();
+                        }}
+                      >
+                        <Trash className='mr-1 size-3' /> Delete
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+          {files.length === 0 && !error && (
+            <EmptyState
+              title='No documents'
+              subtitle='Upload files to get started.'
+            />
+          )}
+        </TabsContent>
+        <TabsContent value='incoming'>
+          <div className='space-y-2'>
+            {requests
+              .filter((r) => r.receiver_id === me)
+              .map((r) => (
+                <Card key={r.id} className='rounded-lg border p-3 text-sm'>
+                  <div className='flex items-center justify-between gap-2'>
+                    <div>
+                      <div className='font-medium'>
+                        {r.type === 'custom'
+                          ? r.note || 'Custom document'
+                          : COMMON_DOCS.find((d) => d.key === r.type)?.label ||
+                            r.type}
+                      </div>
+                      <div className='text-muted-foreground text-xs'>
+                        From: {String(r.requester_id).slice(0, 8)} •{' '}
+                        {new Date(r.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      {r.status !== 'fulfilled' ? (
+                        <label className='hover:bg-accent/50 inline-flex cursor-pointer items-center rounded-full border px-2 py-1 text-xs'>
+                          <input
+                            type='file'
+                            className='hidden'
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void onFulfillUpload(r, f);
+                            }}
+                          />
+                          <span>
+                            {uploadingFor === r.id ? 'Uploading…' : 'Upload'}
+                          </span>
+                        </label>
+                      ) : (
+                        <div className='flex items-center gap-2'>
+                          <Button
+                            size='sm'
+                            variant='ghost'
+                            className='h-7 px-2 text-xs'
+                            onClick={() => {
+                              const url = r.file_path
+                                ? supabase.storage
                                     .from('shipments')
-                                    .remove([r.file_path]);
-                                }
-                                await supabase
-                                  .from('document_requests')
-                                  .update({
-                                    status: 'pending',
-                                    file_path: null
-                                  })
-                                  .eq('id', r.id);
-                                void refreshRequests();
-                              }}
-                            >
-                              <Trash className='mr-1 size-3' /> Delete
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              {requests.filter((r) => r.receiver_id === me).length === 0 && (
-                <div className='text-muted-foreground text-sm'>
-                  No incoming requests.
-                </div>
-              )}
-            </div>
-          </TabsContent>
-          <TabsContent value='outgoing'>
-            <div className='space-y-2'>
-              {requests
-                .filter((r) => r.requester_id === me)
-                .map((r) => (
-                  <div
-                    key={r.id}
-                    className='bg-card/50 rounded-2xl border p-3 text-sm'
-                  >
-                    <div className='flex items-center justify-between gap-2'>
-                      <div>
-                        <div className='font-medium'>
-                          {r.type === 'custom'
-                            ? r.note || 'Custom document'
-                            : COMMON_DOCS.find((d) => d.key === r.type)
-                                ?.label || r.type}
-                        </div>
-                        <div className='text-muted-foreground text-xs'>
-                          To: {String(r.receiver_id || '—').slice(0, 8)} •{' '}
-                          {new Date(r.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                      <div className='flex items-center gap-2'>
-                        {r.status === 'pending' ? (
+                                    .getPublicUrl(r.file_path).data.publicUrl
+                                : '#';
+                              setPreview({ url, name: r.file_path || 'file' });
+                            }}
+                          >
+                            <Eye className='mr-1 size-3' /> Preview
+                          </Button>
                           <Button
                             size='sm'
                             variant='ghost'
                             className='text-destructive h-7 px-2 text-xs'
                             onClick={async () => {
-                              if (!confirm('Withdraw this request?')) return;
+                              if (r.file_path) {
+                                await supabase.storage
+                                  .from('shipments')
+                                  .remove([r.file_path]);
+                              }
                               await supabase
                                 .from('document_requests')
-                                .delete()
+                                .update({ status: 'pending', file_path: null })
                                 .eq('id', r.id);
-                              setRequests((prev) =>
-                                prev.filter((x) => x.id !== r.id)
-                              );
+                              void refreshRequests();
                             }}
                           >
-                            Withdraw
+                            <Trash className='mr-1 size-3' /> Delete
                           </Button>
-                        ) : (
-                          <span className='text-xs'>{r.status}</span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                ))}
-              {requests.filter((r) => r.requester_id === me).length === 0 && (
-                <div className='text-muted-foreground text-sm'>
-                  No outgoing requests.
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+                </Card>
+              ))}
+            {requests.filter((r) => r.receiver_id === me).length === 0 && (
+              <EmptyState
+                title='No incoming requests'
+                subtitle='Requests from your counterparty will appear here.'
+              />
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
       <Dialog
         open={!!preview}
         onOpenChange={(open) => !open && setPreview(null)}
@@ -800,6 +594,159 @@ export default function DocumentsTab({ shipment }: { shipment: any }) {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function RequestDocsButton({
+  trigger,
+  content,
+  disabled
+}: {
+  trigger: React.ReactNode;
+  content: React.ReactNode;
+  disabled?: boolean;
+  onOpenDialog?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <span className={disabled ? 'pointer-events-none opacity-60' : ''}>
+          {trigger}
+        </span>
+      </DialogTrigger>
+      <DialogContent className='sm:max-w-3xl'>
+        <DialogHeader>
+          <DialogTitle>Request Documents</DialogTitle>
+        </DialogHeader>
+        <div className='max-h-[70vh] overflow-auto pr-1'>{content}</div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RequestBuilder(props: {
+  selected: Record<DocType, boolean>;
+  onToggle: (k: DocType) => void;
+  templates: string[];
+  selectedTemplates: Record<string, boolean>;
+  setSelectedTemplates: React.Dispatch<
+    React.SetStateAction<Record<string, boolean>>
+  >;
+  customDocName: string;
+  setCustomDocName: (v: string) => void;
+  customDocs: string[];
+  addCustom: () => void;
+  removeCustom: (label: string) => void;
+  onSubmit: () => void;
+  counterpartyDetected: boolean;
+}) {
+  const {
+    selected,
+    onToggle,
+    templates,
+    selectedTemplates,
+    setSelectedTemplates,
+    customDocName,
+    setCustomDocName,
+    customDocs,
+    addCustom,
+    removeCustom,
+    onSubmit,
+    counterpartyDetected
+  } = props;
+  return (
+    <div className='space-y-4'>
+      <div>
+        <div className='mb-2 text-sm font-medium'>Select documents</div>
+        <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+          {COMMON_DOCS.map((d) => (
+            <label
+              key={d.key}
+              className='hover:bg-accent/40 flex items-center gap-2 rounded-md border p-2'
+            >
+              <Checkbox
+                checked={!!selected[d.key]}
+                onCheckedChange={() => onToggle(d.key)}
+              />
+              <span className='text-sm'>{d.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      {templates.length > 0 && (
+        <div>
+          <div className='text-muted-foreground mb-1 text-xs'>
+            Your templates
+          </div>
+          <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+            {templates.map((t) => (
+              <label
+                key={t}
+                className='hover:bg-accent/40 flex items-center gap-2 rounded-md border p-2'
+              >
+                <Checkbox
+                  checked={!!selectedTemplates[t]}
+                  onCheckedChange={() =>
+                    setSelectedTemplates((m) => ({ ...m, [t]: !m[t] }))
+                  }
+                />
+                <span className='text-sm'>{t}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <div>
+        <div className='text-muted-foreground mb-1 text-xs'>
+          Ask a specific document (custom name)
+        </div>
+        <div className='flex items-center gap-2'>
+          <Input
+            placeholder='e.g. SGS Inspection Report'
+            value={customDocName}
+            onChange={(e) => setCustomDocName(e.target.value)}
+            className='max-w-sm'
+          />
+          <Button
+            size='sm'
+            variant='outline'
+            onClick={addCustom}
+            disabled={!customDocName.trim()}
+          >
+            Add
+          </Button>
+        </div>
+        {customDocs.length > 0 && (
+          <div className='mt-2 flex flex-wrap gap-2'>
+            {customDocs.map((label) => (
+              <span
+                key={label}
+                className='bg-accent/50 text-foreground inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs'
+              >
+                {label}
+                <button
+                  onClick={() => removeCustom(label)}
+                  className='text-muted-foreground hover:text-foreground rounded bg-transparent px-1'
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className='flex items-center gap-2'>
+        <Button size='sm' onClick={onSubmit} disabled={!counterpartyDetected}>
+          Request Selected
+        </Button>
+        {!counterpartyDetected && (
+          <span className='text-muted-foreground text-xs'>
+            Counterparty not detected
+          </span>
+        )}
+      </div>
     </div>
   );
 }

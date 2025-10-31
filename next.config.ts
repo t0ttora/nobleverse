@@ -14,6 +14,7 @@ const baseConfig: NextConfig & { turbopack?: { root?: string } } = {
     ]
   },
   transpilePackages: ['geist'],
+  // keep defaults for headers and compression
   // Don't fail production builds on ESLint errors. Keep linting in CI or via `pnpm lint`.
   eslint: {
     ignoreDuringBuilds: true
@@ -21,7 +22,8 @@ const baseConfig: NextConfig & { turbopack?: { root?: string } } = {
   // Pin Turbopack root to this project to avoid parent lockfile confusion
   turbopack: {
     root: __dirname
-  }
+  },
+  experimental: {}
 };
 
 let configWithPlugins = baseConfig;

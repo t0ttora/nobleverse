@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
+// revert dynamic import: use static chart impl
+import { BarGraphImpl } from './bar-graph.impl';
 
 import {
   Card,
@@ -10,12 +11,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent
-} from '@/components/ui/chart';
+import { ChartConfig } from '@/components/ui/chart';
 import { supabase } from '@/lib/supabaseClient';
 
 export const description = 'Shipments and revenue (last 30 days)';
@@ -148,71 +144,15 @@ export function BarGraph() {
             No shipments in the last 30 days.
           </div>
         ) : (
-          <ChartContainer
-            config={chartConfig}
-            className='aspect-auto h-[250px] w-full'
-          >
-            <BarChart
-              data={chartData}
-              margin={{
-                left: 12,
-                right: 12
-              }}
-            >
-              <defs>
-                <linearGradient id='fillBar' x1='0' y1='0' x2='0' y2='1'>
-                  <stop
-                    offset='0%'
-                    stopColor='var(--primary)'
-                    stopOpacity={0.8}
-                  />
-                  <stop
-                    offset='100%'
-                    stopColor='var(--primary)'
-                    stopOpacity={0.2}
-                  />
-                </linearGradient>
-              </defs>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey='date'
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                minTickGap={32}
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric'
-                  });
-                }}
-              />
-              <ChartTooltip
-                cursor={{ fill: 'var(--primary)', opacity: 0.1 }}
-                content={
-                  <ChartTooltipContent
-                    className='w-[180px]'
-                    nameKey='views'
-                    labelFormatter={(value) => {
-                      return new Date(value).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      });
-                    }}
-                  />
-                }
-              />
-              <Bar
-                dataKey={activeChart}
-                fill='url(#fillBar)'
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ChartContainer>
+          <BarGraphImpl
+            data={chartData}
+            activeKey={activeChart}
+            config={chartConfig as any}
+          />
         )}
       </CardContent>
     </Card>
   );
 }
+
+// static import above

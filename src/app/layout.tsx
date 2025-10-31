@@ -14,6 +14,7 @@ import './theme.css';
 import DashboardShell from '@/components/layout/dashboard-shell';
 import PlainLayout from '@/components/layout/plain-layout';
 import { getUserSession } from '@/../utils/supabase/server';
+// Route prefetcher removed to revert optimization
 
 const META_THEME_COLORS = {
   light: '#ffffff',
@@ -61,21 +62,7 @@ export default async function RootLayout({
 
   return (
     <html lang='en' suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if (typeof window !== 'undefined' && typeof localStorage !== 'undefined' && localStorage.theme === 'dark' || ((!('theme' in localStorage) || localStorage.theme === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  if (typeof document !== 'undefined') {
-                    document.querySelector('meta[name="theme-color"]').setAttribute('content', '${META_THEME_COLORS.dark}')
-                  }
-                }
-              } catch (_) {}
-            `
-          }}
-        />
-      </head>
+      <head />
       <body className={bodyClasses}>
         <NextTopLoader showSpinner={false} />
         <NuqsAdapter>

@@ -7,10 +7,18 @@ import {
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Copy, Mail, Plus, X } from 'lucide-react';
+import { Users, Copy, Mail, Plus, X, MessagesSquare } from 'lucide-react';
 import { supabase } from '@/../utils/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { useRouter } from 'next/navigation';
 
 type Person = {
   id: string;
@@ -21,13 +29,22 @@ type Person = {
 };
 
 export function TeamInviteMenu() {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [shareUrl, setShareUrl] = React.useState<string>('');
   const [email, setEmail] = React.useState('');
+  const [inviteRole, setInviteRole] = React.useState<
+    'Admin' | 'Member' | 'Viewer'
+  >('Member');
   const [query, setQuery] = React.useState('');
   const [results, setResults] = React.useState<Person[]>([]);
   const [members, setMembers] = React.useState<Person[]>([]);
   const [searchFocused, setSearchFocused] = React.useState(false);
+  const [me, setMe] = React.useState<{
+    id: string;
+    email?: string | null;
+  } | null>(null);
+  const [showQR, setShowQR] = React.useState(false);
 
   // Build a share URL from current origin
   React.useEffect(() => {
@@ -37,6 +54,19 @@ export function TeamInviteMenu() {
     } catch {
       // ignore SSR errors
     }
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return;
+      const uid = data.user?.id ?? null;
+      const em = data.user?.email ?? null;
+      setMe(uid ? { id: uid, email: em } : null);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   React.useEffect(() => {
@@ -80,6 +110,115 @@ export function TeamInviteMenu() {
     }
   };
 
+  async function createGroupChat() {
+    try {
+      if (!me?.id) {
+        toast.error('Please sign in');
+        return;
+      }
+      const ids = Array.from(new Set([me.id, ...members.map((m) => m.id)]));
+      if (ids.length < 2) {
+        toast.error('Select at least one teammate');
+        return;
+      }
+      const { data: rid, error } = await supabase.rpc('create_group_room', {
+        p_title: null,
+        p_member_ids: ids
+      });
+      if (error || !rid) {
+        toast.error(error?.message || 'Could not create group');
+        return;
+      }
+      toast.success('Group created');
+      setOpen(false);
+      router.push(`/inbox?room=${rid as string}`);
+    } catch (e: any) {
+      toast.error('Action failed', { description: e?.message });
+    }
+  }
+
+  async function persistEmailInvite() {
+    const e = email.trim();
+    if (!e) return;
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    if (!emailOk) {
+      toast.error('Enter a valid email');
+      return;
+    }
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) {
+        toast.error('Please sign in');
+        return;
+      }
+      // Load current settings to append invite inside org.team.invites
+      const { data: st } = await supabase
+        .from('settings')
+        .select('org')
+        .eq('user_id', uid)
+        .maybeSingle();
+      const org =
+        (st?.org && typeof st.org === 'object' ? (st.org as any) : {}) || {};
+      const team =
+        (org.team && typeof org.team === 'object' ? (org.team as any) : {}) ||
+        {};
+      const invites = Array.isArray(team.invites) ? team.invites : [];
+      const already = invites.some(
+        (iv: any) =>
+          String(iv.email || '').toLowerCase() === e.toLowerCase() &&
+          iv.status === 'pending'
+      );
+      if (already) {
+        toast.error('Already invited');
+        return;
+      }
+      const newInvites = [
+        ...invites,
+        {
+          email: e,
+          role: inviteRole,
+          invited_at: new Date().toISOString(),
+          status: 'pending'
+        }
+      ];
+      const nextOrg = {
+        ...org,
+        team: { ...(team || {}), invites: newInvites }
+      };
+      await supabase.from('settings').upsert({ user_id: uid, org: nextOrg });
+      toast.success('Invite added');
+      setEmail('');
+    } catch (err: any) {
+      toast.error('Failed to save invite', { description: err?.message });
+    }
+  }
+
+  async function importCsv(file: File) {
+    try {
+      const text = await file.text();
+      const lines = text
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      let added = 0;
+      for (const line of lines) {
+        const [emailRaw, roleRaw] = line
+          .split(',')
+          .map((x) => (x || '').trim());
+        if (!emailRaw) continue;
+        setEmail(emailRaw);
+        setInviteRole((roleRaw as any) || 'Member');
+        // eslint-disable-next-line no-await-in-loop
+        await persistEmailInvite();
+        added++;
+      }
+      toast.success(`Imported ${added} invites`);
+    } catch (e: any) {
+      toast.error('CSV import failed', { description: e?.message });
+    }
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -91,7 +230,7 @@ export function TeamInviteMenu() {
           <span>Invite your Team</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align='end' className='w-[420px] p-0'>
+      <PopoverContent align='end' className='w-[520px] p-0'>
         <div className='space-y-4 p-4'>
           {/* Link to share */}
           <div className='space-y-2'>
@@ -107,7 +246,7 @@ export function TeamInviteMenu() {
           {/* Email */}
           <div className='space-y-2'>
             <div className='text-muted-foreground text-xs'>Email</div>
-            <div className='flex items-center gap-2'>
+            <div className='flex flex-wrap items-center gap-2'>
               <div className='relative flex-1'>
                 <Mail className='text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2' />
                 <Input
@@ -117,18 +256,60 @@ export function TeamInviteMenu() {
                   className='h-9 pl-8'
                 />
               </div>
+              <Select
+                value={inviteRole}
+                onValueChange={(v) => setInviteRole(v as any)}
+              >
+                <SelectTrigger className='h-9 w-[120px]'>
+                  <SelectValue placeholder='Role' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='Admin'>Admin</SelectItem>
+                  <SelectItem value='Member'>Member</SelectItem>
+                  <SelectItem value='Viewer'>Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size='sm' onClick={persistEmailInvite}>
+                Add Invite
+              </Button>
+              <input
+                type='file'
+                accept='.csv,text/csv'
+                className='hidden'
+                id='invite-csv-input'
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void importCsv(f);
+                  // reset
+                  (e.target as any).value = '';
+                }}
+              />
               <Button
                 size='sm'
-                onClick={() => {
-                  if (email.trim()) {
-                    toast.success('Invite sent');
-                    setEmail('');
-                  }
-                }}
+                variant='outline'
+                onClick={() =>
+                  document.getElementById('invite-csv-input')?.click()
+                }
               >
-                Send Invite
+                Import CSV
+              </Button>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => setShowQR((s) => !s)}
+              >
+                {showQR ? 'Hide QR' : 'Show QR'}
               </Button>
             </div>
+            {showQR && (
+              <div className='mt-2 flex items-center justify-center'>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(shareUrl)}`}
+                  alt='Invite QR'
+                  className='rounded-md border'
+                />
+              </div>
+            )}
           </div>
 
           {/* Search and pick people (chips + dropdown) */}
@@ -253,13 +434,32 @@ export function TeamInviteMenu() {
                         {m.email || ''}
                       </div>
                     </div>
-                    <div className='text-muted-foreground text-xs'>
-                      Can View
+                    <div className='flex items-center gap-2'>
+                      <Select defaultValue='Viewer'>
+                        <SelectTrigger className='h-8 w-[110px] text-xs'>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value='Admin'>Admin</SelectItem>
+                          <SelectItem value='Member'>Member</SelectItem>
+                          <SelectItem value='Viewer'>Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 ))
               )}
             </div>
+          </div>
+
+          {/* Actions */}
+          <div className='flex items-center justify-between gap-2 pt-1'>
+            <div className='text-muted-foreground text-xs'>
+              Tip: Select teammates above to start a group chat.
+            </div>
+            <Button size='sm' className='gap-2' onClick={createGroupChat}>
+              <MessagesSquare className='size-4' /> Create group chat
+            </Button>
           </div>
         </div>
       </PopoverContent>

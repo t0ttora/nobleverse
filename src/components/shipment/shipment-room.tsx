@@ -3,6 +3,7 @@ import { ShipmentHeader, MilestonesPanel, EscrowPanel } from './';
 import { DocumentsTab, TrackingTab } from './tabs';
 import { RealtimeChat } from '@/components/realtime-chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import EmptyState from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -38,6 +39,14 @@ export default function ShipmentRoom({
   const net = shipment.net_amount_cents / 100;
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [leftWidth, setLeftWidth] = useState(560);
+  const initialRatio = (() => {
+    try {
+      const raw = localStorage.getItem('nv_ship_left_ratio');
+      if (raw) return Math.min(0.7, Math.max(0.25, Number(raw)));
+    } catch {}
+    return 0.44;
+  })();
+  const ratioRef = useRef<number>(initialRatio);
   // Responsive: mobile stacked view state
   const [mobileView, setMobileView] = useState<'chat' | 'details'>('chat');
   const [isMobile, setIsMobile] = useState(false);
@@ -48,6 +57,20 @@ export default function ShipmentRoom({
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, []);
+  // Restore persisted active tab and mobile view
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem(`nv_ship_active_tab:${shipment.id}`);
+      if (
+        t &&
+        ['overview', 'tracking', 'docs', 'finance', 'settings'].includes(t)
+      ) {
+        setActiveTab(t as TabKey);
+      }
+      const mv = localStorage.getItem('nv_ship_mobile_view');
+      if (mv === 'chat' || mv === 'details') setMobileView(mv as any);
+    } catch {}
+  }, [shipment.id]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isResizing = useRef(false);
   const handleCreateShare = async () => {
@@ -61,8 +84,9 @@ export default function ShipmentRoom({
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const min = 380,
-      max = Math.min(rect.width - 320, 880);
+    const min = rect.width < 1100 ? 360 : 420;
+    const maxRightMin = rect.width < 1100 ? 420 : 520; // ensure right panel min width
+    const max = Math.min(rect.width - maxRightMin, 980);
     let w = e.clientX - rect.left;
     if (w < min) w = min;
     if (w > max) w = max;
@@ -70,15 +94,46 @@ export default function ShipmentRoom({
   }, []);
   const stop = useCallback(() => {
     isResizing.current = false;
+    // persist ratio
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const ratio = Math.max(0.25, Math.min(0.7, leftWidth / rect.width));
+      ratioRef.current = ratio;
+      try {
+        localStorage.setItem('nv_ship_left_ratio', String(ratio));
+      } catch {}
+    }
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', stop);
-  }, [onMouseMove]);
+  }, [onMouseMove, leftWidth]);
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     isResizing.current = true;
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', stop);
   };
+
+  // Set an initial width and keep it responsive on window resize
+  useEffect(() => {
+    function apply() {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const min = rect.width < 1100 ? 360 : 420;
+      const maxRightMin = rect.width < 1100 ? 420 : 520;
+      const max = Math.min(rect.width - maxRightMin, 980);
+      const target = Math.round(
+        Math.min(max, Math.max(min, ratioRef.current * rect.width))
+      );
+      setLeftWidth(target);
+    }
+    apply();
+    const onResize = () => {
+      if (isResizing.current) return;
+      apply();
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Ensure chat room exists and load initial messages from unified chat_messages
   const [initialMessages, setInitialMessages] = useState<
@@ -171,7 +226,12 @@ export default function ShipmentRoom({
               <Button
                 variant={mobileView === 'chat' ? 'default' : 'outline'}
                 size='sm'
-                onClick={() => setMobileView('chat')}
+                onClick={() => {
+                  setMobileView('chat');
+                  try {
+                    localStorage.setItem('nv_ship_mobile_view', 'chat');
+                  } catch {}
+                }}
                 className='h-7 px-3 text-[11px] leading-none'
               >
                 Chat
@@ -179,7 +239,12 @@ export default function ShipmentRoom({
               <Button
                 variant={mobileView === 'details' ? 'default' : 'outline'}
                 size='sm'
-                onClick={() => setMobileView('details')}
+                onClick={() => {
+                  setMobileView('details');
+                  try {
+                    localStorage.setItem('nv_ship_mobile_view', 'details');
+                  } catch {}
+                }}
                 className='h-7 px-3 text-[11px] leading-none'
               >
                 Details
@@ -197,7 +262,7 @@ export default function ShipmentRoom({
         )}
       >
         <div
-          className='bg-card/30 hidden flex-col overflow-hidden rounded-l-2xl border-r shadow-sm backdrop-blur md:flex'
+          className='hidden flex-col overflow-hidden md:flex'
           style={{ width: leftWidth }}
         >
           <div className='flex h-full flex-col'>
@@ -221,71 +286,80 @@ export default function ShipmentRoom({
         />
         <div className='flex flex-1 overflow-hidden'>
           <div className='flex flex-1 flex-col overflow-hidden'>
-            <Tabs
-              value={activeTab}
-              onValueChange={(v: any) => setActiveTab(v)}
-              className='flex flex-1 flex-col overflow-hidden'
-            >
-              <TabsList className='scrollbar-thin w-full justify-start overflow-x-auto'>
-                <TabsTrigger value='overview'>Overview</TabsTrigger>
-                <TabsTrigger value='tracking'>Tracking</TabsTrigger>
-                <TabsTrigger value='docs'>Docs</TabsTrigger>
-                <TabsTrigger value='financial'>Financial</TabsTrigger>
-                <TabsTrigger value='scans'>Scans</TabsTrigger>
-                <TabsTrigger value='settings'>Settings</TabsTrigger>
-              </TabsList>
-              <TabsContent
-                value='overview'
-                className='flex-1 space-y-6 overflow-auto p-4'
+            <div className='bg-background flex h-full min-h-0 flex-1 flex-col overflow-hidden border-l'>
+              <Tabs
+                value={activeTab}
+                onValueChange={(v: any) => {
+                  setActiveTab(v);
+                  try {
+                    localStorage.setItem(
+                      `nv_ship_active_tab:${shipment.id}`,
+                      String(v)
+                    );
+                  } catch {}
+                }}
+                className='flex flex-1 flex-col overflow-hidden'
               >
-                <OverviewTab
-                  shipment={shipment}
-                  total={total}
-                  fee={fee}
-                  net={net}
-                />
-              </TabsContent>
-              <TabsContent
-                value='tracking'
-                className='flex-1 space-y-6 overflow-auto p-4'
-              >
-                <TrackingTab
-                  shipmentId={shipment.id}
-                  ownerId={shipment.owner_id}
-                  forwarderId={shipment.forwarder_id}
-                  currentUserId={currentUserId}
-                />
-              </TabsContent>
-              <TabsContent
-                value='docs'
-                className='flex-1 space-y-6 overflow-auto p-4'
-              >
-                <DocumentsTab shipment={shipment} />
-              </TabsContent>
-              <TabsContent
-                value='financial'
-                className='flex-1 space-y-6 overflow-auto p-4'
-              >
-                <FinancialTab
-                  shipment={shipment}
-                  total={total}
-                  fee={fee}
-                  net={net}
-                />
-              </TabsContent>
-              <TabsContent
-                value='scans'
-                className='flex-1 space-y-6 overflow-auto p-4'
-              >
-                <ScansTab shipment={shipment} />
-              </TabsContent>
-              <TabsContent
-                value='settings'
-                className='flex-1 space-y-6 overflow-auto p-4'
-              >
-                <SettingsTab shipment={shipment} />
-              </TabsContent>
-            </Tabs>
+                <div className='px-3 pt-4 md:pt-6'>
+                  <TabsList className='scrollbar-thin mt-1 w-full justify-start overflow-x-auto'>
+                    <TabsTrigger value='overview'>Overview</TabsTrigger>
+                    <TabsTrigger value='tracking'>
+                      Tracking & Milestones
+                    </TabsTrigger>
+                    <TabsTrigger value='docs'>Docs</TabsTrigger>
+                    <TabsTrigger value='finance'>Finance</TabsTrigger>
+                    <TabsTrigger value='settings'>Settings</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent
+                  value='overview'
+                  className='flex-1 space-y-4 overflow-auto p-3 md:p-4'
+                >
+                  <OverviewTab
+                    shipment={shipment}
+                    total={total}
+                    fee={fee}
+                    net={net}
+                    goToFinance={() => setActiveTab('finance')}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value='tracking'
+                  className='flex-1 space-y-4 overflow-auto p-3 md:p-4'
+                >
+                  <TrackingTab
+                    shipmentId={shipment.id}
+                    ownerId={shipment.owner_id}
+                    forwarderId={shipment.forwarder_id}
+                    currentUserId={currentUserId}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value='docs'
+                  className='flex-1 space-y-4 overflow-auto p-3 md:p-4'
+                >
+                  <DocumentsTab shipment={shipment} />
+                </TabsContent>
+                <TabsContent
+                  value='finance'
+                  className='flex-1 space-y-4 overflow-auto p-3 md:p-4'
+                >
+                  <FinancialTab
+                    shipment={shipment}
+                    total={total}
+                    fee={fee}
+                    net={net}
+                    goToDocs={() => setActiveTab('docs')}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value='settings'
+                  className='flex-1 space-y-4 overflow-auto p-3 md:p-4'
+                >
+                  <SettingsTab shipment={shipment} />
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         </div>
       </div>
@@ -308,20 +382,29 @@ export default function ShipmentRoom({
             <div className='flex flex-1 flex-col overflow-hidden'>
               <Tabs
                 value={activeTab}
-                onValueChange={(v: any) => setActiveTab(v)}
+                onValueChange={(v: any) => {
+                  setActiveTab(v);
+                  try {
+                    localStorage.setItem(
+                      `nv_ship_active_tab:${shipment.id}`,
+                      String(v)
+                    );
+                  } catch {}
+                }}
                 className='flex flex-1 flex-col overflow-hidden'
               >
                 <TabsList className='scrollbar-thin w-full justify-start overflow-x-auto px-1'>
                   <TabsTrigger value='overview'>Overview</TabsTrigger>
-                  <TabsTrigger value='tracking'>Tracking</TabsTrigger>
+                  <TabsTrigger value='tracking'>
+                    Tracking & Milestones
+                  </TabsTrigger>
                   <TabsTrigger value='docs'>Docs</TabsTrigger>
-                  <TabsTrigger value='financial'>Fin</TabsTrigger>
-                  <TabsTrigger value='scans'>Scans</TabsTrigger>
+                  <TabsTrigger value='finance'>Finance</TabsTrigger>
                   <TabsTrigger value='settings'>Settings</TabsTrigger>
                 </TabsList>
                 <TabsContent
                   value='overview'
-                  className='flex-1 space-y-4 overflow-auto p-3'
+                  className='flex-1 space-y-3 overflow-auto p-2.5'
                 >
                   <OverviewTab
                     shipment={shipment}
@@ -332,7 +415,7 @@ export default function ShipmentRoom({
                 </TabsContent>
                 <TabsContent
                   value='tracking'
-                  className='flex-1 space-y-4 overflow-auto p-3'
+                  className='flex-1 space-y-3 overflow-auto p-2.5'
                 >
                   <TrackingTab
                     shipmentId={shipment.id}
@@ -343,30 +426,25 @@ export default function ShipmentRoom({
                 </TabsContent>
                 <TabsContent
                   value='docs'
-                  className='flex-1 space-y-4 overflow-auto p-3'
+                  className='flex-1 space-y-3 overflow-auto p-2.5'
                 >
                   <DocumentsTab shipment={shipment} />
                 </TabsContent>
                 <TabsContent
-                  value='financial'
-                  className='flex-1 space-y-4 overflow-auto p-3'
+                  value='finance'
+                  className='flex-1 space-y-3 overflow-auto p-2.5'
                 >
                   <FinancialTab
                     shipment={shipment}
                     total={total}
                     fee={fee}
                     net={net}
+                    goToDocs={() => setActiveTab('docs')}
                   />
                 </TabsContent>
                 <TabsContent
-                  value='scans'
-                  className='flex-1 space-y-4 overflow-auto p-3'
-                >
-                  <ScansTab shipment={shipment} />
-                </TabsContent>
-                <TabsContent
                   value='settings'
-                  className='flex-1 space-y-4 overflow-auto p-3'
+                  className='flex-1 space-y-3 overflow-auto p-2.5'
                 >
                   <SettingsTab shipment={shipment} />
                 </TabsContent>
@@ -380,13 +458,7 @@ export default function ShipmentRoom({
   );
 }
 
-type TabKey =
-  | 'overview'
-  | 'tracking'
-  | 'docs'
-  | 'financial'
-  | 'scans'
-  | 'settings';
+type TabKey = 'overview' | 'tracking' | 'docs' | 'finance' | 'settings';
 
 // Removed custom TabsHeader in favor of shadcn Tabs
 
@@ -394,54 +466,93 @@ function OverviewTab({
   shipment,
   total,
   fee,
-  net
+  net,
+  goToFinance
 }: {
   shipment: any;
   total: number;
   fee: number;
   net: number;
+  goToFinance?: () => void;
 }) {
   return (
     <div className='space-y-4'>
-      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-6'>
-        <KpiCard label='Total' value={`$${total.toFixed(2)}`} sub='Gross' />
-        <KpiCard label='Fee' value={`$${fee.toFixed(2)}`} sub='Platform' />
-        <KpiCard label='Net' value={`$${net.toFixed(2)}`} sub='To Forwarder' />
-        <KpiCard label='Status' value={shipment.status} sub='Shipment' />
-        <KpiCard label='Escrow' value={shipment.escrow_status} sub='State' />
-        <KpiCard
-          label='Milestones'
-          value={shipment.milestone_count ?? '—'}
-          sub='Count'
-        />
-      </div>
-      <div className='grid gap-3 sm:gap-4 md:grid-cols-3'>
+      {/* Bento Grid */}
+      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3'>
+        {/* Shipment Status Stepper */}
         <Card className='md:col-span-2'>
           <CardHeader className='pb-2'>
-            <CardTitle className='text-sm'>Cargo Info</CardTitle>
+            <CardTitle className='text-sm'>Shipment Status</CardTitle>
           </CardHeader>
-          <CardContent className='text-muted-foreground space-y-1 text-xs'>
-            <div>Origin: {shipment.origin || '—'}</div>
-            <div>Destination: {shipment.destination || '—'}</div>
-            <div>Mode: {shipment.mode || '—'}</div>
-            <div>Incoterm: {shipment.incoterm || '—'}</div>
+          <CardContent className='p-3'>
+            <StatusStepper status={shipment.status} />
           </CardContent>
         </Card>
+
+        {/* Finance Summary */}
         <Card>
           <CardHeader className='pb-2'>
-            <CardTitle className='text-sm'>Participants</CardTitle>
+            <CardTitle className='text-sm'>Finance Summary</CardTitle>
           </CardHeader>
-          <CardContent className='text-muted-foreground space-y-1 text-xs'>
-            <div>Owner: {shipment.owner_id?.slice(0, 8) || '—'}</div>
-            <div>Forwarder: {shipment.forwarder_id?.slice(0, 8) || '—'}</div>
+          <CardContent className='space-y-2 p-3 text-sm'>
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground'>Net Amount</span>
+              <span className='font-semibold'>${net.toFixed(2)}</span>
+            </div>
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground'>Status</span>
+              <span className='capitalize'>
+                {(shipment.escrow_status || '').replace(/_/g, ' ')}
+              </span>
+            </div>
+            <div className='pt-1'>
+              <Button
+                variant='link'
+                className='px-0'
+                onClick={() => goToFinance?.()}
+              >
+                View Details →
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      </div>
-      <div className='grid gap-4 md:grid-cols-2'>
-        <div className='bg-card/40 rounded-lg border'>
-          <EscrowPanel shipment={shipment} />
-        </div>
-        <MilestoneSummary shipmentId={shipment.id} />
+
+        {/* Key Info (merged) */}
+        <Card className='sm:col-span-2 md:col-span-3'>
+          <CardHeader className='pb-2'>
+            <CardTitle className='text-sm'>Key Info</CardTitle>
+          </CardHeader>
+          <CardContent className='grid grid-cols-1 gap-3 p-3 text-xs sm:grid-cols-2 md:grid-cols-3'>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Origin</div>
+              <div className='font-medium'>{shipment.origin || '—'}</div>
+            </div>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Destination</div>
+              <div className='font-medium'>{shipment.destination || '—'}</div>
+            </div>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Mode</div>
+              <div className='font-medium'>{shipment.mode || '—'}</div>
+            </div>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Incoterm</div>
+              <div className='font-medium'>{shipment.incoterm || '—'}</div>
+            </div>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Owner</div>
+              <div className='font-medium'>
+                {shipment.owner_id?.slice(0, 8) || '—'}
+              </div>
+            </div>
+            <div className='space-y-1'>
+              <div className='text-muted-foreground'>Forwarder</div>
+              <div className='font-medium'>
+                {shipment.forwarder_id?.slice(0, 8) || '—'}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -455,30 +566,57 @@ function FinancialTab({
   shipment,
   total,
   fee,
-  net
+  net,
+  goToDocs
 }: {
   shipment: any;
   total: number;
   fee: number;
   net: number;
+  goToDocs?: () => void;
 }) {
+  const escrowState = String(shipment.escrow_status || '').replace(/_/g, ' ');
   return (
     <div className='space-y-4'>
-      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-4 xl:grid-cols-6'>
+      {/* Top summary KPIs */}
+      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4'>
         <KpiCard label='Total' value={`$${total.toFixed(2)}`} sub='Gross' />
-        <KpiCard label='Fee' value={`$${fee.toFixed(2)}`} sub='Platform' />
+        <KpiCard label='Fees' value={`$${fee.toFixed(2)}`} sub='Platform' />
         <KpiCard label='Net' value={`$${net.toFixed(2)}`} sub='To Forwarder' />
-        <KpiCard label='Status' value={shipment.status} sub='Shipment' />
-        <KpiCard label='Escrow' value={shipment.escrow_status} sub='State' />
-        <KpiCard
-          label='Milestones'
-          value={shipment.milestone_count ?? '—'}
-          sub='Count'
-        />
+        <KpiCard label='Escrow' value={escrowState} sub='State' />
       </div>
-      <EscrowLedgerTable shipmentId={shipment.id} />
-      <div className='bg-card/40 rounded-lg border'>
-        <EscrowPanel shipment={shipment} />
+
+      {/* Main content grid: Ledger + Actions */}
+      <div className='grid grid-cols-1 gap-4 lg:grid-cols-3'>
+        {/* Ledger (wide) */}
+        <div className='lg:col-span-2'>
+          <EscrowLedgerTable shipmentId={shipment.id} />
+        </div>
+
+        {/* Actions & Summary */}
+        <Card className='rounded-lg border'>
+          <CardHeader className='pb-2'>
+            <CardTitle className='text-sm'>Escrow</CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-3 p-3'>
+            <div className='text-muted-foreground text-xs'>
+              Current status: <span className='capitalize'>{escrowState}</span>
+            </div>
+            <div className='rounded-md border'>
+              <EscrowPanel shipment={shipment} />
+            </div>
+            <div className='text-muted-foreground text-[11px]'>
+              Payment is released to the forwarder once delivered, or can be
+              manually released here if both parties agree.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Invoices & Payments summaries */}
+      <div className='grid grid-cols-1 gap-4 lg:grid-cols-3'>
+        <InvoicesPanel shipmentId={shipment.id} onOpenDocs={goToDocs} />
+        <PaymentsPanel shipmentId={shipment.id} />
       </div>
     </div>
   );
@@ -512,6 +650,7 @@ function ScansTab({ shipment }: { shipment: any }) {
 
 function SettingsTab({ shipment }: { shipment: any }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string>('');
   const call = async (status: string) => {
     setLoading(status);
     try {
@@ -524,24 +663,41 @@ function SettingsTab({ shipment }: { shipment: any }) {
       setLoading(null);
     }
   };
+  const createShare = async () => {
+    setLoading('create-share');
+    try {
+      const r = await fetch(`/api/shipments/${shipment.id}/share`, {
+        method: 'POST'
+      });
+      if (r.ok) {
+        const j = await r.json();
+        setShareUrl(j.url || '');
+      }
+    } finally {
+      setLoading(null);
+    }
+  };
   const disableLinks = async () => {
     if (!confirm('Disable all active public share links?')) return;
     setLoading('disable-links');
     try {
       await fetch(`/api/shipments/${shipment.id}/share`, { method: 'DELETE' });
+      setShareUrl('');
     } finally {
       setLoading(null);
     }
   };
   return (
     <div className='space-y-4'>
-      <Card>
-        <CardHeader className='pb-2'>
-          <CardTitle className='flex items-center gap-2 text-sm'>
-            <IconSettings className='h-4 w-4' /> Settings
-          </CardTitle>
+      {/* Status Controls */}
+      <Card className='rounded-lg border'>
+        <CardHeader className='pb-1'>
+          <CardTitle className='text-sm'>Shipment Controls</CardTitle>
         </CardHeader>
-        <CardContent className='text-muted-foreground space-y-3 text-xs'>
+        <CardContent className='space-y-3 p-3 text-xs'>
+          <div className='text-muted-foreground'>
+            Force a status when testing or resolving issues.
+          </div>
           <div className='flex flex-wrap gap-2'>
             <Button
               size='sm'
@@ -557,16 +713,32 @@ function SettingsTab({ shipment }: { shipment: any }) {
               disabled={loading === 'in_transit'}
               onClick={() => call('in_transit')}
             >
-              {loading === 'in_transit' ? '…' : 'Force Status In-Transit'}
+              {loading === 'in_transit' ? '…' : 'Force In-Transit'}
             </Button>
             <Button size='sm' variant='destructive' disabled>
               Close Dispute
             </Button>
           </div>
-          <div className='border-t pt-2'>
-            <div className='text-foreground mb-1 flex items-center gap-1 font-medium'>
-              <IconAdjustments className='h-3 w-3' /> Share Links
-            </div>
+        </CardContent>
+      </Card>
+
+      {/* Sharing */}
+      <Card className='rounded-lg border'>
+        <CardHeader className='pb-1'>
+          <CardTitle className='text-sm'>Sharing</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-3 p-3 text-xs'>
+          <div className='text-muted-foreground'>
+            Create a public share link to allow read-only tracking.
+          </div>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Button
+              size='sm'
+              onClick={createShare}
+              disabled={loading === 'create-share'}
+            >
+              {loading === 'create-share' ? 'Creating…' : 'Create Share Link'}
+            </Button>
             <Button
               size='sm'
               variant='destructive'
@@ -576,6 +748,37 @@ function SettingsTab({ shipment }: { shipment: any }) {
               {loading === 'disable-links' ? 'Working…' : 'Disable All Links'}
             </Button>
           </div>
+          {shareUrl && (
+            <div className='flex items-center gap-2'>
+              <input
+                readOnly
+                value={shareUrl}
+                className='w-full rounded-md border bg-transparent px-2 py-1 text-xs'
+              />
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => navigator.clipboard.writeText(shareUrl)}
+              >
+                Copy
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Danger zone */}
+      <Card className='rounded-lg border'>
+        <CardHeader className='pb-1'>
+          <CardTitle className='text-sm'>Danger Zone</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-2 p-3 text-xs'>
+          <div className='text-muted-foreground'>
+            Irreversible or sensitive actions.
+          </div>
+          <Button size='sm' variant='destructive' disabled>
+            Archive Shipment (coming soon)
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -821,6 +1024,8 @@ function RealtimeScans({ shipmentId }: { shipmentId: string }) {
 
 function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
   const [rows, setRows] = useState<any[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [q, setQ] = useState<string>('');
   useEffect(() => {
     let sub: any;
     (async () => {
@@ -850,8 +1055,19 @@ function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
       sub && supabase.removeChannel(sub);
     };
   }, [shipmentId]);
+  const filtered = rows.filter((r) => {
+    const typeOk = typeFilter === 'all' || r.entry_type === typeFilter;
+    const txt = q.trim().toLowerCase();
+    if (!txt) return typeOk;
+    const meta = JSON.stringify(r.meta || {}).toLowerCase();
+    return (
+      typeOk &&
+      (meta.includes(txt) || String(r.entry_type).toLowerCase().includes(txt))
+    );
+  });
+
   const total =
-    rows.reduce(
+    filtered.reduce(
       (a, r) =>
         a + (r.entry_type === 'REFUND' ? -r.amount_cents : r.amount_cents),
       0
@@ -864,18 +1080,41 @@ function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className='p-0'>
-        <div className='max-h-64 overflow-auto'>
-          <table className='min-w-full text-xs'>
-            <thead className='bg-muted/40 text-[10px] tracking-wide uppercase'>
+        <div className='flex items-center justify-between gap-2 px-3 py-2'>
+          <div className='text-[11px]'>
+            Entries: <span className='font-medium'>{filtered.length}</span>
+          </div>
+          <div className='flex items-center gap-2'>
+            <select
+              className='rounded-md border bg-transparent px-2 py-1 text-xs'
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value='all'>All</option>
+              <option value='RELEASE'>Release</option>
+              <option value='REFUND'>Refund</option>
+              <option value='FEE'>Fee</option>
+            </select>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder='Search meta'
+              className='rounded-md border bg-transparent px-2 py-1 text-xs'
+            />
+          </div>
+        </div>
+        <div className='max-h-64 overflow-auto border-t'>
+          <table className='min-w-full border-collapse text-xs'>
+            <thead className='bg-muted/40 sticky top-0 z-10 text-[10px] tracking-wide uppercase'>
               <tr className='text-left'>
-                <th className='px-2 py-1 font-medium'>Time</th>
-                <th className='px-2 py-1 font-medium'>Type</th>
-                <th className='px-2 py-1 font-medium'>Meta</th>
-                <th className='px-2 py-1 text-right font-medium'>Amount</th>
+                <th className='px-3 py-2 font-medium'>Time</th>
+                <th className='px-3 py-2 font-medium'>Type</th>
+                <th className='px-3 py-2 font-medium'>Meta</th>
+                <th className='px-3 py-2 text-right font-medium'>Amount</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {filtered.map((r) => {
                 const amt = r.amount_cents / 100;
                 const sign = r.entry_type === 'REFUND' ? -amt : amt;
                 const cls =
@@ -888,15 +1127,15 @@ function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
                         : 'text-foreground';
                 return (
                   <tr key={r.id} className='hover:bg-muted/30 border-t'>
-                    <td className='px-2 py-1 whitespace-nowrap'>
+                    <td className='px-3 py-2 whitespace-nowrap'>
                       {new Date(r.created_at).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit'
                       })}
                     </td>
-                    <td className='px-2 py-1'>{r.entry_type}</td>
+                    <td className='px-3 py-2'>{r.entry_type}</td>
                     <td
-                      className='max-w-[140px] truncate px-2 py-1'
+                      className='max-w-[160px] truncate px-3 py-2'
                       title={JSON.stringify(r.meta || {})}
                     >
                       {r.meta?.partial
@@ -907,26 +1146,26 @@ function EscrowLedgerTable({ shipmentId }: { shipmentId: string }) {
                             ? 'manual'
                             : '-'}
                     </td>
-                    <td className={'px-2 py-1 text-right font-medium ' + cls}>
+                    <td className={'px-3 py-2 text-right font-medium ' + cls}>
                       {sign.toFixed(2)}
                     </td>
                   </tr>
                 );
               })}
-              {rows.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className='text-muted-foreground px-2 py-4 text-center'
-                  >
-                    No entries
+                  <td colSpan={4} className='px-3 py-4'>
+                    <EmptyState
+                      title='No entries'
+                      subtitle='Escrow activity will appear here.'
+                    />
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <div className='flex justify-end gap-2 border-t px-2 py-1 text-[11px]'>
+        <div className='flex justify-end gap-2 border-t px-3 py-2 text-[11px]'>
           <span className='opacity-60'>Net:</span>
           <span className='font-semibold'>${total.toFixed(2)}</span>
         </div>
@@ -945,6 +1184,193 @@ function DocumentsMini({ shipmentId }: { shipmentId: string }) {
         No documents uploaded.
       </div>
     </div>
+  );
+}
+
+function InvoicesPanel({
+  shipmentId,
+  onOpenDocs
+}: {
+  shipmentId: string;
+  onOpenDocs?: () => void;
+}) {
+  const [files, setFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.storage
+          .from('shipments')
+          .list(shipmentId, {
+            limit: 200,
+            sortBy: { column: 'name', order: 'asc' } as any
+          });
+        if (!mounted) return;
+        if (error) throw error;
+        setFiles(data || []);
+      } catch {
+        setFiles([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [shipmentId]);
+  function isInvoiceName(name: string) {
+    const s = name.toLowerCase();
+    return /(invoice|inv_|inv\.|receipt|bill|commercial_invoice)/.test(s);
+  }
+  const invoices = files
+    .filter((f) => typeof f.name === 'string' && isInvoiceName(f.name))
+    .slice(0, 8);
+  const getUrl = (name: string) =>
+    supabase.storage.from('shipments').getPublicUrl(`${shipmentId}/${name}`)
+      .data.publicUrl;
+  return (
+    <Card className='rounded-lg border lg:col-span-2'>
+      <CardHeader className='flex flex-row items-center justify-between pb-2'>
+        <CardTitle className='text-sm'>Invoices</CardTitle>
+        {onOpenDocs && (
+          <Button
+            size='sm'
+            variant='link'
+            className='px-0 text-xs'
+            onClick={onOpenDocs}
+          >
+            Open in Docs →
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className='p-3'>
+        {loading && (
+          <div className='text-muted-foreground text-xs'>Loading…</div>
+        )}
+        {!loading && invoices.length === 0 && (
+          <EmptyState
+            title='No invoices found'
+            subtitle='Upload invoices under Docs to see them here.'
+            action={
+              onOpenDocs ? (
+                <Button size='sm' onClick={onOpenDocs}>
+                  Go to Docs
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+        {!loading && invoices.length > 0 && (
+          <div className='space-y-2'>
+            {invoices.map((f) => (
+              <div
+                key={f.name}
+                className='flex items-center justify-between rounded-md border p-2 text-xs'
+              >
+                <div className='min-w-0 truncate' title={f.name}>
+                  {f.name}
+                </div>
+                <div className='flex items-center gap-2'>
+                  <div className='opacity-60'>
+                    {f.updated_at
+                      ? new Date(f.updated_at).toLocaleDateString()
+                      : ''}
+                  </div>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={() => window.open(getUrl(f.name), '_blank')}
+                  >
+                    Open
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentsPanel({ shipmentId }: { shipmentId: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  useEffect(() => {
+    let sub: any;
+    (async () => {
+      const { data } = await supabase
+        .from('escrow_ledger')
+        .select('*')
+        .eq('shipment_id', shipmentId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setRows(data || []);
+      sub = supabase
+        .channel(`realtime:escrow_summary:${shipmentId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'escrow_ledger',
+            filter: `shipment_id=eq.${shipmentId}`
+          },
+          (p: any) => setRows((r) => [p.new, ...r].slice(0, 20))
+        )
+        .subscribe();
+    })();
+    return () => {
+      sub && supabase.removeChannel(sub);
+    };
+  }, [shipmentId]);
+  const nice = (r: any) => {
+    const amt = r.amount_cents / 100;
+    const sign = r.entry_type === 'REFUND' ? -amt : amt;
+    return sign.toFixed(2);
+  };
+  return (
+    <Card className='rounded-lg border'>
+      <CardHeader className='pb-2'>
+        <CardTitle className='text-sm'>Payments</CardTitle>
+      </CardHeader>
+      <CardContent className='space-y-2 p-3 text-xs'>
+        {rows.length === 0 && (
+          <EmptyState
+            title='No payments yet'
+            subtitle='Releases and refunds will show up here.'
+          />
+        )}
+        {rows.slice(0, 8).map((r) => (
+          <div
+            key={r.id}
+            className='flex items-center justify-between rounded-md border p-2'
+          >
+            <div className='flex items-center gap-2'>
+              <span className='bg-muted/60 rounded px-1.5 py-0.5 text-[10px]'>
+                {r.entry_type}
+              </span>
+              <span className='opacity-70'>
+                {new Date(r.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            <div
+              className={
+                'font-medium ' +
+                (r.entry_type === 'REFUND'
+                  ? 'text-red-500'
+                  : r.entry_type === 'RELEASE'
+                    ? 'text-emerald-600'
+                    : 'text-foreground')
+              }
+            >
+              {nice(r)}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1011,7 +1437,7 @@ function KpiCard({
   sub?: string;
 }) {
   return (
-    <Card className='border-border/60 from-background to-background/80 bg-gradient-to-br shadow-sm'>
+    <Card className='rounded-lg border'>
       <CardHeader className='p-3 pb-1'>
         <CardTitle className='text-muted-foreground flex items-center gap-1 text-[11px] font-medium tracking-wide uppercase'>
           {label}
@@ -1028,6 +1454,55 @@ function KpiCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Simple horizontal stepper for shipment status
+function StatusStepper({ status }: { status?: string }) {
+  const steps = ['Picked Up', 'In Transit', 'Delivered'];
+  const idx = (() => {
+    const s = String(status || '').toLowerCase();
+    if (s.includes('delivered')) return 2;
+    if (s.includes('in_transit') || s.includes('transit')) return 1;
+    if (s.includes('picked')) return 0;
+    return -1; // not started
+  })();
+  const pct = ((idx + 1) / steps.length) * 100;
+  return (
+    <div className='space-y-2'>
+      <div className='flex items-center justify-between text-[11px] md:text-xs'>
+        <span className='capitalize'>
+          {(status || 'pending').replace(/_/g, ' ')}
+        </span>
+        <span className='opacity-70'>
+          Progress {Math.max(0, Math.min(100, isNaN(pct) ? 0 : pct)).toFixed(0)}
+          %
+        </span>
+      </div>
+      <div className='relative h-2 w-full'>
+        <div className='bg-muted absolute inset-0 rounded-full' />
+        <div
+          className='bg-primary/70 absolute top-0 left-0 h-2 rounded-full'
+          style={{
+            width: `${Math.max(0, Math.min(100, isNaN(pct) ? 0 : pct))}%`
+          }}
+        />
+        <div className='absolute inset-0 flex items-center justify-between px-0.5'>
+          {steps.map((_, i) => (
+            <span
+              key={i}
+              className={
+                'size-2 rounded-full border ' +
+                (idx >= i && idx !== -1
+                  ? 'bg-primary border-primary'
+                  : 'bg-background border-border')
+              }
+            />
+          ))}
+        </div>
+      </div>
+      {/* Optional: ETA if available in parent scope; kept minimal */}
+    </div>
   );
 }
 

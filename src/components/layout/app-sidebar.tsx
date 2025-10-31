@@ -46,11 +46,13 @@ import {
   SidebarMenuSubItem
 } from '@/components/ui/sidebar';
 import { useProfileRole } from '@/hooks/use-profile-role';
+import { useTabs } from '@/components/layout/tabs-context';
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { role } = useProfileRole();
+  const { activateNone } = useTabs();
 
   return (
     <Sidebar collapsible='icon'>
@@ -66,6 +68,10 @@ export default function AppSidebar() {
                 asChild
                 tooltip='Home'
                 isActive={pathname === '/'}
+                onClick={() => {
+                  // Ensure any active tab is closed when navigating via sidebar
+                  activateNone();
+                }}
               >
                 <Link href='/'>
                   <Icons.dashboard />
@@ -78,6 +84,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='Shipments'
                 isActive={pathname.startsWith('/shipments')}
+                onClick={() => activateNone()}
               >
                 <Link href='/shipments'>
                   <Icons.ship />
@@ -92,6 +99,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/requests'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/requests'>My Requests</Link>
                         </SidebarMenuSubButton>
@@ -100,6 +108,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/invoices'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/invoices'>Invoices</Link>
                         </SidebarMenuSubButton>
@@ -108,6 +117,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/history'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/history'>History</Link>
                         </SidebarMenuSubButton>
@@ -120,6 +130,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/incoming-requests'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/incoming-requests'>
                             Incoming Requests
@@ -130,6 +141,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/active-operations'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/active-operations'>
                             Active Operations
@@ -140,6 +152,7 @@ export default function AppSidebar() {
                         <SidebarMenuSubButton
                           asChild
                           isActive={pathname === '/shipments/fleet-utilization'}
+                          onClick={() => activateNone()}
                         >
                           <Link href='/shipments/fleet-utilization'>
                             Fleet Utilization
@@ -207,6 +220,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='Inbox'
                 isActive={pathname === '/inbox'}
+                onClick={() => activateNone()}
               >
                 <Link href='/inbox'>
                   <Icons.mail />
@@ -219,6 +233,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='Contacts'
                 isActive={pathname === '/contacts'}
+                onClick={() => activateNone()}
               >
                 <Link href='/contacts'>
                   <Icons.addressBook />
@@ -236,6 +251,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='NobleFiles'
                 isActive={pathname.startsWith('/noblefiles')}
+                onClick={() => activateNone()}
               >
                 <Link href='/noblefiles'>
                   <Icons.folder />
@@ -248,6 +264,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='NobleSuite'
                 isActive={pathname === '/noblesuite'}
+                onClick={() => activateNone()}
               >
                 <Link href='/noblesuite'>
                   <Icons.apps />
@@ -260,6 +277,7 @@ export default function AppSidebar() {
                 asChild
                 tooltip='NobleAutomate'
                 isActive={pathname.startsWith('/nobleautomate')}
+                onClick={() => activateNone()}
               >
                 <Link href='/nobleautomate'>
                   <Icons.robot />
@@ -279,6 +297,7 @@ export default function AppSidebar() {
               asChild
               tooltip='Feedback'
               isActive={pathname === '/feedback'}
+              onClick={() => activateNone()}
             >
               <Link href='/feedback'>
                 <Icons.chat />

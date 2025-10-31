@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/lib/supabaseClient';
+import MilestonesPanel from '@/components/shipment/shipment-milestones-panel';
+import ScansTab from './scans-tab';
 
 function useRealtimeStatus(shipmentId: string, onUpdate: (s: any) => void) {
   useEffect(() => {
@@ -267,7 +269,7 @@ export function TrackingTab({
   return (
     <div className='space-y-4'>
       <div className='flex flex-col gap-2 md:flex-row md:items-center md:justify-between'>
-        <h3 className='text-base font-semibold'>Tracking</h3>
+        <h3 className='text-sm font-medium'>Tracking</h3>
         {isForwarder ? (
           <div className='flex gap-2'>
             {!driverSource && (
@@ -298,7 +300,7 @@ export function TrackingTab({
       </div>
 
       {driverSource && isForwarder ? (
-        <Card className='p-4'>
+        <Card className='rounded-lg border p-3'>
           <div className='grid gap-3 md:grid-cols-3'>
             <div className='space-y-2 md:col-span-2'>
               <div className='text-muted-foreground text-sm'>
@@ -337,7 +339,7 @@ export function TrackingTab({
         </Card>
       ) : null}
       {driverSource && !isForwarder ? (
-        <Card className='p-4'>
+        <Card className='rounded-lg border p-3'>
           <div className='flex items-center justify-between'>
             <div className='text-sm'>Driver GPS is enabled</div>
             <div className='text-muted-foreground text-xs'>
@@ -347,29 +349,57 @@ export function TrackingTab({
         </Card>
       ) : null}
 
-      <Card className='p-4'>
-        <div className='space-y-2'>
-          <div className='text-sm font-medium'>Last known position</div>
-          {status ? (
-            <div className='text-sm'>
-              {status.last_lat}, {status.last_lon} at{' '}
-              {new Date(status.last_timestamp).toLocaleString()} (
-              {status.provider})
+      {/* Main grid: map/position on left, milestones + scans on right */}
+      <div className='grid gap-4 md:grid-cols-3'>
+        <Card className='rounded-lg border p-3 md:col-span-2'>
+          <div className='space-y-2'>
+            <div className='text-sm font-medium'>Last Known Position</div>
+            {status ? (
+              <div className='text-sm'>
+                {status.last_lat}, {status.last_lon} at{' '}
+                {new Date(status.last_timestamp).toLocaleString()} (
+                {status.provider})
+              </div>
+            ) : activeSources.length === 0 ? (
+              <div className='text-muted-foreground text-sm'>
+                Location is not shared
+              </div>
+            ) : (
+              <div className='text-muted-foreground text-sm'>
+                Awaiting first location…
+              </div>
+            )}
+            {/* Map placeholder - can be replaced with actual map later */}
+            <div className='bg-muted/40 mt-2 h-64 w-full rounded-md border' />
+          </div>
+        </Card>
+
+        <div className='space-y-4'>
+          <Card className='rounded-lg border p-0'>
+            <MilestonesPanel shipmentId={shipmentId} />
+          </Card>
+          <Card className='rounded-lg border p-3'>
+            <div className='mb-2 text-sm font-medium'>Scans</div>
+            <ScansTab shipmentId={shipmentId} />
+            <div className='pt-2'>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() =>
+                  fetch(`/api/shipments/${shipmentId}/label`, {
+                    method: 'POST'
+                  })
+                }
+              >
+                Regenerate Label
+              </Button>
             </div>
-          ) : activeSources.length === 0 ? (
-            <div className='text-muted-foreground text-sm'>
-              Location is not shared
-            </div>
-          ) : (
-            <div className='text-muted-foreground text-sm'>
-              Awaiting first location…
-            </div>
-          )}
+          </Card>
         </div>
-      </Card>
+      </div>
 
       {airSeaSources.length > 0 && isForwarder && (
-        <Card className='p-4'>
+        <Card className='rounded-lg border p-3'>
           <div className='mb-2 flex items-center justify-between'>
             <div className='text-sm font-medium'>Air/Sea Sources</div>
             {actionMsg && (

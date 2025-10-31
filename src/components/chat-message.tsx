@@ -68,6 +68,7 @@ export const ChatMessageItem = ({
   onDeleted,
   compact = false
 }: ChatMessageItemProps) => {
+  // Use static markdown renderer and plugins (pre-optimization behavior)
   const { role } = useProfileRole();
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -560,44 +561,6 @@ export const ChatMessageItem = ({
                   </div>
                 )}
               </div>
-            )}
-            {/* No inline hover actions here; actions rendered as side columns */}
-            {/* Read receipts */}
-            {readers.length > 0 && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <div className='absolute right-1 -bottom-3 flex -space-x-2'>
-                    {readers.slice(0, 3).map((u) => (
-                      <span
-                        key={u.id}
-                        className='bg-muted text-muted-foreground border-border inline-flex size-4 items-center justify-center rounded-full border text-[10px] font-bold'
-                        title={u.name}
-                      >
-                        {(u.name || 'U').slice(0, 2).toUpperCase()}
-                      </span>
-                    ))}
-                  </div>
-                </PopoverTrigger>
-                <PopoverContent className='w-48 p-2'>
-                  <div className='mb-1 text-xs font-medium'>Read by</div>
-                  <div className='space-y-1'>
-                    {readers.map((u) => (
-                      <div
-                        key={u.id}
-                        className='flex items-center gap-2 text-sm'
-                      >
-                        <span
-                          className='bg-muted text-muted-foreground border-border mr-2 inline-flex size-5 items-center justify-center rounded-full border text-xs font-bold'
-                          title={u.name}
-                        >
-                          {(u.name || 'U').slice(0, 2).toUpperCase()}
-                        </span>
-                        <span>{u.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
             )}
           </div>
 

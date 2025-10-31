@@ -27,6 +27,9 @@ export async function middleware(request: NextRequest) {
 
   // Only root ("/") and any "/auth/*" route are public
   const isPublic = pathname === '/' || pathname.startsWith('/auth');
+  const isAuthRoute = pathname.startsWith('/auth/');
+
+  // Always perform session lookup for consistent behavior across routes
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -66,7 +69,7 @@ export async function middleware(request: NextRequest) {
     user &&
     (pathname === '/auth/sign-in' ||
       pathname === '/auth/sign-up' ||
-      (pathname.startsWith('/auth/') && pathname !== '/auth/callback'))
+      (isAuthRoute && pathname !== '/auth/callback'))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
@@ -81,4 +84,7 @@ export async function middleware(request: NextRequest) {
 }
 
 // Apply middleware to all routes; we filter assets in code above
-export const config = { matcher: ['/:path*'] };
+// Narrow matcher to exclude static assets and API routes to avoid unnecessary middleware invocations
+// Matches any path that does NOT start with _next, api, assets, favicon.ico, or contain a dot (file extensions)
+// Use Next.js default matcher behavior to apply middleware broadly
+export const config = {} as const;

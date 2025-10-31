@@ -3,8 +3,10 @@ import React from 'react';
 import SuiteHeader from '@/components/suite/suite-header';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { SimpleEditorHandle } from '@/components/tiptap-templates/simple/simple-editor';
-import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
+import {
+  SimpleEditor,
+  type SimpleEditorHandle
+} from '@/components/tiptap-templates/simple/simple-editor';
 import { updateDocClient } from '@/../utils/supabase/docs';
 import { supabase } from '@/lib/supabaseClient';
 import {

@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { IconTrendingUp } from '@tabler/icons-react';
-import { Label, Pie, PieChart } from 'recharts';
 
 import {
   Card,
@@ -12,12 +11,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent
-} from '@/components/ui/chart';
+import { ChartConfig } from '@/components/ui/chart';
 import { supabase } from '@/lib/supabaseClient';
 
 type Slice = { name: string; value: number; fill?: string };
@@ -79,78 +73,7 @@ export function PieGraph() {
             {loading ? 'Loading…' : 'No partner data'}
           </div>
         ) : (
-          <ChartContainer
-            config={chartConfig}
-            className='mx-auto aspect-square h-[250px]'
-          >
-            <PieChart>
-              <defs>
-                {[0, 1, 2, 3].map((i) => (
-                  <linearGradient
-                    key={i}
-                    id={`fillSlice${i}`}
-                    x1='0'
-                    y1='0'
-                    x2='0'
-                    y2='1'
-                  >
-                    <stop
-                      offset='0%'
-                      stopColor='var(--primary)'
-                      stopOpacity={1 - i * 0.15}
-                    />
-                    <stop
-                      offset='100%'
-                      stopColor='var(--primary)'
-                      stopOpacity={0.8 - i * 0.15}
-                    />
-                  </linearGradient>
-                ))}
-              </defs>
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-              />
-              <Pie
-                data={data}
-                dataKey='value'
-                nameKey='name'
-                innerRadius={60}
-                strokeWidth={2}
-                stroke='var(--background)'
-              >
-                <Label
-                  content={({ viewBox }) => {
-                    if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                      return (
-                        <text
-                          x={viewBox.cx}
-                          y={viewBox.cy}
-                          textAnchor='middle'
-                          dominantBaseline='middle'
-                        >
-                          <tspan
-                            x={viewBox.cx}
-                            y={viewBox.cy}
-                            className='fill-foreground text-3xl font-bold'
-                          >
-                            {total.toLocaleString()}
-                          </tspan>
-                          <tspan
-                            x={viewBox.cx}
-                            y={(viewBox.cy || 0) + 24}
-                            className='fill-muted-foreground text-sm'
-                          >
-                            Total Shipments
-                          </tspan>
-                        </text>
-                      );
-                    }
-                  }}
-                />
-              </Pie>
-            </PieChart>
-          </ChartContainer>
+          <PieGraphImpl data={data} total={total} />
         )}
       </CardContent>
       <CardFooter className='flex-col gap-2 text-sm'>
@@ -170,3 +93,5 @@ export function PieGraph() {
     </Card>
   );
 }
+
+import { PieGraphImpl } from './pie-graph.impl';

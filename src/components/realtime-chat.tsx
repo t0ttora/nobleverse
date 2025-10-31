@@ -958,7 +958,7 @@ export const RealtimeChat = ({
       {/* Messages (scrollable area) */}
       <div
         ref={containerRef}
-        className='absolute inset-x-0 top-0 bottom-0 space-y-3 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-36 md:space-y-4 md:px-4 md:pt-4'
+        className='scrollbar-thin absolute inset-x-0 top-0 bottom-0 space-y-3 overflow-x-hidden overflow-y-auto px-3 pt-3 pb-36 md:space-y-4 md:px-4 md:pt-4'
       >
         {/* Debug guide: enable with ?debugChat=1 to verify right edge */}
         {typeof window !== 'undefined' &&
